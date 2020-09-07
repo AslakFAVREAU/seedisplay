@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>SOEK - SEE</title>
+  <!-- https://electronjs.org/docs/tutorial/security#csp-meta-tag -->
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
+
+  <style>
+    body {
+      margin: 0px
+    }
+
+    #date,
+    #semainePaireImpaire,
+    #ephe,
+    #heure {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      text-align: center;
+    }
+
+    #pageDefault {
+      height: 100vh;
+    }
+
+    #pageDefault h1 {
+      font-size: 5em;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    #pageDefault h2 {
+      font-size: 3em;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    span {
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    #divImg {
+      /* The image used */
+      background-image: url("default.jpg");
+      height: 100vh;
+
+      /* Full height */
+
+      /* Center and scale the image nicely */
+      background-position: center;
+      background-repeat: no-repeat;
+      background-size: contain;
+    }
+
+    .inlineblock {
+      display: inline-block;
+
+      padding: 5px;
+      border: 1px solid rgb(0, 91, 127);
+      border-radius: 10px;
+
+    }
+
+    #zone_meteo {
+      text-align: center;
+      font-family: Arial, Helvetica, sans-serif;
+      margin-bottom: 15px;
+    }
+
+    .footer {
+      position: fixed;
+      flex-direction: column;
+      justify-content: center;
+      text-align: center;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 50px;
+    }
+  </style>
+</head>
+
+<body>
+  <!--<h1>Hello World!</h1>
+  We are using node
+  <script>document.write(process.versions.node)</script>,
+  Chrome
+  <script>document.write(process.versions.chrome)</script>,
+  and Electron
+  <script>document.write(process.versions.electron)</script>.-->
+  <div id="divVideo">
+    <video id="video" width="100%" height="100%" controls="false" poster="image" preload="true" controls autoplay>
+     
+      <source src="http://127.0.0.1:8000/uploads/see/media/EVENEMENT-SOE-presentation2-5f53d66c0e163.mp4" type="video/mp4" />
+
+    </video>
+ </div>
+
+  <div id="divImg"></div>
+
+  <div id="pageDefault">
+
+
+
+    <div style="padding: 80px;">
+      <div style="border:5px solid rgb(0, 91, 127);">
+        <h1 id=date></h1>
+        <h2 style="font-style: italic;" id="ephe"></h2>
+        <div id="week">
+          <h2 id=semainePaireImpaire></h2>
+        </div>
+        <h1 id=heure></h1>
+      </div>
+    </div>
+
+    <div>
+      <div class="container">
+
+        <div id="zone_meteo" style="padding: 50px;">
+          <div class="inlineblock" id="today">
+            <div><img id='todayImgMeteo' style="height=500px" src="" /></div>
+            <h5 id="todayTemp"></h5>
+            <h5>aujourd'hui</h5>
+          </div>
+
+          <div class="inlineblock" id="d+1">
+            <div><img id='ImgMeteod+1' style="height=500px" src="" /></div>
+            <h5 id="Tempd+1"></h5>
+            <h5>demain</h5>
+          </div>
+
+          <div class="inlineblock" id="d+2">
+            <div><img id='ImgMeteod+2' style="height=500px" src="" /></div>
+            <h5 id="Tempd+2"></h5>
+            <h5 id="dateJourd+2"></h5>
+          </div>
+
+          <div class="inlineblock" id="d+3">
+            <div><img id='ImgMeteod+3' style="height=500px" src="" /></div>
+            <h5 id="Tempd+3"></h5>
+            <h5 id="dateJourd+3"></h5>
+          </div>
+          <di class="inlineblock" id="d+4">
+            <div><img id='ImgMeteod+4' style="height=500px" src="" /></div>
+            <h5 id="Tempd+4"></h5>
+            <h5 id="dateJourd+4"></h5>
+        </div>
+
+
+
+
+      </div>
+
+    </div>
+    <div class="footer" id=footer style="height: 50px;">
+      <img style="height: 25px;" class="imgFooter" src="logo/see.png" /><span> by </span><img style="height: 25px;"
+        class="imgFooter" src="logo/soe.png" />
+    </div>
+  </div>
+
+
+
+
+
+
+
+
+
+  <script src="js/dateHeure.js"></script>
+  <script src="js/ephe.js"></script>
+  <script src="js/getConfigSEE.js"></script>
+  <script src="API/listeDiapo.js"></script>
+  <script src="js/meteo.js"></script>
+  <script>
+    /*Init variable */
+    var env = "local"
+    var idEcran = 1
+    var numImage = 0
+    var weekDisplay = false
+    var weekNo = true
+    var weekType = false
+    const refresh = 21600000
+    var lastUdpateMeteo = Date.now()
+
+    const axios = require('axios')
+    const fs = require('fs')
+    const csv = require('csv-parse')
+    var path = require("path")
+
+
+    words = __dirname.split('Desktop');
+    const pathSEE = words[0] + "Desktop/SEE/"
+    console.log(pathSEE)
+
+
+
+    //document.getElementById("divImg").style.display = "none";
+    document.getElementById("pageDefault").style.display = "none";
+    var idEcran = 1
+    requestJsonDiapo()
+    getConfigSEE()
+    ephe()
+
+
+    requestJsonMeteo()
+
+
+
+
+
+
+    function defaultScreen() {
+      if (lastUdpateMeteo + 21600000 - Date.now() < 0) {
+        console.log("update Meteo et Ephe à " + Date.now())
+        lastUdpateMeteo = Date.now()
+        requestJsonMeteo()
+        ephe()
+      }
+      /*Affichage de la date et de la semaine et de l heure sur la page par default*/
+      document.getElementById("date").innerHTML = dateFr()
+
+      document.getElementById("heure").innerHTML = heure()
+
+
+      returnSemainePaireImpaire = semainePaireImpaire(new Date())
+      if (weekNo == true) {
+        document.getElementById("semainePaireImpaire").innerHTML = "Semaine" + " (" + returnSemainePaireImpaire[0] + ")"
+        if (weekType == true) {
+          document.getElementById("semainePaireImpaire").innerHTML = returnSemainePaireImpaire[1] + " (" + returnSemainePaireImpaire[0] + ")"
+        }
+
+      }
+
+
+      document.getElementById("divImg").style.display = "none";
+      document.getElementById("divVideo").style.display = "none";
+      document.getElementById("pageDefault").style.display = "block";
+      url = "url(blank.jpg)";
+      document.getElementById("divImg").style.backgroundImage = url;
+      numImage = 0;
+      setTimeout(function () {
+        requestJsonDiapo();
+        document.getElementById("divImg").style.display = "block";
+        document.getElementById("pageDefault").style.display = "none";
+      },
+        5000);
+
+
+
+    }
+    defaultScreen()
+
+
+    function LoopDiapo(ArrayLoop) {
+      // Partie en fin de boucle
+      if (numImage == ArrayLoop.length) {
+
+        getConfigSEE()
+        defaultScreen()
+
+
+
+
+      } else {
+        
+
+
+        if (ArrayLoop[numImage][0]=='mp4'){
+          document.getElementById("divVideo").style.display = "block";
+          document.getElementById("divImg").style.display = "none";
+          document.getElementById("video").play()
+          document.getElementById('video').addEventListener('ended',myHandler,false);
+            function myHandler(e) {
+              console.log('toto')
+              LoopDiapo(ArrayLoop)
+              document.getElementById("divVideo").style.display = "none";
+                  document.getElementById("divImg").style.display = "block";
+                  numImage++;
+            }
+        }
+        else{
+          console.log('ret')
+                    if (env == 'prod') {
+          url = "url(https://soek.fr/uploads/see/media/" + ArrayLoop[numImage][1] + ")";
+        }
+        else if (env == 'local') {
+          url = "url(http://127.0.0.1:8000//uploads/see/media/" + ArrayLoop[numImage][1] + ")";
+        }
+
+        document.getElementById("divImg").style.backgroundImage = url;
+        setTimeout(function () {
+          LoopDiapo(ArrayLoop);
+        }, ArrayLoop[numImage][2] * 1000);
+        numImage++;
+
+        }
+
+        /*
+      Quand on sera en local on aura les fichier en local host 
+      url = "url(img/" + ArrayLoop[numImage] + ")";*/
+       
+
+        
+        
+      }
+
+    }
+
+  </script>
+
+
+</body>
+
+</html>
