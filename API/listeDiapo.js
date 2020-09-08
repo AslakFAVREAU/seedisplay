@@ -21,16 +21,11 @@ return ArrayImg;
 
 const getDiapoJson = async () => {
 
-  if(env == 'prod'){
-    url = 'https://soek.fr/see/API/diapo/'+idEcran 
-  }
-  else if (env == 'local'){
-    url = 'http://127.0.0.1:8000/see/API/diapo/'+idEcran 
-    console.log("local")
-  }
+
 
     try {
-      return await axios.get(url)
+      console.log(urlAPI)
+      return await axios.get(urlAPI)
     } catch (error) {
       console.error(error)
     }
@@ -41,7 +36,7 @@ const getDiapoJson = async () => {
     if (JsonDiapo) {
       ArrayDiapo = listeDiapo(JsonDiapo.data)
       console.log(ArrayDiapo)
-      LoopDiapo(ArrayDiapo)
+    //  defaultScreen()
 
     }
   }

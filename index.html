@@ -9,7 +9,8 @@
 
   <style>
     body {
-      margin: 0px
+      margin: 0px;
+      overflow: hidden;
     }
 
     #date,
@@ -89,13 +90,20 @@
   <script>document.write(process.versions.chrome)</script>,
   and Electron
   <script>document.write(process.versions.electron)</script>.-->
-  <div id="divVideo">
-    <video id="video" width="100%" height="100%" controls="false" poster="image" preload="true" controls autoplay>
-     
-      <source src="http://127.0.0.1:8000/uploads/see/media/EVENEMENT-SOE-presentation2-5f53d66c0e163.mp4" type="video/mp4" />
+  <div id="divVideo1">
+    <video id="video1" width="100%" height="100%">
+
+      <source id="srcVideo1" src="" type="video/mp4" />
 
     </video>
- </div>
+  </div>
+  <div id="divVideo2">
+    <video id="video2" width="100%" height="100%">
+
+      <source id="srcVideo2" src="" type="video/mp4" />
+
+    </video>
+  </div>
 
   <div id="divImg"></div>
 
@@ -103,7 +111,7 @@
 
 
 
-    <div style="padding: 80px;">
+    <div style="padding: 2%;">
       <div style="border:5px solid rgb(0, 91, 127);">
         <h1 id=date></h1>
         <h2 style="font-style: italic;" id="ephe"></h2>
@@ -117,34 +125,34 @@
     <div>
       <div class="container">
 
-        <div id="zone_meteo" style="padding: 50px;">
-          <div class="inlineblock" id="today">
-            <div><img id='todayImgMeteo' style="height=500px" src="" /></div>
-            <h5 id="todayTemp"></h5>
-            <h5>aujourd'hui</h5>
+        <div id="zone_meteo" style="padding: 2%x;">
+          <div class="inlineblock" id="today" style="width: 20%;">
+            <div><img id='todayImgMeteo' style="width: 50%;" src="" /></div>
+            <h2 id="todayTemp"></h2>
+            <h2>aujourd'hui</h2>
           </div>
 
-          <div class="inlineblock" id="d+1">
-            <div><img id='ImgMeteod+1' style="height=500px" src="" /></div>
-            <h5 id="Tempd+1"></h5>
-            <h5>demain</h5>
+          <div class="inlineblock" id="d+1" style="width: 20%;">
+            <div><img id='ImgMeteod+1' style="width: 50%;" src="" /></div>
+            <h2 id="Tempd+1"></h2>
+            <h2>demain</h2>
           </div>
 
-          <div class="inlineblock" id="d+2">
-            <div><img id='ImgMeteod+2' style="height=500px" src="" /></div>
-            <h5 id="Tempd+2"></h5>
-            <h5 id="dateJourd+2"></h5>
+          <div class="inlineblock" id="d+2" style="width: 20%;">
+            <div><img id='ImgMeteod+2' style="width: 50%;" src="" /></div>
+            <h2 id="Tempd+2"></h2>
+            <h2 id="dateJourd+2"></h2>
           </div>
 
-          <div class="inlineblock" id="d+3">
-            <div><img id='ImgMeteod+3' style="height=500px" src="" /></div>
-            <h5 id="Tempd+3"></h5>
-            <h5 id="dateJourd+3"></h5>
+          <div class="inlineblock" id="d+3" style="width: 20%;">
+            <div><img id='ImgMeteod+3' style="width: 50%;" src="" /></div>
+            <h2 id="Tempd+3"></h2>
+            <h2 id="dateJourd+3"></h2>
           </div>
-          <di class="inlineblock" id="d+4">
-            <div><img id='ImgMeteod+4' style="height=500px" src="" /></div>
-            <h5 id="Tempd+4"></h5>
-            <h5 id="dateJourd+4"></h5>
+          <di class="inlineblock" id="d+4" style="width: 20%;">
+            <div><img id='ImgMeteod+4' style="width: 50%;" src="" /></div>
+            <h2 id="Tempd+4"></h2>
+            <h2 id="dateJourd+4"></h2>
         </div>
 
 
@@ -174,8 +182,14 @@
   <script src="js/meteo.js"></script>
   <script>
     /*Init variable */
-    var env = "local"
+    var env = "prod"
     var idEcran = 1
+    var urlMedia = ""
+   // var urlAPI = 'http://127.0.0.1:8000/see/API/diapo/' + idEcran
+    var player = 1
+    var noplayer = 2
+    var playerLoad = 1
+
     var numImage = 0
     var weekDisplay = false
     var weekNo = true
@@ -200,10 +214,10 @@
     var idEcran = 1
 
     // End init variable
-    requestJsonDiapo()
+    //requestJsonDiapo()
     getConfigSEE()
     ephe()
-
+    
 
     requestJsonMeteo()
 
@@ -213,15 +227,24 @@
 
 
     function defaultScreen() {
+      document.getElementById("divImg").style.display = "none";
+      document.getElementById("divVideo1").style.display = "none";
+      document.getElementById("divVideo2").style.display = "none";
+      document.getElementById("pageDefault").style.display = "block";
+      url = "url(blank.jpg)";
+      document.getElementById("divImg").style.backgroundImage = url;
+      console.log("defaul")
       if (lastUdpateMeteo + 21600000 - Date.now() < 0) {
         console.log("update Meteo et Ephe à " + Date.now())
         lastUdpateMeteo = Date.now()
         requestJsonMeteo()
         ephe()
       }
+      numImage = 0;
+      console.log(urlAPI)
+      requestJsonDiapo();
       /*Affichage de la date et de la semaine et de l heure sur la page par default*/
       document.getElementById("date").innerHTML = dateFr()
-
       document.getElementById("heure").innerHTML = heure()
 
 
@@ -235,14 +258,35 @@
       }
 
 
-      document.getElementById("divImg").style.display = "none";
-      document.getElementById("divVideo").style.display = "none";
-      document.getElementById("pageDefault").style.display = "block";
-      url = "url(blank.jpg)";
-      document.getElementById("divImg").style.backgroundImage = url;
-      numImage = 0;
+ 
+
+        setTimeout(function () {
+        numImage = 0;
+           // Test si le 0 de la boucle est une video
+           if ((numImage + 1) < ArrayDiapo.length && ArrayDiapo[numImage][0] === 'mp4') {
+          console.log(playerLoad + 'player chargé')
+          
+          console.log(urlMedia)
+          urlVideo = urlServeurMedia + ArrayLoop[numImage + 1][1]
+          console.log(urlVideo)
+          document.getElementById("srcVideo" + playerLoad).src = urlVideo;
+          document.getElementById("video" + playerLoad).load()
+          if (playerLoad == 1) {
+            playerLoad = 2
+          }
+          else {
+            playerLoad = 1
+          }
+        }
+      },
+        2500);
+
+
       setTimeout(function () {
-        requestJsonDiapo();
+        numImage = 0;
+
+        LoopDiapo(ArrayDiapo)
+        
         document.getElementById("divImg").style.display = "block";
         document.getElementById("pageDefault").style.display = "none";
       },
@@ -251,61 +295,99 @@
 
 
     }
-    defaultScreen()
+
 
 
     function LoopDiapo(ArrayLoop) {
       // Partie en fin de boucle
+      console.log("longeur diapo = " + ArrayLoop.length + " num = " + numImage+ " type ")
       if (numImage == ArrayLoop.length) {
-
+        console.log("num = array lengt")
         getConfigSEE()
         defaultScreen()
-
-
+        numImage = 0
 
 
       } else {
-        
+        // Test si INDEX+1 de la boucle est une video
+        if ((numImage + 1) < ArrayLoop.length && ArrayLoop[numImage + 1][0] === 'mp4') {
+          console.log(playerLoad + 'player chargé')
+          console.log(urlMedia)
+          urlVideo = urlServeurMedia + ArrayLoop[numImage + 1][1]
+          console.log(urlVideo)
+          document.getElementById("srcVideo" + playerLoad).src = urlVideo;
+          document.getElementById("video" + playerLoad).load()
+          if (playerLoad == 1) {
+            playerLoad = 2
+          }
+          else {
+            playerLoad = 1
+          }
+        }
 
 
-        if (ArrayLoop[numImage][0]=='mp4'){
-          document.getElementById("divVideo").style.display = "block";
+
+        if (ArrayLoop[numImage][0] === 'mp4') {
+          console.log(player + 'player en cours')
+          document.getElementById("divVideo" + player).style.display = "block";
           document.getElementById("divImg").style.display = "none";
-          document.getElementById("video").play()
-          document.getElementById('video').addEventListener('ended',myHandler,false);
-            function myHandler(e) {
-              console.log('toto')
-              LoopDiapo(ArrayLoop)
-              document.getElementById("divVideo").style.display = "none";
-                  document.getElementById("divImg").style.display = "block";
-                  numImage++;
-            }
-        }
-        else{
-          console.log('ret')
-                    if (env == 'prod') {
-          url = "url(https://soek.fr/uploads/see/media/" + ArrayLoop[numImage][1] + ")";
-        }
-        else if (env == 'local') {
-          url = "url(http://127.0.0.1:8000//uploads/see/media/" + ArrayLoop[numImage][1] + ")";
-        }
+          document.getElementById("divVideo" + noplayer).style.display = "none";
 
-        document.getElementById("divImg").style.backgroundImage = url;
-        setTimeout(function () {
-          LoopDiapo(ArrayLoop);
-        }, ArrayLoop[numImage][2] * 1000);
-        numImage++;
+
+          
+
+          document.getElementById("video" + player).play()
+          document.getElementById('video' + player).addEventListener('ended', myHandler, false);
+          function myHandler(e) {
+            
+            numImage++;
+            console.log(numImage)
+            console.log("fin video")
+            document.getElementById("video" + player).pause()
+            document.getElementById("divVideo" + player).style.display = "none";
+            document.getElementById("divImg").style.display = "block";
+            if (player == 1) {
+              player = 2
+              noplayer = 1
+
+            }
+            else {
+              player = 1
+              noplayer = 2
+            }
+            LoopDiapo(ArrayLoop)
+           
+          
+
+          }
+        }
+        else if (ArrayLoop[numImage][0] === 'png' || ArrayLoop[numImage][0] === 'jpeg') {
+
+
+
+          console.log(ArrayLoop[numImage][0] + " img")
+          url = urlMedia + ArrayLoop[numImage][1] + ")";
+          document.getElementById("divImg").style.backgroundImage = url;
+          setTimeout(function (p) {
+            numImage++;
+            console.log("next")
+            LoopDiapo(ArrayLoop)
+
+          }, ArrayLoop[numImage][2] * 1000);
+
 
         }
 
         /*
       Quand on sera en local on aura les fichier en local host 
       url = "url(img/" + ArrayLoop[numImage] + ")";*/
-       
 
-        
-        
+
+
+
       }
+
+
 
     }
 
