@@ -13,13 +13,12 @@ function createWindow () {
     alwaysOnTop :true,
     webPreferences: {
       nodeIntegration: true,
-      devTools: true
+      devTools: false
     }
   })
 
   // et charger le fichier index.html de l'application.
   win.loadFile('index.html')
-
   // Ouvre les DevTools.
   win.webContents.openDevTools()
 }

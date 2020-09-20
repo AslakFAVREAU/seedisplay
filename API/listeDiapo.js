@@ -16,15 +16,14 @@ indexLigne++;
 }
 indexDiapo++;
 }
+console.log(ArrayImg)
+ArrayMedia = ArrayImg
 return ArrayImg;
 }
 
 const getDiapoJson = async () => {
-
-
-
     try {
-      console.log(urlAPI)
+    console.log(urlAPI)
       return await axios.get(urlAPI)
     } catch (error) {
       console.error(error)
@@ -35,8 +34,16 @@ const getDiapoJson = async () => {
     const JsonDiapo = await getDiapoJson()
     if (JsonDiapo) {
       ArrayDiapo = listeDiapo(JsonDiapo.data)
-      console.log(ArrayDiapo)
-    //  defaultScreen()
+    
+
+      // On ne fait l'instantiation de default scree que si on est sur la phase d'init sinon on ne fait que metre a jour le ArrayDiapo
+      if (init == true){   
+        console.log("boucle init apelle default screen")   
+        defaultScreen()
+   
+      }
+
+     
 
     }
   }

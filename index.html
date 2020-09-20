@@ -6,42 +6,35 @@
   <title>SOEK - SEE</title>
   <!-- https://electronjs.org/docs/tutorial/security#csp-meta-tag -->
   <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
+  <link rel="stylesheet" href="./node_modules/bootstrap/dist/css/bootstrap.min.css" />
 
+  <link rel="stylesheet" href="./node_modules/jquery/dist/jquery.slim.min.js" />
+  <link rel="stylesheet" href="./node_modules/popper.js/dist/popper.min.js" />
+  <link rel="stylesheet" href="./node_modules/bootstrap/dist/js/bootstrap.min.js" />
+  <script>let $ = require('jquery');</script>
+  <script>require('popper.js');</script>
+  <script>require('bootstrap');</script>
   <style>
     body {
       margin: 0px;
       overflow: hidden;
     }
 
-    #date,
-    #semainePaireImpaire,
-    #ephe,
-    #heure {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      text-align: center;
-    }
+  
 
-    #pageDefault {
+    #pageDefault,#pagePsaume {
       height: 100vh;
     }
 
-    #pageDefault h1 {
-      font-size: 5em;
-      font-family: Arial, Helvetica, sans-serif;
-    }
 
-    #pageDefault h2 {
-      font-size: 3em;
-      font-family: Arial, Helvetica, sans-serif;
-    }
 
-    span {
-      font-family: Arial, Helvetica, sans-serif;
-    }
+#pageDefault{
+  background-color: white;
+}
 
-    #divImg {
+  
+
+    #divImg1,#divImg2 {
       /* The image used */
       background-image: url("default.jpg");
       height: 100vh;
@@ -53,32 +46,13 @@
       background-repeat: no-repeat;
       background-size: contain;
     }
+    body {
+  font-family: 'arial', sans-serif !important;
+}
+ 
 
-    .inlineblock {
-      display: inline-block;
-
-      padding: 5px;
-      border: 1px solid rgb(0, 91, 127);
-      border-radius: 10px;
-
-    }
-
-    #zone_meteo {
-      text-align: center;
-      font-family: Arial, Helvetica, sans-serif;
-      margin-bottom: 15px;
-    }
-
-    .footer {
-      position: fixed;
-      flex-direction: column;
-      justify-content: center;
-      text-align: center;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 50px;
-    }
+  
+   
   </style>
 </head>
 
@@ -90,305 +64,248 @@
   <script>document.write(process.versions.chrome)</script>,
   and Electron
   <script>document.write(process.versions.electron)</script>.-->
+
+  
+
+  <div id="pageDefault">
+
+    <div class="contain m-5 p-5 border border-primary text-center">
+
+      <strong><h1 class="display-1" id=date></h1></strong>
+      <em><h2 class="display-3" id="ephe"></h2></em>
+      <div class="" id="week">
+        <h2 class="display-2" id=semainePaireImpaire></h2>
+      </div>
+      <h1 class="display-1" id=heure></h1>
+
+    </div> 
+
+
+
+<div class="fixed-bottom ">
+    <div id="zone_meteo">
+      <div class="">
+        <div class="card-deck p-5  text-center">
+
+          <div class="card shadow-sm" id="today">
+            <div class="card-body">
+              <img id='todayImgMeteo' src="" />
+              <h1 id="todayTemp" class="card-title pricing-card-title"></h1>
+            </div>
+            <div class="card-footer">
+              <h3 class="my-0 font-weight-normal">aujourd'hui</h3>
+            </div>
+          </div>
+
+          <div class="card shadow-sm" id="d+1">
+            <div class="card-body">
+              <img id='ImgMeteod+1' src="" />
+              <h1 id="Tempd+1" class="card-title pricing-card-title"></h1>
+            </div>
+            <div class="card-footer">
+              <h3 class="my-0 font-weight-normal">demain</h3>
+            </div>
+          </div>
+
+          <div class="card shadow-sm" id="d+2">
+            <div class="card-body">
+              <img id='ImgMeteod+2' src="" />
+              <h1 id="Tempd+2" class="card-title pricing-card-title"></h1>
+            </div>
+            <div class="card-footer">
+              <h3 id="dateJourd+2" class="my-0 font-weight-normal"></h3>
+            </div>
+          </div>
+
+          <div class="card shadow-sm" id="d+3">
+            <div class="card-body">
+              <img id='ImgMeteod+3' src="" />
+              <h1 id="Tempd+3" class="card-title pricing-card-title"></h1>
+            </div>
+            <div class="card-footer">
+              <h3 id="dateJourd+3" class="my-0 font-weight-normal"></h3>
+            </div>
+          </div>
+          <div class="card shadow-sm" id="d+4">
+            <div class="card-body">
+              <img id='ImgMeteod+4' src="" />
+              <h1 id="Tempd+4" class="card-title pricing-card-title"></h1>
+            </div>
+            <div class="card-footer">
+              <h3 id="dateJourd+4" class="my-0 font-weight-normal"></h3>
+            </div>
+          </div>
+
+
+
+
+
+        </div>
+
+      </div>
+
+
+
+
+    </div>
+
+
+
+    <div class="row " id="footer">
+      <div class="col-12 align-self-center text-center p-2"><img class="img-fluid" style="height: 30px;" src="logo/see.png" />
+     <span> by </span>
+      <img class="img-fluid" style="height: 30px;" src="logo/soe.png" /></div>
+     </div>
+    </div>
+  </div>
+
   <div id="divVideo1">
-    <video id="video1" width="100%" height="100%">
+    <video class="videoPlayer" id="video1" width="100%" height="100%">
 
       <source id="srcVideo1" src="" type="video/mp4" />
 
     </video>
   </div>
   <div id="divVideo2">
-    <video id="video2" width="100%" height="100%">
+    <video class="videoPlayer" id="video2" width="100%" height="100%">
 
       <source id="srcVideo2" src="" type="video/mp4" />
 
     </video>
   </div>
 
-  <div id="divImg"></div>
+  <div id="divImg1"></div>
+  <div id="divImg2"></div>
 
-  <div id="pageDefault">
+<div id="pagePsaume">
 
-
-
-    <div style="padding: 2%;">
-      <div style="border:5px solid rgb(0, 91, 127);">
-        <h1 id=date></h1>
-        <h2 style="font-style: italic;" id="ephe"></h2>
-        <div id="week">
-          <h2 id=semainePaireImpaire></h2>
+  <div class="row mb-2">
+    <div class="col-md-12">
+      <div class="card flex-md-row mb-4 box-shadow h-md-250">
+        <div class="card-body d-flex flex-column align-items-start">
+          <strong class="d-inline-block mb-2 text-primary">Psaume 1</strong>
+          <h3 class="mb-0">
+            <a class="text-dark" href="#">"Les deux voies"</a>
+          </h3>
+          <div class="mb-1 text-muted">Nov 12</div>
+          <p class="card-text mb-auto">Heureux l'homme qui ne suit pas le conseil des impies, ni dans la voie des pêcheurs ne s'arrête, ni au siège des railleurs ne s'assied, mais se plaît dans la voie de Yahvé, mais murmure sa loi jour et nuit !</p>
+          <a href="#">Continue reading</a>
         </div>
-        <h1 id=heure></h1>
+        <img class="card-img-right flex-auto d-none d-md-block" data-src="holder.js/200x250?theme=thumb" alt="Thumbnail [200x250]" style="width: 200px; height: 250px;" 
+        src="http://www.psaumes.site-catholique.fr/public/image/Sainte-Bible-1.jpg" data-holder-rendered="true">
       </div>
     </div>
-
-    <div>
-      <div class="container">
-
-        <div id="zone_meteo" style="padding: 2%x;">
-          <div class="inlineblock" id="today" style="width: 20%;">
-            <div><img id='todayImgMeteo' style="width: 50%;" src="" /></div>
-            <h2 id="todayTemp"></h2>
-            <h2>aujourd'hui</h2>
-          </div>
-
-          <div class="inlineblock" id="d+1" style="width: 20%;">
-            <div><img id='ImgMeteod+1' style="width: 50%;" src="" /></div>
-            <h2 id="Tempd+1"></h2>
-            <h2>demain</h2>
-          </div>
-
-          <div class="inlineblock" id="d+2" style="width: 20%;">
-            <div><img id='ImgMeteod+2' style="width: 50%;" src="" /></div>
-            <h2 id="Tempd+2"></h2>
-            <h2 id="dateJourd+2"></h2>
-          </div>
-
-          <div class="inlineblock" id="d+3" style="width: 20%;">
-            <div><img id='ImgMeteod+3' style="width: 50%;" src="" /></div>
-            <h2 id="Tempd+3"></h2>
-            <h2 id="dateJourd+3"></h2>
-          </div>
-          <di class="inlineblock" id="d+4" style="width: 20%;">
-            <div><img id='ImgMeteod+4' style="width: 50%;" src="" /></div>
-            <h2 id="Tempd+4"></h2>
-            <h2 id="dateJourd+4"></h2>
-        </div>
-
-
-
-
-      </div>
-
-    </div>
-    <div class="footer" id=footer style="height: 50px;">
-      <img style="height: 25px;" class="imgFooter" src="logo/see.png" /><span> by </span><img style="height: 25px;"
-        class="imgFooter" src="logo/soe.png" />
-    </div>
+    
   </div>
 
+</div>
 
 
 
 
 
-
-
-
+<script src="js/loopDiapo.js"></script>
   <script src="js/dateHeure.js"></script>
   <script src="js/ephe.js"></script>
   <script src="js/getConfigSEE.js"></script>
   <script src="API/listeDiapo.js"></script>
   <script src="js/meteo.js"></script>
+ 
+  <script src="js/defaultScreen.js"></script>
+  
   <script>
-    /*Init variable */
-    var env = "prod"
-    var idEcran = 1
-    var urlMedia = ""
-   // var urlAPI = 'http://127.0.0.1:8000/see/API/diapo/' + idEcran
-    var player = 1
-    var noplayer = 2
-    var playerLoad = 1
-
-    var numImage = 0
-    var weekDisplay = false
-    var weekNo = true
-    var weekType = false
-    const refresh = 21600000
-    var lastUdpateMeteo = Date.now()
 
     const axios = require('axios')
     const fs = require('fs')
     const csv = require('csv-parse')
     var path = require("path")
+    const request = require('request')
+    const fetch = require('node-fetch');
 
+    /*Init variable */
+    var init = true
+    var env = "prod"
+    var urlMedia = ""
 
-    words = __dirname.split('Desktop');
-    const pathSEE = words[0] + "Desktop/SEE/"
-    console.log(pathSEE)
+    // Path Media et config
+    const pathSEE = "C:/SEE/"
+    const pathMedia = "C:/SEE/media/"
 
+    // Double DIV IMG
+    var imgShow= 1
+    var imgLoad= 1
 
+    // Double DIV VIDEO
+    var player = 1
+    var noplayer = 2
+    var playerLoad = 1
 
-    //document.getElementById("divImg").style.display = "none";
-    document.getElementById("pageDefault").style.display = "none";
-    var idEcran = 1
+    
+    var numImage = 0
+    var ArrayMedia = []
+
+    //var weekDisplay = false
+   // var weekNo = true
+   // var weekType = false
+
+    const refresh = 21600000
+    var lastUdpateMeteo = Date.now() 
 
     // End init variable
-    //requestJsonDiapo()
-    getConfigSEE()
+  
     ephe()
-    
-
     requestJsonMeteo()
+    getConfigSEE()
 
 
+    /*
+    fs.writeFile('C:/Users/Aslak FAVREAU/Desktop/media/test.txt', 'Hello World!', function (err) {
+      if (err) return console.log(err);
+      console.log('Hello World > helloworld.txt');
+    });
+    */
 
 
-
-
-    function defaultScreen() {
-      document.getElementById("divImg").style.display = "none";
-      document.getElementById("divVideo1").style.display = "none";
-      document.getElementById("divVideo2").style.display = "none";
-      document.getElementById("pageDefault").style.display = "block";
-      url = "url(blank.jpg)";
-      document.getElementById("divImg").style.backgroundImage = url;
-      console.log("defaul")
-      if (lastUdpateMeteo + 21600000 - Date.now() < 0) {
-        console.log("update Meteo et Ephe à " + Date.now())
-        lastUdpateMeteo = Date.now()
-        requestJsonMeteo()
-        ephe()
-      }
-      numImage = 0;
-      console.log(urlAPI)
-      requestJsonDiapo();
-      /*Affichage de la date et de la semaine et de l heure sur la page par default*/
-      document.getElementById("date").innerHTML = dateFr()
-      document.getElementById("heure").innerHTML = heure()
-
-
-      returnSemainePaireImpaire = semainePaireImpaire(new Date())
-      if (weekNo == true) {
-        document.getElementById("semainePaireImpaire").innerHTML = "Semaine" + " (" + returnSemainePaireImpaire[0] + ")"
-        if (weekType == true) {
-          document.getElementById("semainePaireImpaire").innerHTML = returnSemainePaireImpaire[1] + " (" + returnSemainePaireImpaire[0] + ")"
-        }
-
-      }
-
-
- 
-
-        setTimeout(function () {
-        numImage = 0;
-           // Test si le 0 de la boucle est une video
-           if ((numImage + 1) < ArrayDiapo.length && ArrayDiapo[numImage][0] === 'mp4') {
-          console.log(playerLoad + 'player chargé')
-          
-          console.log(urlMedia)
-          urlVideo = urlServeurMedia + ArrayLoop[numImage + 1][1]
-          console.log(urlVideo)
-          document.getElementById("srcVideo" + playerLoad).src = urlVideo;
-          document.getElementById("video" + playerLoad).load()
-          if (playerLoad == 1) {
-            playerLoad = 2
-          }
-          else {
-            playerLoad = 1
-          }
-        }
-      },
-        2500);
-
-
-      setTimeout(function () {
-        numImage = 0;
-
-        LoopDiapo(ArrayDiapo)
-        
-        document.getElementById("divImg").style.display = "block";
-        document.getElementById("pageDefault").style.display = "none";
-      },
-        5000);
-
-
-
+    /*
+    Fonction pour téléharger les img sur le ecran
+    */
+    async function download(nomMedia) {
+      urlMedia = "http://soek.fr/uploads/see/media/" + nomMedia
+      const response = await fetch(urlMedia);
+      const buffer = await response.buffer();
+      fs.writeFile(pathMedia + nomMedia, buffer, () =>
+        console.log('finished downloading!' + nomMedia));
     }
 
 
 
-    function LoopDiapo(ArrayLoop) {
-      // Partie en fin de boucle
-      console.log("longeur diapo = " + ArrayLoop.length + " num = " + numImage+ " type ")
-      if (numImage == ArrayLoop.length) {
-        console.log("num = array lengt")
-        getConfigSEE()
-        defaultScreen()
-        numImage = 0
-
-
-      } else {
-        // Test si INDEX+1 de la boucle est une video
-        if ((numImage + 1) < ArrayLoop.length && ArrayLoop[numImage + 1][0] === 'mp4') {
-          console.log(playerLoad + 'player chargé')
-          console.log(urlMedia)
-          urlVideo = urlServeurMedia + ArrayLoop[numImage + 1][1]
-          console.log(urlVideo)
-          document.getElementById("srcVideo" + playerLoad).src = urlVideo;
-          document.getElementById("video" + playerLoad).load()
-          if (playerLoad == 1) {
-            playerLoad = 2
-          }
-          else {
-            playerLoad = 1
-          }
-        }
-
-
-
-        if (ArrayLoop[numImage][0] === 'mp4') {
-          console.log(player + 'player en cours')
-          document.getElementById("divVideo" + player).style.display = "block";
-          document.getElementById("divImg").style.display = "none";
-          document.getElementById("divVideo" + noplayer).style.display = "none";
-
-
-          
-
-          document.getElementById("video" + player).play()
-          document.getElementById('video' + player).addEventListener('ended', myHandler, false);
-          function myHandler(e) {
-            
-            numImage++;
-            console.log(numImage)
-            console.log("fin video")
-            document.getElementById("video" + player).pause()
-            document.getElementById("divVideo" + player).style.display = "none";
-            document.getElementById("divImg").style.display = "block";
-            if (player == 1) {
-              player = 2
-              noplayer = 1
-
-            }
-            else {
-              player = 1
-              noplayer = 2
-            }
-            LoopDiapo(ArrayLoop)
-           
-          
-
-          }
-        }
-        else if (ArrayLoop[numImage][0] === 'png' || ArrayLoop[numImage][0] === 'jpeg') {
-
-
-
-          console.log(ArrayLoop[numImage][0] + " img")
-          url = urlMedia + ArrayLoop[numImage][1] + ")";
-          document.getElementById("divImg").style.backgroundImage = url;
-          setTimeout(function (p) {
-            numImage++;
-            console.log("next")
-            LoopDiapo(ArrayLoop)
-
-          }, ArrayLoop[numImage][2] * 1000);
-
-
-        }
-
-        /*
-      Quand on sera en local on aura les fichier en local host 
-      url = "url(img/" + ArrayLoop[numImage] + ")";*/
 
 
 
 
-      }
 
 
 
+    document.getElementById('video1').addEventListener('ended', endVideo1, false);
+    function endVideo1(e) {
+      console.log("fin player1")
+     document.getElementById("divVideo1").style.display = "none";
+      //  document.getElementById("video" + player).pause()        
+    
+      
+        console.log("next player is ="+player)   
+      LoopDiapo()
+    }
+
+    document.getElementById('video2').addEventListener('ended', endVideo2, false);
+    function endVideo2(e) {
+      console.log("fin player2")
+      document.getElementById("divVideo2").style.display = "none";
+      //  document.getElementById("video" + player).pause()        
+  
+      
+        console.log("next player is ="+player)  
+      LoopDiapo()
     }
 
   </script>
