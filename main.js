@@ -8,12 +8,12 @@ function createWindow () {
     icon: 'assets/Flavicon.png',
     width: 800,
     height: 600,
-    fullscreen : true, 
-    frame:false,
+    fullscreen : false, 
+    frame:true,
     alwaysOnTop :true,
     webPreferences: {
       nodeIntegration: true,
-      devTools: false
+      devTools: true
     }
   })
 

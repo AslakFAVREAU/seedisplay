@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="./node_modules/jquery/dist/jquery.slim.min.js" />
   <link rel="stylesheet" href="./node_modules/popper.js/dist/popper.min.js" />
   <link rel="stylesheet" href="./node_modules/bootstrap/dist/js/bootstrap.min.js" />
+  <link rel="stylesheet" href="app.scss" />
   <script>let $ = require('jquery');</script>
   <script>require('popper.js');</script>
   <script>require('bootstrap');</script>
@@ -29,10 +30,14 @@
 
 
 #pageDefault{
-  background-color: white;
+  background-image: url('logo/back.jpg');
+  background-size: cover;
+background-repeat: no-repeat;
 }
 
-  
+  #divHeure{
+    font-size:100%;
+  }
 
     #divImg1,#divImg2 {
       /* The image used */
@@ -56,7 +61,7 @@
   </style>
 </head>
 
-<body>
+<body style='cursor:none'>
   <!--<h1>Hello World!</h1>
   We are using node
   <script>document.write(process.versions.node)</script>,
@@ -68,71 +73,119 @@
   
 
   <div id="pageDefault">
-
-    <div class="contain m-5 p-5 border border-primary text-center">
-
-      <strong><h1 class="display-1" id=date></h1></strong>
-      <em><h2 class="display-3" id="ephe"></h2></em>
-      <div class="" id="week">
-        <h2 class="display-2" id=semainePaireImpaire></h2>
+    <div id="gifNoel" style="display:none;height: auto;position:absolute;
+    z-index: 2;"> 
+      <img id="imgGif" src="logo/gifNoel.gif"> 
       </div>
-      <h1 class="display-1" id=heure></h1>
+<div style="height:2%"></div>
 
+    <div id="titleMain" class="contain m-5  text-center" style="height: 40%;color:black;background-color:rgba(255, 255, 255, 0.8);border-radius: 10px 100px / 120px;">
+ 
+      <div id="divHeure" style="height: 30%"> <strong></strong><h1 class="display-1 p-5 " id=heure></h1> </strong></strong></div>
+      <br>
+      
+      <div  id="week">
+        <h2 class="display-2" id=semainePaireImpaire></h2>
+      </div><br>
+      <strong><h2 class="display-1" id=date></h2></strong>
+      <em><h4 class="display-3" id="ephe"></h4></em>
     </div> 
 
+<!--div class="contain m-5 p-5 border border-primary">
+  <img style="float: left;height:150px; margin:10px"id="actuImg"/>
+  <h1 id="actuT"></h1>
+  <p id="actuP"></p>
+ 
+  <h6 id="actuSource"></h6>
 
+</div-->
 
 <div class="fixed-bottom ">
     <div id="zone_meteo">
       <div class="">
         <div class="card-deck p-5  text-center">
 
-          <div class="card shadow-sm" id="today">
+          <div class="card shadow-sm" id="today" style="background-color:rgba(255, 255, 255, 0.8);border-radius: 10%;">
             <div class="card-body">
-              <img id='todayImgMeteo' src="" />
+              <img id='todayImgMeteo' style=" max-width: 30%;"  src="" />
               <h1 id="todayTemp" class="card-title pricing-card-title"></h1>
+              <div style="float:left;width: 50%;"> 
+                <img  style=" max-width: 50%;" src="logo/meteo/040-sunrise.png" /><div id="todaySunRise"></div>
+              </div>
+              <div style="float:right;width: 50%;">
+                <img  style=" max-width: 50%;" src="logo/meteo/041-sunset.png" /><div id="todaySunSet"></div>
+              </div>
+             
+              
             </div>
             <div class="card-footer">
-              <h3 class="my-0 font-weight-normal">aujourd'hui</h3>
+              <h3 class="my-0 font-weight-bold" style="font-style:Montserrat">aujourd'hui</h3>
             </div>
           </div>
 
-          <div class="card shadow-sm" id="d+1">
-            <div class="card-body">
-              <img id='ImgMeteod+1' src="" />
+          <div class="card shadow-sm" id="d+1" style="background-color:rgba(255, 255, 255, 0.8);border-radius: 10%;">
+            <div class="card-body" >
+              <img id='ImgMeteod+1' style=" max-width: 30%;" src="" />
               <h1 id="Tempd+1" class="card-title pricing-card-title"></h1>
+              <div style="float:left;width: 50%;"> 
+                <img  style=" max-width: 50%;" src="logo/meteo/040-sunrise.png" /><div id="SunRise+1"></div>
+              </div>
+              <div style="float:right;width: 50%;">
+                <img  style=" max-width: 50%;" src="logo/meteo/041-sunset.png" /><div id="SunSet+1"></div>
+              </div>           
             </div>
             <div class="card-footer">
-              <h3 class="my-0 font-weight-normal">demain</h3>
+              <h3 class="my-0 font-weight-bold">demain</h3>
             </div>
           </div>
 
-          <div class="card shadow-sm" id="d+2">
-            <div class="card-body">
-              <img id='ImgMeteod+2' src="" />
+          <div class="card shadow-sm" id="d+2"style="background-color:rgba(255, 255, 255, 0.8);
+          border-radius: 10%;">
+            <div class="card-body" s>
+              <img id='ImgMeteod+2' style=" max-width: 30%;" src="" />
               <h1 id="Tempd+2" class="card-title pricing-card-title"></h1>
+              <div style="float:left;width: 50%;"> 
+                <img  style=" max-width: 50%;" src="logo/meteo/040-sunrise.png" /><div id="SunRise+2"></div>
+              </div>
+              <div style="float:right;width: 50%;">
+                <img  style=" max-width: 50%;" src="logo/meteo/041-sunset.png" /><div id="SunSet+2"></div>
+              </div>
             </div>
             <div class="card-footer">
-              <h3 id="dateJourd+2" class="my-0 font-weight-normal"></h3>
+              <h3 id="dateJourd+2" class="my-0 font-weight-bold"></h3>
             </div>
           </div>
 
-          <div class="card shadow-sm" id="d+3">
-            <div class="card-body">
-              <img id='ImgMeteod+3' src="" />
+          <div class="card shadow-sm" id="d+3" style="background-color:rgba(255, 255, 255, 0.8);
+          border-radius: 10%;">
+            <div class="card-body" >
+              <img id='ImgMeteod+3' style=" max-width: 30%;" src="" />
               <h1 id="Tempd+3" class="card-title pricing-card-title"></h1>
+              <div style="float:left;width: 50%;"> 
+                <img  style=" max-width: 50%;" src="logo/meteo/040-sunrise.png" /><div id="SunRise+3"></div>
+              </div>
+              <div style="float:right;width: 50%;">
+                <img  style=" max-width: 50%;" src="logo/meteo/041-sunset.png" /><div id="SunSet+3"></div>
+              </div>
             </div>
             <div class="card-footer">
-              <h3 id="dateJourd+3" class="my-0 font-weight-normal"></h3>
+              <h3 id="dateJourd+3" class="my-0 font-weight-bold"></h3>
             </div>
           </div>
-          <div class="card shadow-sm" id="d+4">
+          <div class="card shadow-sm" id="d+4" style="background-color:rgba(255, 255, 255, 0.8);
+          border-radius: 10%;">
             <div class="card-body">
-              <img id='ImgMeteod+4' src="" />
+              <img id='ImgMeteod+4' style=" max-width: 30%;" src="" />
               <h1 id="Tempd+4" class="card-title pricing-card-title"></h1>
+              <div style="float:left;width: 50%;"> 
+                <img  style=" max-width: 50%;" src="logo/meteo/040-sunrise.png" /><div id="SunRise+4"></div>
+              </div>
+              <div style="float:right;width: 50%;">
+                <img  style=" max-width: 50%;" src="logo/meteo/041-sunset.png" /><div id="SunSet+4"></div>
+              </div>
             </div>
             <div class="card-footer">
-              <h3 id="dateJourd+4" class="my-0 font-weight-normal"></h3>
+              <h3 id="dateJourd+4" class="my-0 font-weight-bold"></h3>
             </div>
           </div>
 
@@ -152,9 +205,8 @@
 
 
     <div class="row " id="footer">
-      <div class="col-12 align-self-center text-center p-2"><img class="img-fluid" style="height: 30px;" src="logo/see.png" />
-     <span> by </span>
-      <img class="img-fluid" style="height: 30px;" src="logo/soe.png" /></div>
+      <div class="col-12 align-self-center text-center p-2 mb-4">
+      <img class="img-fluid" style="height: 30px;" src="logo/see_WH.png" /></div>
      </div>
     </div>
   </div>
@@ -210,7 +262,7 @@
   <script src="js/getConfigSEE.js"></script>
   <script src="API/listeDiapo.js"></script>
   <script src="js/meteo.js"></script>
- 
+  <script src="js/restartGif.js"></script>
   <script src="js/defaultScreen.js"></script>
   
   <script>
@@ -255,6 +307,7 @@
   
     ephe()
     requestJsonMeteo()
+    //requestJsonActuFr()
     getConfigSEE()
 
 
@@ -270,7 +323,7 @@
     Fonction pour téléharger les img sur le ecran
     */
     async function download(nomMedia) {
-      urlMedia = "http://soek.fr/uploads/see/media/" + nomMedia
+      urlMedia = "https://soek.fr/uploads/see/media/" + nomMedia
       const response = await fetch(urlMedia);
       const buffer = await response.buffer();
       fs.writeFile(pathMedia + nomMedia, buffer, () =>
@@ -305,7 +358,7 @@
   
       
         console.log("next player is ="+player)  
-      LoopDiapo()
+     LoopDiapo()
     }
 
   </script>
