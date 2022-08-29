@@ -4,12 +4,23 @@
   "description": "",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    
+  },
+  "postinstall": "electron-builder install-app-deps",
+  "build": {
+    "appId": "yourappid",
+    "win": {
+      "target": "squirrel"
+    }
   },
   "author": "Evenement SOE",
   "license": "ISC",
   "devDependencies": {
-    "electron": "^10.1.0"
+    "electron": "^10.1.0",
+    "electron-builder": "^23.3.3"
   },
   "dependencies": {
     "axios": "^0.20.0",
@@ -17,7 +28,7 @@
     "config": "^3.3.1",
     "csv-parse": "^4.12.0",
     "csv-parser": "^2.3.3",
-    "electron-builder": "^23.3.3",
+    "electron-builder-squirrel-windows": "^23.4.0",
     "electron-packager": "^15.1.0",
     "jquery": "^3.5.1",
     "node-fetch": "^2.6.1",
