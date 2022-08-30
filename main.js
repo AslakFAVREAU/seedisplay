@@ -1,6 +1,40 @@
-const { app, BrowserWindow } = require('electron')
+const { app, BrowserWindow } = require('electron');
+const log = require('electron-log');
+const updater = require("electron-updater");
+const autoUpdater = updater.autoUpdater;
+//-------------------------------------------------------------------
+// Logging
+//
+// THIS SECTION IS NOT REQUIRED
+//
+// This logging setup is not required for auto-updates to work,
+// but it sure makes debugging easier :)
+//-------------------------------------------------------------------
+autoUpdater.logger = log;
+autoUpdater.logger.transports.file.level = 'info';
+log.info('App starting...');
 
 
+
+
+
+//
+// CHOOSE one of the following options for Auto updates
+//
+
+//-------------------------------------------------------------------
+// Auto updates - Option 1 - Simplest version
+//
+// This will immediately download an update, then install when the
+// app quits.
+//-------------------------------------------------------------------
+app.on('ready', function()  {
+  autoUpdater.checkForUpdatesAndNotify();
+});
+
+///////////////////
+// End Auto upadater //
+///////////////////
 
 function createWindow () {
   // Cree la fenetre du navigateur.
@@ -8,11 +42,12 @@ function createWindow () {
     icon: 'assets/Flavicon.png',
     width: 800,
     height: 600,
-    fullscreen : false, 
+    fullscreen : true, 
     frame:true,
     alwaysOnTop :true,
     webPreferences: {
       nodeIntegration: true,
+      contextIsolation: false,
       devTools: true
     }
   })

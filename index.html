@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+
 <html>
 
 <head>
@@ -21,25 +21,27 @@
       overflow: hidden;
     }
 
-  
 
-    #pageDefault,#pagePsaume {
+
+    #pageDefault,
+    #pagePsaume {
       height: 100vh;
     }
 
 
 
-#pageDefault{
-  background-image: url('logo/back.jpg');
-  background-size: cover;
-background-repeat: no-repeat;
-}
+    #pageDefault {
+      background-image: url('logo/back.jpg');
+      background-size: cover;
+      background-repeat: no-repeat;
+    }
 
-  #divHeure{
-    font-size:100%;
-  }
+    #divHeure {
+      font-size: 100%;
+    }
 
-    #divImg1,#divImg2 {
+    #divImg1,
+    #divImg2 {
       /* The image used */
       background-image: url("default.jpg");
       height: 100vh;
@@ -51,13 +53,10 @@ background-repeat: no-repeat;
       background-repeat: no-repeat;
       background-size: contain;
     }
-    body {
-  font-family: 'arial', sans-serif !important;
-}
- 
 
-  
-   
+    body {
+      font-family: 'arial', sans-serif !important;
+    }
   </style>
 </head>
 
@@ -70,28 +69,35 @@ background-repeat: no-repeat;
   and Electron
   <script>document.write(process.versions.electron)</script>.-->
 
-  
+
 
   <div id="pageDefault">
     <div id="gifNoel" style="display:none;height: auto;position:absolute;
-    z-index: 2;"> 
-      <img id="imgGif" src="logo/gifNoel.gif"> 
-      </div>
-<div style="height:2%"></div>
+    z-index: 2;">
+      <img id="imgGif" src="logo/gifNoel.gif">
+    </div>
+    <div style="height:2%"></div>
 
-    <div id="titleMain" class="contain m-5  text-center" style="height: 40%;color:black;background-color:rgba(255, 255, 255, 0.8);border-radius: 10px 100px / 120px;">
- 
-      <div id="divHeure" style="height: 30%"> <strong></strong><h1 class="display-1 p-5 " id=heure></h1> </strong></strong></div>
+    <div id="titleMain" class="contain m-5  text-center"
+      style="height: 40%;color:black;background-color:rgba(255, 255, 255, 0.8);border-radius: 10px 100px / 120px;">
+
+      <div id="divHeure" style="height: 30%"> <strong></strong>
+        <h1 class="display-1 p-5 " id=heure></h1> </strong></strong>
+      </div>
       <br>
-      
-      <div  id="week">
+
+      <div id="week">
         <h2 class="display-2" id=semainePaireImpaire></h2>
       </div><br>
-      <strong><h2 class="display-1" id=date></h2></strong>
-      <em><h4 class="display-3" id="ephe"></h4></em>
-    </div> 
+      <strong>
+        <h2 class="display-1" id=date></h2>
+      </strong>
+      <em>
+        <h4 class="display-3" id="ephe"></h4>
+      </em>
+    </div>
 
-<!--div class="contain m-5 p-5 border border-primary">
+    <!--div class="contain m-5 p-5 border border-primary">
   <img style="float: left;height:150px; margin:10px"id="actuImg"/>
   <h1 id="actuT"></h1>
   <p id="actuP"></p>
@@ -100,114 +106,126 @@ background-repeat: no-repeat;
 
 </div-->
 
-<div class="fixed-bottom ">
-    <div id="zone_meteo">
-      <div class="">
-        <div class="card-deck p-5  text-center">
+    <div class="fixed-bottom ">
+      <div id="zone_meteo">
+        <div class="">
+          <div class="card-deck p-5  text-center">
 
-          <div class="card shadow-sm" id="today" style="background-color:rgba(255, 255, 255, 0.8);border-radius: 10%;">
-            <div class="card-body">
-              <img id='todayImgMeteo' style=" max-width: 30%;"  src="" />
-              <h1 id="todayTemp" class="card-title pricing-card-title"></h1>
-              <div style="float:left;width: 50%;"> 
-                <img  style=" max-width: 50%;" src="logo/meteo/040-sunrise.png" /><div id="todaySunRise"></div>
-              </div>
-              <div style="float:right;width: 50%;">
-                <img  style=" max-width: 50%;" src="logo/meteo/041-sunset.png" /><div id="todaySunSet"></div>
-              </div>
-             
-              
-            </div>
-            <div class="card-footer">
-              <h3 class="my-0 font-weight-bold" style="font-style:Montserrat">aujourd'hui</h3>
-            </div>
-          </div>
+            <div class="card shadow-sm" id="today"
+              style="background-color:rgba(255, 255, 255, 0.8);border-radius: 10%;">
+              <div class="card-body">
+                <img id='todayImgMeteo' style=" max-width: 30%;" src="" />
+                <h1 id="todayTemp" class="card-title pricing-card-title"></h1>
+                <div style="float:left;width: 50%;">
+                  <img style=" max-width: 50%;" src="logo/meteo/040-sunrise.png" />
+                  <div id="todaySunRise"></div>
+                </div>
+                <div style="float:right;width: 50%;">
+                  <img style=" max-width: 50%;" src="logo/meteo/041-sunset.png" />
+                  <div id="todaySunSet"></div>
+                </div>
 
-          <div class="card shadow-sm" id="d+1" style="background-color:rgba(255, 255, 255, 0.8);border-radius: 10%;">
-            <div class="card-body" >
-              <img id='ImgMeteod+1' style=" max-width: 30%;" src="" />
-              <h1 id="Tempd+1" class="card-title pricing-card-title"></h1>
-              <div style="float:left;width: 50%;"> 
-                <img  style=" max-width: 50%;" src="logo/meteo/040-sunrise.png" /><div id="SunRise+1"></div>
-              </div>
-              <div style="float:right;width: 50%;">
-                <img  style=" max-width: 50%;" src="logo/meteo/041-sunset.png" /><div id="SunSet+1"></div>
-              </div>           
-            </div>
-            <div class="card-footer">
-              <h3 class="my-0 font-weight-bold">demain</h3>
-            </div>
-          </div>
 
-          <div class="card shadow-sm" id="d+2"style="background-color:rgba(255, 255, 255, 0.8);
+              </div>
+              <div class="card-footer">
+                <h3 class="my-0 font-weight-bold" style="font-style:Montserrat">aujourd'hui</h3>
+              </div>
+            </div>
+
+            <div class="card shadow-sm" id="d+1" style="background-color:rgba(255, 255, 255, 0.8);border-radius: 10%;">
+              <div class="card-body">
+                <img id='ImgMeteod+1' style=" max-width: 30%;" src="" />
+                <h1 id="Tempd+1" class="card-title pricing-card-title"></h1>
+                <div style="float:left;width: 50%;">
+                  <img style=" max-width: 50%;" src="logo/meteo/040-sunrise.png" />
+                  <div id="SunRise+1"></div>
+                </div>
+                <div style="float:right;width: 50%;">
+                  <img style=" max-width: 50%;" src="logo/meteo/041-sunset.png" />
+                  <div id="SunSet+1"></div>
+                </div>
+              </div>
+              <div class="card-footer">
+                <h3 class="my-0 font-weight-bold">demain</h3>
+              </div>
+            </div>
+
+            <div class="card shadow-sm" id="d+2" style="background-color:rgba(255, 255, 255, 0.8);
           border-radius: 10%;">
-            <div class="card-body" s>
-              <img id='ImgMeteod+2' style=" max-width: 30%;" src="" />
-              <h1 id="Tempd+2" class="card-title pricing-card-title"></h1>
-              <div style="float:left;width: 50%;"> 
-                <img  style=" max-width: 50%;" src="logo/meteo/040-sunrise.png" /><div id="SunRise+2"></div>
+              <div class="card-body" s>
+                <img id='ImgMeteod+2' style=" max-width: 30%;" src="" />
+                <h1 id="Tempd+2" class="card-title pricing-card-title"></h1>
+                <div style="float:left;width: 50%;">
+                  <img style=" max-width: 50%;" src="logo/meteo/040-sunrise.png" />
+                  <div id="SunRise+2"></div>
+                </div>
+                <div style="float:right;width: 50%;">
+                  <img style=" max-width: 50%;" src="logo/meteo/041-sunset.png" />
+                  <div id="SunSet+2"></div>
+                </div>
               </div>
-              <div style="float:right;width: 50%;">
-                <img  style=" max-width: 50%;" src="logo/meteo/041-sunset.png" /><div id="SunSet+2"></div>
+              <div class="card-footer">
+                <h3 id="dateJourd+2" class="my-0 font-weight-bold"></h3>
               </div>
             </div>
-            <div class="card-footer">
-              <h3 id="dateJourd+2" class="my-0 font-weight-bold"></h3>
-            </div>
-          </div>
 
-          <div class="card shadow-sm" id="d+3" style="background-color:rgba(255, 255, 255, 0.8);
+            <div class="card shadow-sm" id="d+3" style="background-color:rgba(255, 255, 255, 0.8);
           border-radius: 10%;">
-            <div class="card-body" >
-              <img id='ImgMeteod+3' style=" max-width: 30%;" src="" />
-              <h1 id="Tempd+3" class="card-title pricing-card-title"></h1>
-              <div style="float:left;width: 50%;"> 
-                <img  style=" max-width: 50%;" src="logo/meteo/040-sunrise.png" /><div id="SunRise+3"></div>
+              <div class="card-body">
+                <img id='ImgMeteod+3' style=" max-width: 30%;" src="" />
+                <h1 id="Tempd+3" class="card-title pricing-card-title"></h1>
+                <div style="float:left;width: 50%;">
+                  <img style=" max-width: 50%;" src="logo/meteo/040-sunrise.png" />
+                  <div id="SunRise+3"></div>
+                </div>
+                <div style="float:right;width: 50%;">
+                  <img style=" max-width: 50%;" src="logo/meteo/041-sunset.png" />
+                  <div id="SunSet+3"></div>
+                </div>
               </div>
-              <div style="float:right;width: 50%;">
-                <img  style=" max-width: 50%;" src="logo/meteo/041-sunset.png" /><div id="SunSet+3"></div>
+              <div class="card-footer">
+                <h3 id="dateJourd+3" class="my-0 font-weight-bold"></h3>
               </div>
             </div>
-            <div class="card-footer">
-              <h3 id="dateJourd+3" class="my-0 font-weight-bold"></h3>
-            </div>
-          </div>
-          <div class="card shadow-sm" id="d+4" style="background-color:rgba(255, 255, 255, 0.8);
+            <div class="card shadow-sm" id="d+4" style="background-color:rgba(255, 255, 255, 0.8);
           border-radius: 10%;">
-            <div class="card-body">
-              <img id='ImgMeteod+4' style=" max-width: 30%;" src="" />
-              <h1 id="Tempd+4" class="card-title pricing-card-title"></h1>
-              <div style="float:left;width: 50%;"> 
-                <img  style=" max-width: 50%;" src="logo/meteo/040-sunrise.png" /><div id="SunRise+4"></div>
+              <div class="card-body">
+                <img id='ImgMeteod+4' style=" max-width: 30%;" src="" />
+                <h1 id="Tempd+4" class="card-title pricing-card-title"></h1>
+                <div style="float:left;width: 50%;">
+                  <img style=" max-width: 50%;" src="logo/meteo/040-sunrise.png" />
+                  <div id="SunRise+4"></div>
+                </div>
+                <div style="float:right;width: 50%;">
+                  <img style=" max-width: 50%;" src="logo/meteo/041-sunset.png" />
+                  <div id="SunSet+4"></div>
+                </div>
               </div>
-              <div style="float:right;width: 50%;">
-                <img  style=" max-width: 50%;" src="logo/meteo/041-sunset.png" /><div id="SunSet+4"></div>
+              <div class="card-footer">
+                <h3 id="dateJourd+4" class="my-0 font-weight-bold"></h3>
               </div>
             </div>
-            <div class="card-footer">
-              <h3 id="dateJourd+4" class="my-0 font-weight-bold"></h3>
-            </div>
+
+
+
+
+
           </div>
-
-
-
-
 
         </div>
+
+
+
 
       </div>
 
 
 
-
-    </div>
-
-
-
-    <div class="row " id="footer">
-      <div class="col-12 align-self-center text-center p-2 mb-4">
-      <img class="img-fluid" style="height: 30px;" src="logo/see_WH.png" /></div>
-     </div>
+      <div class="row " id="footer">
+        <div class="col-12 align-self-center text-center p-2 mb-4">
+          <img class="img-fluid" style="height: 30px;" src="logo/see_WH.png" />
+        </div>
+      </div>
     </div>
   </div>
 
@@ -229,34 +247,17 @@ background-repeat: no-repeat;
   <div id="divImg1"></div>
   <div id="divImg2"></div>
 
-<div id="pagePsaume">
+  <div id="pagePsaume">
 
-  <div class="row mb-2">
-    <div class="col-md-12">
-      <div class="card flex-md-row mb-4 box-shadow h-md-250">
-        <div class="card-body d-flex flex-column align-items-start">
-          <strong class="d-inline-block mb-2 text-primary">Psaume 1</strong>
-          <h3 class="mb-0">
-            <a class="text-dark" href="#">"Les deux voies"</a>
-          </h3>
-          <div class="mb-1 text-muted">Nov 12</div>
-          <p class="card-text mb-auto">Heureux l'homme qui ne suit pas le conseil des impies, ni dans la voie des pêcheurs ne s'arrête, ni au siège des railleurs ne s'assied, mais se plaît dans la voie de Yahvé, mais murmure sa loi jour et nuit !</p>
-          <a href="#">Continue reading</a>
-        </div>
-        <img class="card-img-right flex-auto d-none d-md-block" data-src="holder.js/200x250?theme=thumb" alt="Thumbnail [200x250]" style="width: 200px; height: 250px;" 
-        src="http://www.psaumes.site-catholique.fr/public/image/Sainte-Bible-1.jpg" data-holder-rendered="true">
-      </div>
-    </div>
-    
+ 
+
   </div>
 
-</div>
 
 
 
 
-
-<script src="js/loopDiapo.js"></script>
+  <script src="js/loopDiapo.js"></script>
   <script src="js/dateHeure.js"></script>
   <script src="js/ephe.js"></script>
   <script src="js/getConfigSEE.js"></script>
@@ -264,7 +265,7 @@ background-repeat: no-repeat;
   <script src="js/meteo.js"></script>
   <script src="js/restartGif.js"></script>
   <script src="js/defaultScreen.js"></script>
-  
+
   <script>
 
     const axios = require('axios')
@@ -284,27 +285,27 @@ background-repeat: no-repeat;
     const pathMedia = "C:/SEE/media/"
 
     // Double DIV IMG
-    var imgShow= 1
-    var imgLoad= 1
+    var imgShow = 1
+    var imgLoad = 1
 
     // Double DIV VIDEO
     var player = 1
     var noplayer = 2
     var playerLoad = 1
 
-    
+
     var numImage = 0
     var ArrayMedia = []
 
     //var weekDisplay = false
-   // var weekNo = true
-   // var weekType = false
+    // var weekNo = true
+    // var weekType = false
 
     const refresh = 21600000
-    var lastUdpateMeteo = Date.now() 
+    var lastUdpateMeteo = Date.now()
 
     // End init variable
-  
+
     ephe()
     requestJsonMeteo()
     //requestJsonActuFr()
@@ -342,11 +343,11 @@ background-repeat: no-repeat;
     document.getElementById('video1').addEventListener('ended', endVideo1, false);
     function endVideo1(e) {
       console.log("fin player1")
-     document.getElementById("divVideo1").style.display = "none";
+      document.getElementById("divVideo1").style.display = "none";
       //  document.getElementById("video" + player).pause()        
-    
-      
-        console.log("next player is ="+player)   
+
+
+      console.log("next player is =" + player)
       LoopDiapo()
     }
 
@@ -355,10 +356,10 @@ background-repeat: no-repeat;
       console.log("fin player2")
       document.getElementById("divVideo2").style.display = "none";
       //  document.getElementById("video" + player).pause()        
-  
-      
-        console.log("next player is ="+player)  
-     LoopDiapo()
+
+
+      console.log("next player is =" + player)
+      LoopDiapo()
     }
 
   </script>
