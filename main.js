@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, Menu, BrowserWindow } = require('electron');
 const log = require('electron-log');
 const updater = require("electron-updater");
 const autoUpdater = updater.autoUpdater;
@@ -14,6 +14,77 @@ autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
 log.info('App starting...');
 
+//-------------------------------------------------------------------
+// Define the menu
+//
+// THIS SECTION IS NOT REQUIRED
+//-------------------------------------------------------------------
+let template = []
+
+
+
+
+//-------------------------------------------------------------------
+// Open a window that displays the version
+//
+// THIS SECTION IS NOT REQUIRED
+//
+// This isn't required for auto-updates to work, but it's easier
+// for the app to show a window than to have to click "About" to see
+// that updates are working.
+//-------------------------------------------------------------------
+let win;
+
+function sendStatusToWindow(text) {
+  log.info(text);
+  win.webContents.send('message', text);
+}
+function createDefaultWindow() {
+  win = new BrowserWindow({
+   
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+  win.webContents.openDevTools();
+  win.on('closed', () => {
+    win = null;
+  });
+  win.loadURL(`file://${__dirname}/version.html#v${app.getVersion()}`);
+  return win;
+}
+autoUpdater.on('checking-for-update', () => {
+  sendStatusToWindow('Checking for update...');
+})
+autoUpdater.on('update-available', (info) => {
+  sendStatusToWindow('Update available.');
+})
+autoUpdater.on('update-not-available', (info) => {
+  sendStatusToWindow('Update not available.');
+})
+autoUpdater.on('error', (err) => {
+  sendStatusToWindow('Error in auto-updater. ' + err);
+})
+autoUpdater.on('download-progress', (progressObj) => {
+  let log_message = "Download speed: " + progressObj.bytesPerSecond;
+  log_message = log_message + ' - Downloaded ' + progressObj.percent + '%';
+  log_message = log_message + ' (' + progressObj.transferred + "/" + progressObj.total + ')';
+  sendStatusToWindow(log_message);
+})
+autoUpdater.on('update-downloaded', (info) => {
+  sendStatusToWindow('Update downloaded');
+});
+app.on('ready', function() {
+  // Create the Menu
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+
+  createDefaultWindow();
+});
+app.on('window-all-closed', () => {
+  app.quit();
+});
 
 
 
@@ -43,14 +114,15 @@ function createWindow () {
     width: 800,
     height: 600,
     fullscreen : true, 
-    frame:true,
-    alwaysOnTop :true,
+    frame:false,
+    alwaysOnTop :true,    
     webPreferences: {
       nodeIntegration: true,
+      nativeWindowOpen: true,
       contextIsolation: false,
-      devTools: true
+      devTools: false
     }
-  })
+    })
 
   // et charger le fichier index.html de l'application.
   win.loadFile('index.html')
@@ -80,4 +152,5 @@ app.on('activate', () => {
   }
 })
 
-// Dans ce fichier, vous pouvez inclure le reste de votre code spécifique au processus principal. Vous pouvez également le mettre dans des fichiers séparés et les inclure ici.
+
+//End
