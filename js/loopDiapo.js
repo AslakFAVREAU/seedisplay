@@ -15,8 +15,15 @@ function LoopDiapo() {
     __log('info','diapo','LoopDiapo: start numImage=' + numImage + ' player=' + player + ' playerLoad=' + playerLoad + ' imgShow=' + imgShow + ' imgLoad=' + imgLoad)
     __log('debug','diapo','playerLoad=' + playerLoad + ' player=' + player)
 
+    // Vérification de la disponibilité des médias
+    if (!ArrayLoop || ArrayLoop.length === 0) {
+        __log('warn','diapo','ArrayLoop empty, falling back to default screen')
+        defaultScreen()
+        return
+    }
+
     // Si on est en fin de boucle on renvoi vers l'affichage par default
-    if (numImage == ArrayLoop.length) {
+    if (numImage >= ArrayLoop.length) {
         __log('info','diapo','fin de boucle on repart dans default')
         numImage = 0
         defaultScreen()
@@ -55,21 +62,39 @@ function LoopDiapo() {
 
     if (current[0] === 'video') {
         __log('info','diapo','video player '+ player + ' start for index ' + numImage)
-        try { document.getElementById("divImg1").style.display = "none" } catch(e){}
-        try { document.getElementById("divImg2").style.display = "none" } catch(e){}
-        try { document.getElementById("divVideo" + player).style.display = "block" } catch(e){}
-        try { document.getElementById("video" + player).play() } catch(e){}
+        
+        // Utiliser smoothTransition si disponible, sinon fallback classique
+        if (typeof smoothTransition === 'function') {
+            smoothTransition('divImg1', 'divVideo' + player, () => {
+                try { document.getElementById("video" + player).play() } catch(e){ __log('error','diapo','video play failed', e) }
+            })
+            smoothTransition('divImg2', 'divVideo' + player)
+        } else {
+            try { document.getElementById("divImg1").style.display = "none" } catch(e){}
+            try { document.getElementById("divImg2").style.display = "none" } catch(e){}
+            try { document.getElementById("divVideo" + player).style.display = "block" } catch(e){}
+            try { document.getElementById("video" + player).play() } catch(e){ __log('error','diapo','video play failed', e) }
+        }
+        
         __log('debug','diapo','video play called for player ' + player)
         // advance
         player = (player == 1) ? 2 : 1
         numImage++
     } else if (current[0] === 'img') {
         __log('info','diapo','img show: ' + imgShow + ' index: ' + numImage)
-        try { document.getElementById("divImg1").style.display = "none" } catch(e){}
-        try { document.getElementById("divImg2").style.display = "none" } catch(e){}
-        try { document.getElementById("divImg" + imgShow).style.display = "block" } catch(e){}
+        
+        // Utiliser smoothTransition si disponible
+        if (typeof smoothTransition === 'function') {
+            smoothTransition('divVideo1', 'divImg' + imgShow)
+            smoothTransition('divVideo2', 'divImg' + imgShow)
+        } else {
+            try { document.getElementById("divImg1").style.display = "none" } catch(e){}
+            try { document.getElementById("divImg2").style.display = "none" } catch(e){}
+            try { document.getElementById("divImg" + imgShow).style.display = "block" } catch(e){}
+        }
+        
         // schedule next
-        const delay = (current[2] && Number(current[2])) ? Number(current[2]) * 1000 : 5000
+        const delay = (current[2] && Number(current[2]) > 0) ? Number(current[2]) * 1000 : 5000
         setTimeout(function () {
             numImage++
             LoopDiapo()
@@ -79,6 +104,8 @@ function LoopDiapo() {
     } else {
         __log('warn','diapo','unknown media type', current[0])
         numImage++
+        // Retry avec le prochain média au lieu de s'arrêter
+        setTimeout(() => LoopDiapo(), 100)
     }
 }
 

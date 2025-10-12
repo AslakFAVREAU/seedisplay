@@ -19,14 +19,36 @@
       overflow: hidden;
     }
 
+    /* Écran de chargement initial avec default.jpg */
+    #loadingScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-image: url('default.jpg');
+      background-size: contain;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-color: #000;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 24px;
+      transition: opacity 0.5s ease-out;
+    }
 
+    #loadingScreen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
 
     #pageDefault,
     #pagePsaume {
       height: 100vh;
     }
-
-
 
     #pageDefault {
       background-image: url('logo/back.jpg');
@@ -55,10 +77,29 @@
     body {
       font-family: 'arial', sans-serif !important;
     }
+
+    /* Animation pour le spinner de chargement */
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Amélioration des transitions entre écrans */
+    #pageDefault, #divImg1, #divImg2, #divVideo1, #divVideo2 {
+      transition: opacity 0.3s ease-in-out;
+    }
   </style>
 </head>
 
 <body style='cursor:none'>
+  <!-- Écran de chargement avec default.jpg -->
+  <div id="loadingScreen">
+    <div style="text-align: center;">
+      <div style="margin-bottom: 20px;">Chargement...</div>
+      <div style="width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 1s ease-in-out infinite; margin: 0 auto;"></div>
+    </div>
+  </div>
+
   <!-- Debug overlay: will show renderer console logs inside the window -->
   <div id="debugLog" style="position:fixed;left:10px;bottom:10px;z-index:9999;color:#fff;background:rgba(0,0,0,0.7);max-height:200px;overflow:auto;padding:8px;border-radius:6px;font-size:12px;min-width:300px;max-width:600px;display:none"></div>
   <!--<h1>Hello World!</h1>
@@ -268,6 +309,44 @@
 
   <script>
 
+    // Gestion de l'écran de chargement
+    function hideLoadingScreen() {
+      const loadingScreen = document.getElementById('loadingScreen');
+      if (loadingScreen) {
+        loadingScreen.classList.add('hidden');
+        setTimeout(() => {
+          loadingScreen.style.display = 'none';
+        }, 500); // Attendre la fin de la transition
+      }
+    }
+
+    function showLoadingScreen(message = 'Chargement...') {
+      const loadingScreen = document.getElementById('loadingScreen');
+      if (loadingScreen) {
+        loadingScreen.style.display = 'flex';
+        loadingScreen.classList.remove('hidden');
+        const messageDiv = loadingScreen.querySelector('div > div:first-child');
+        if (messageDiv) messageDiv.textContent = message;
+      }
+    }
+
+    // Amélioration de la gestion des transitions entre médias
+    function smoothTransition(fromElementId, toElementId, callback) {
+      const fromEl = document.getElementById(fromElementId);
+      const toEl = document.getElementById(toElementId);
+      
+      if (fromEl) fromEl.style.opacity = '0';
+      
+      setTimeout(() => {
+        if (fromEl) fromEl.style.display = 'none';
+        if (toEl) {
+          toEl.style.display = 'block';
+          toEl.style.opacity = '1';
+        }
+        if (callback) callback();
+      }, 300);
+    }
+
     // Small runtime logger visible on the page to capture renderer logs when DevTools isn't available
     (function(){
       try{
@@ -373,29 +452,56 @@
 
     // End init variable
 
-  ephe()
+  // Marquer les éphémérides comme chargées après l'exécution
+  ephe().then(() => {
+    ephemerisLoaded = true;
+    checkLoadingComplete();
+  }).catch(() => {
+    ephemerisLoaded = true;
+    checkLoadingComplete();
+  })
 
   // Initialize config via the secure preload API and then call existing getConfigSEE logic
   __log('info','bootstrap','inline init script start (preload-aware)')
+  
+  // Variables pour suivre l'état du chargement
+  let configLoaded = false;
+  let ephemerisLoaded = false;
+  
+  function checkLoadingComplete() {
+    if (configLoaded && ephemerisLoaded) {
+      __log('info','bootstrap','All initialization complete, hiding loading screen')
+      setTimeout(() => hideLoadingScreen(), 1000); // Délai pour voir l'interface se charger
+    }
+  }
+  
   // Récupération asynchrone de la configuration (préférer config sur disque ou variables d'environnement)
   window.api.getConfig().then((config) => {
-  __log('info','bootstrap','api.getConfig returned', config)
+    __log('info','bootstrap','api.getConfig returned', config)
     // Apply config values to globals expected by the legacy code
     try {
       // Expose la config au code legacy qui s'attend à trouver window.configSEE
       window.configSEE = config
       // Appeler la fonction legacy pour appliquer la configuration et déclencher les flux (diapo / meteo)
       if (typeof getConfigSEE === 'function') {
-  __log('info','bootstrap','calling legacy getConfigSEE()')
+        __log('info','bootstrap','calling legacy getConfigSEE()')
         getConfigSEE()
+        configLoaded = true;
+        checkLoadingComplete();
       } else {
-  __log('warn','bootstrap','legacy getConfigSEE not present')
+        __log('warn','bootstrap','legacy getConfigSEE not present')
+        configLoaded = true;
+        checkLoadingComplete();
       }
     } catch (e) {
-  __log('error','bootstrap','Error applying config to legacy flow', e)
+      __log('error','bootstrap','Error applying config to legacy flow', e)
+      configLoaded = true;
+      checkLoadingComplete();
     }
   }).catch((err) => {
     __log('error','bootstrap','window.api.getConfig failed', err)
+    configLoaded = true;
+    checkLoadingComplete();
   })
 
 
