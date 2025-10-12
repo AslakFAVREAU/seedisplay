@@ -1,10 +1,18 @@
 // Fonction appeler a chaque tour de boucle pour update l'ecran
+// Local safe logger (defined once)
+if (typeof window !== 'undefined') {
+    window.__log = window.__log || function(level, tag, ...args) { try { if (window.logger && typeof window.logger[level] === 'function') return window.logger[level](tag, ...args); if (console && typeof console[level] === 'function') return console[level](tag, ...args); return console.log(tag, ...args) } catch(e){ try{ console.log(tag, ...args) }catch(_){} } }
+    var __log = window.__log
+} else {
+    var __log = function(level, tag, ...args) { try { if (console && typeof console[level] === 'function') return console[level](tag, ...args); return console.log(tag, ...args) } catch(e){ try{ console.log(tag, ...args) }catch(_){} } }
+}
+
 function defaultScreen() {
-    console.log("default")
+
     const dateGif = new Date();
 
 const monthGif = dateGif.getMonth();
-console.log("fgdfgfdg" + monthGif);
+__log('debug','default','monthGif=' + monthGif)
 if (monthGif == 11)
 {
     document.getElementById("gifNoel").style.display = "block";   
@@ -12,10 +20,10 @@ if (monthGif == 11)
     restart("imgGif","logo/gifNoel.gif")
     // On remet le compteur de la loop à 0
     numImage = 0;
-    console.log(init)
+    __log('debug','default','init=' + init)
     // On passe par la fontion pour recup le diapo si Init est a false
     if (init == false) {
-        console.log("init false")
+        __log('info','default','init false')
     // Double DIV IMG
      imgShow= 1
      imgLoad= 1
@@ -61,23 +69,41 @@ if (monthGif == 11)
     document.getElementById("divImg2").style.backgroundImage = "url(" + url + ")";
 
 
-    // Avant de  demarer la boucle on lance le telechargement des medias
+    // Avant de demarer la boucle on lance le telechargement des medias
     setTimeout(function () {
+        if (!ArrayDiapo || !ArrayDiapo.length) {
+            __log('warn','default','aucun media dans ArrayDiapo, rien a telecharger')
+        } else {
         for (downloadIndex = 0; downloadIndex < ArrayDiapo.length; downloadIndex++) {
-            try {
-                if (!fs.existsSync(pathMedia + ArrayDiapo[downloadIndex][1])) {
-                    download(ArrayDiapo[downloadIndex][1])
+                try {
+                    const mediaName = ArrayDiapo[downloadIndex] && ArrayDiapo[downloadIndex][1]
+                    __log('debug','default','checking media', mediaName)
+                if (mediaName) {
+                    const exists = (window && window.api && typeof window.api.existsSync === 'function') ? window.api.existsSync('media/' + mediaName) : false
+                    if (!exists) {
+                        // use preload saveBinary when available
+                        if (window && window.api && typeof window.api.saveBinary === 'function') {
+                            const urlMedia = 'https://soek.fr/uploads/see/media/' + mediaName
+                            window.api.saveBinary('media/' + mediaName, urlMedia)
+                            __log('info','default','launching download via api.saveBinary for ' + mediaName)
+                        } else {
+                            // fallback to renderer download (may not work without nodeIntegration)
+                            download(mediaName)
+                            __log('info','default','launching download fallback for ' + mediaName)
+                        }
+                    }
                 }
             }
-            catch (err) { console.error(err) }
+            catch (err) { __log('error','default', err && err.message) }
+        }
         }
     }, 2500)
 
 
     setTimeout(function () {
-        // Test si le 0 de la boucle est une video
-        if (ArrayDiapo[0][0] === 'video') {
-            console.log(playerLoad + 'player chargé dans boucle init')     
+        // Test si on a au moins un élément et si le 0 de la boucle est une video
+        if (ArrayDiapo && ArrayDiapo.length > 0 && ArrayDiapo[0][0] === 'video') {
+            __log('debug','default', playerLoad + ' player chargé dans boucle init')     
             urlVideo = pathMedia + ArrayDiapo[0][1].replace("%20", '%2520')
             document.getElementById("srcVideo" + playerLoad).src = urlVideo;
             document.getElementById("video" + playerLoad).load()
@@ -85,11 +111,11 @@ if (monthGif == 11)
              
           
         }
-        else if (ArrayDiapo[0][0] === 'img') {
+        else if (ArrayDiapo && ArrayDiapo.length > 0 && ArrayDiapo[0][0] === 'img') {
             url = pathMedia + ArrayDiapo[0][1].replace("%20", '%2520')
             urlFinal = "url('" + url + "')"
             document.getElementById("divImg" + imgLoad).style.backgroundImage = urlFinal;
-            console.log('on charge le imgLoad '+ imgLoad + 'le img SHow sera '+ imgShow )  
+            __log('debug','default','on charge le imgLoad '+ imgLoad + ' le imgShow sera '+ imgShow)
         
                 imgShow = 1
                 imgLoad = 2

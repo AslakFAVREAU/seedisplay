@@ -8,13 +8,11 @@
   <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
   <link rel="stylesheet" href="./node_modules/bootstrap/dist/css/bootstrap.min.css" />
 
-  <link rel="stylesheet" href="./node_modules/jquery/dist/jquery.slim.min.js" />
-  <link rel="stylesheet" href="./node_modules/popper.js/dist/popper.min.js" />
-  <link rel="stylesheet" href="./node_modules/bootstrap/dist/js/bootstrap.min.js" />
+  <script src="./node_modules/jquery/dist/jquery.slim.min.js"></script>
+  <script src="./node_modules/popper.js/dist/umd/popper.min.js"></script>
+  <script src="./node_modules/bootstrap/dist/js/bootstrap.min.js"></script>
   <link rel="stylesheet" href="app.scss" />
-  <script>let $ = require('jquery');</script>
-  <script>require('popper.js');</script>
-  <script>require('bootstrap');</script>
+  <!-- renderer no longer uses require(); scripts are loaded above via script tags -->
   <style>
     body {
       margin: 0px;
@@ -61,6 +59,8 @@
 </head>
 
 <body style='cursor:none'>
+  <!-- Debug overlay: will show renderer console logs inside the window -->
+  <div id="debugLog" style="position:fixed;left:10px;bottom:10px;z-index:9999;color:#fff;background:rgba(0,0,0,0.7);max-height:200px;overflow:auto;padding:8px;border-radius:6px;font-size:12px;min-width:300px;max-width:600px;display:none"></div>
   <!--<h1>Hello World!</h1>
   We are using node
   <script>document.write(process.versions.node)</script>,
@@ -268,12 +268,79 @@
 
   <script>
 
-    const axios = require('axios')
-    const fs = require('fs')
-    const csv = require('csv-parse')
-    var path = require("path")
-    const request = require('request')
-    const fetch = require('node-fetch');
+    // Small runtime logger visible on the page to capture renderer logs when DevTools isn't available
+    (function(){
+      try{
+        const debugEl = document.getElementById('debugLog')
+        const esc = (s)=> String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        function append(level, args){
+          try{
+            const msg = Array.from(args).map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')
+            const line = document.createElement('div')
+            line.style.marginBottom = '4px'
+            line.innerHTML = `<span style="color: #9ad0ff">[${level}]</span> ${esc(msg)}`
+            debugEl.appendChild(line)
+            debugEl.style.display = 'block'
+            // keep last 100 lines
+            while(debugEl.childNodes.length>100) debugEl.removeChild(debugEl.firstChild)
+          }catch(e){/*ignore*/}
+        }
+    const _log = console.log.bind(console)
+  const _warn = console.warn.bind(console)
+  const _err = console.error.bind(console)
+    // local helper
+    const __log = (level, tag, ...args) => { try { if (typeof window !== 'undefined' && window.logger) return window.logger[level](tag, ...args); if (console && console[level]) return console[level](tag, ...args); return _log.apply(console, args) } catch(e){ try{ _log.apply(console,args) }catch(_){} } }
+        // If preload exposes a structured logger, route logs through it so they
+        // appear in main with a consistent format. Fallback to original behaviour.
+  if (typeof window !== 'undefined' && window.logger) {
+          // Only call logger methods when they exist to avoid TypeErrors
+          const safeInfo = (tag, ...rest) => { if (window.logger && typeof window.logger.info === 'function') { try { window.logger.info(tag, ...rest) } catch(e) { _log.apply(console, arguments) } } }
+          const safeWarn = (tag, ...rest) => { if (window.logger && typeof window.logger.warn === 'function') { try { window.logger.warn(tag, ...rest) } catch(e) { _warn.apply(console, arguments) } } }
+          const safeError = (tag, ...rest) => { if (window.logger && typeof window.logger.error === 'function') { try { window.logger.error(tag, ...rest) } catch(e) { _err.apply(console, arguments) } } }
+          console.log = function(tagOrMsg){
+            if (arguments.length > 1) {
+              const tag = arguments[0]
+              const rest = Array.prototype.slice.call(arguments,1)
+              safeInfo(tag, ...rest)
+            } else {
+              safeInfo('renderer', arguments[0])
+            }
+            append('LOG', arguments); _log.apply(console, arguments)
+          }
+          console.warn = function(tagOrMsg){
+            if (arguments.length > 1) {
+              const tag = arguments[0]
+              const rest = Array.prototype.slice.call(arguments,1)
+              safeWarn(tag, ...rest)
+            } else {
+              safeWarn('renderer', arguments[0])
+            }
+            append('WARN', arguments); _warn.apply(console, arguments)
+          }
+          console.error = function(tagOrMsg){
+            if (arguments.length > 1) {
+              const tag = arguments[0]
+              const rest = Array.prototype.slice.call(arguments,1)
+              safeError(tag, ...rest)
+            } else {
+              safeError('renderer', arguments[0])
+            }
+            append('ERROR', arguments); _err.apply(console, arguments)
+          }
+        } else {
+          console.log = function(){ append('LOG', arguments); _log.apply(console, arguments) }
+          console.warn = function(){ append('WARN', arguments); _warn.apply(console, arguments) }
+          console.error = function(){ append('ERROR', arguments); _err.apply(console, arguments) }
+        }
+        window.addEventListener('error', function(ev){ append('ERROR', [ev.message, ev.filename+':'+ev.lineno]); })
+        window.addEventListener('unhandledrejection', function(ev){ append('ERROR', ['UnhandledRejection', ev.reason]) })
+      }catch(e){/*ignore*/}
+    })();
+
+
+  // Use the secure preload API instead of requiring node modules in renderer
+  // axios/fs/fetch are available via window.api methods exposed in preload.js
+    const csv = null // csv-parse not available in renderer; keep null or implement via main if needed
 
     /*Init variable */
     var init = true
@@ -306,16 +373,36 @@
 
     // End init variable
 
-    ephe()
-    requestJsonMeteo()
-    //requestJsonActuFr()
-    getConfigSEE()
+  ephe()
+
+  // Initialize config via the secure preload API and then call existing getConfigSEE logic
+  __log('info','bootstrap','inline init script start (preload-aware)')
+  // Récupération asynchrone de la configuration (préférer config sur disque ou variables d'environnement)
+  window.api.getConfig().then((config) => {
+  __log('info','bootstrap','api.getConfig returned', config)
+    // Apply config values to globals expected by the legacy code
+    try {
+      // Expose la config au code legacy qui s'attend à trouver window.configSEE
+      window.configSEE = config
+      // Appeler la fonction legacy pour appliquer la configuration et déclencher les flux (diapo / meteo)
+      if (typeof getConfigSEE === 'function') {
+  __log('info','bootstrap','calling legacy getConfigSEE()')
+        getConfigSEE()
+      } else {
+  __log('warn','bootstrap','legacy getConfigSEE not present')
+      }
+    } catch (e) {
+  __log('error','bootstrap','Error applying config to legacy flow', e)
+    }
+  }).catch((err) => {
+    __log('error','bootstrap','window.api.getConfig failed', err)
+  })
 
 
     /*
     fs.writeFile('C:/Users/Aslak FAVREAU/Desktop/media/test.txt', 'Hello World!', function (err) {
-      if (err) return console.log(err);
-      console.log('Hello World > helloworld.txt');
+  if (err) return __log('error','bootstrap', err);
+  __log('info','bootstrap','Hello World > helloworld.txt')
     });
     */
 
@@ -325,10 +412,30 @@
     */
     async function download(nomMedia) {
       urlMedia = "https://soek.fr/uploads/see/media/" + nomMedia
-      const response = await fetch(urlMedia);
-      const buffer = await response.buffer();
-      fs.writeFile(pathMedia + nomMedia, buffer, () =>
-        console.log('finished downloading!' + nomMedia));
+      if (window && window.api && typeof window.api.fetchJson === 'function') {
+        try {
+          // fetchJson returns parsed JSON; for binary download we would add another API. Keep a simple fetch via renderer if allowed.
+          __log('info','download','using preload.fetchJson for ' + urlMedia)
+          const data = await window.api.fetchJson(urlMedia)
+          // Not ideal for binary media; this is a placeholder for now
+          __log('debug','download','received data length ' + JSON.stringify(data).length)
+  } catch (e) { __log('error','download','download via preload failed', e) }
+      } else if (typeof fetch === 'function') {
+        const response = await fetch(urlMedia);
+        const buffer = await response.arrayBuffer();
+        // Attempt to write via a preload writeFile if available
+        if (window && window.api && typeof window.api.writeFile === 'function') {
+          const uint8 = new Uint8Array(buffer)
+            try {
+            window.api.writeFile('media/' + nomMedia, Buffer.from(uint8).toString('binary'))
+            __log('info','download','finished downloading via api.writeFile ' + nomMedia)
+          } catch (e) { __log('error','download','api.writeFile failed', e) }
+        } else {
+                            __log('warn','download','no api.writeFile available to save downloaded media')
+        }
+      } else {
+  __log('warn','download','no fetch or preload.fetchJson available')
+      }
     }
 
 
@@ -342,23 +449,23 @@
 
     document.getElementById('video1').addEventListener('ended', endVideo1, false);
     function endVideo1(e) {
-      console.log("fin player1")
+  __log('info','video','fin player1')
       document.getElementById("divVideo1").style.display = "none";
       //  document.getElementById("video" + player).pause()        
 
 
-      console.log("next player is =" + player)
+  __log('debug','video','next player is =' + player)
       LoopDiapo()
     }
 
     document.getElementById('video2').addEventListener('ended', endVideo2, false);
     function endVideo2(e) {
-      console.log("fin player2")
+  __log('info','video','fin player2')
       document.getElementById("divVideo2").style.display = "none";
       //  document.getElementById("video" + player).pause()        
 
 
-      console.log("next player is =" + player)
+  __log('debug','video','next player is =' + player)
       LoopDiapo()
     }
 

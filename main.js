@@ -41,12 +41,21 @@ function sendStatusToWindow(text) {
 }
 function createDefaultWindow() {
   win = new BrowserWindow({
-   
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: require('path').join(__dirname, 'preload.js')
     }
   });
+  // Forward renderer console messages to main log so we can see them in the terminal
+  try {
+    win.webContents.on('console-message', (event, level, message, line, sourceId) => {
+      // Log messages coming from the renderer process so they appear in the main process logs
+      log.info(`[renderer] ${message} (level=${level}, ${sourceId}:${line})`);
+    });
+  } catch (e) {
+    log.warn('Could not attach console-message listener to default window', e);
+  }
   win.webContents.openDevTools();
   win.on('closed', () => {
     win = null;
@@ -113,22 +122,38 @@ function createWindow () {
     icon: 'assets/Flavicon.png',
     width: 800,
     height: 600,
-    fullscreen : true, 
-    frame:false,
-    alwaysOnTop :true,    
+    fullscreen : false, 
+    frame:true,
+    alwaysOnTop :false,    
     webPreferences: {
-      nodeIntegration: true,
+      nodeIntegration: false,
       nativeWindowOpen: true,
-      contextIsolation: false,
-      devTools: false
+      contextIsolation: true,
+      preload: require('path').join(__dirname, 'preload.js'),
+      devTools: true
     }
     })
 
   // et charger le fichier index.html de l'application.
   win.loadFile('index.html')
+  // Attach console forwarding for this window as well
+  try {
+    win.webContents.on('console-message', (event, level, message, line, sourceId) => {
+      // Forward renderer console messages to the main log (useful when DevTools is closed)
+      log.info(`[renderer] ${message} (level=${level}, ${sourceId}:${line})`);
+    });
+  } catch (e) {
+    log.warn('Could not attach console-message listener to index window', e);
+  }
   // Ouvre les DevTools.
   win.webContents.openDevTools()
 }
+
+// Listen for renderer log messages from preload
+const { ipcMain } = require('electron')
+ipcMain.on('renderer-log', (event, { level, msg }) => {
+  log.log(level || 'info', `[renderer-ipc] ${msg}`)
+})
 
 // Cette méthode sera appelée quant Electron aura fini
 // de s'initialiser et prêt à créer des fenêtres de navigation.

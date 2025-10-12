@@ -1,0 +1,13 @@
+{
+  "meteo": true,
+  "meteoApiKey": "07a8ad506ec50b4b6d95e17a894be9b2",
+  "meteoLat": 48.75,
+  "meteoLon": 2.3,
+  "meteoUnits": "metric",
+  "idEcran": 13,
+  "weekDisplay": true,
+  "weekNo": true,
+  "weekType": false,
+  "logoSOE": true,
+  "env": "prod"
+}
