@@ -103,13 +103,49 @@ app.on('window-all-closed', () => {
 //
 
 //-------------------------------------------------------------------
-// Auto updates - Option 1 - Simplest version
+// Auto updates - Configuration améliorée
 //
-// This will immediately download an update, then install when the
-// app quits.
+// Configuration sécurisée et user-friendly des mises à jour automatiques
 //-------------------------------------------------------------------
-app.on('ready', function()  {
+
+// Configuration de l'updater pour le développement (optionnel)
+if (process.env.NODE_ENV === 'development') {
+  // Force les updates en développement si la variable d'environnement est définie
+  if (process.env.ENABLE_DEV_UPDATES === 'true') {
+    autoUpdater.forceDevUpdateConfig = true;
+    log.info('Development updates enabled');
+  }
+}
+
+// Gestion des erreurs d'update
+autoUpdater.on('error', (error) => {
+  log.error('Update error:', error);
+  if (win) {
+    sendStatusToWindow('Erreur de mise à jour: ' + error.message);
+  }
+});
+
+// Amélioration de la gestion des updates
+autoUpdater.on('update-downloaded', (info) => {
+  log.info('Update downloaded, will install on restart');
+  sendStatusToWindow('Mise à jour téléchargée. Redémarrage dans 5 secondes...');
+  
+  // Installation automatique après 5 secondes
+  setTimeout(() => {
+    autoUpdater.quitAndInstall(false, true);
+  }, 5000);
+});
+
+app.on('ready', function() {
+  // Vérifier les mises à jour au démarrage
+  log.info('Checking for updates...');
   autoUpdater.checkForUpdatesAndNotify();
+  
+  // Vérifier périodiquement les mises à jour (toutes les 4 heures)
+  setInterval(() => {
+    log.info('Periodic update check...');
+    autoUpdater.checkForUpdatesAndNotify();
+  }, 4 * 60 * 60 * 1000); // 4 heures
 });
 
 ///////////////////
@@ -153,6 +189,94 @@ function createWindow () {
 const { ipcMain } = require('electron')
 ipcMain.on('renderer-log', (event, { level, msg }) => {
   log.log(level || 'info', `[renderer-ipc] ${msg}`)
+})
+
+// Provide handlers for preload fallback when native modules are unavailable in preload
+const fs = require('fs')
+const path = require('path')
+const axios = require('axios')
+const BASE_PATH = 'C:/SEE/'
+
+ipcMain.handle('preload-getConfig', async () => {
+  try {
+    const p = path.join(BASE_PATH, 'configSEE.json')
+    if (!fs.existsSync(p)) return null
+    const raw = fs.readFileSync(p, 'utf8')
+    return JSON.parse(raw)
+  } catch (e) { return null }
+})
+
+ipcMain.handle('preload-readFile', async (evt, relative) => {
+  try { const p = path.join(BASE_PATH, relative); return fs.readFileSync(p, 'utf8') } catch(e) { return null }
+})
+
+ipcMain.handle('preload-writeFile', async (evt, relative, data) => {
+  try { const p = path.join(BASE_PATH, relative); const dir = path.dirname(p); if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(p, data); return true } catch(e) { return false }
+})
+
+ipcMain.handle('preload-readBundledFile', async (evt, relative) => {
+  try { const p = path.join(__dirname, relative); return fs.readFileSync(p, 'utf8') } catch(e) { return null }
+})
+
+ipcMain.handle('preload-fetchJson', async (evt, url, opts) => {
+  try {
+    // Support simple GET as well as a generic request via opts.method/data
+    if (!opts || !opts.method) {
+      const res = await axios.get(url, opts || {})
+      return res.data
+    }
+    // axios.request supports method, url, data, headers, etc.
+    const req = Object.assign({}, opts, { url })
+    const res = await axios.request(req)
+    return res.data
+  } catch(e) { return null }
+})
+
+ipcMain.on('preload-getEnv', (evt, name) => {
+  try { evt.returnValue = process.env[name] || null } catch(e) { evt.returnValue = null }
+})
+
+ipcMain.on('preload-existsSync', (evt, relative) => {
+  try { const p = path.join(BASE_PATH, relative); evt.returnValue = fs.existsSync(p) } catch(e) { evt.returnValue = false }
+})
+
+ipcMain.handle('preload-saveBinary', async (evt, relative, url) => {
+  try {
+    const p = path.join(BASE_PATH, relative)
+    const dir = path.dirname(p)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    const res = await axios.get(url, { responseType: 'arraybuffer' })
+    const buf = Buffer.from(res.data)
+    fs.writeFileSync(p, buf)
+    return true
+  } catch(e) { return false }
+})
+
+ipcMain.handle('preload-getMediaCacheInfo', async () => {
+  try {
+    const mediaDir = path.join(BASE_PATH, 'media')
+    if (!fs.existsSync(mediaDir)) return { totalBytes: 0, files: 0 }
+    const files = fs.readdirSync(mediaDir)
+    let total = 0
+    for (const f of files) { try { total += fs.statSync(path.join(mediaDir,f)).size } catch(e){} }
+    return { totalBytes: total, files: files.length }
+  } catch(e) { return { totalBytes:0, files:0 } }
+})
+
+ipcMain.on('preload-setMediaCacheLimit', (evt, bytes) => {
+  try { global.__mediaCacheLimitBytes = Number(bytes) || 0; evt.returnValue = true } catch(e) { evt.returnValue = false }
+})
+
+ipcMain.handle('preload-pruneMedia', async () => {
+  try {
+    const mediaDir = path.join(BASE_PATH, 'media')
+    if (!fs.existsSync(mediaDir)) return false
+    const files = fs.readdirSync(mediaDir).map(f => { const st = fs.statSync(path.join(mediaDir,f)); return { name:f, path:path.join(mediaDir,f), mtime:st.mtimeMs, size:st.size } }).sort((a,b)=>a.mtime-b.mtime)
+    const limit = global.__mediaCacheLimitBytes || (1024*1024*1024)
+    let total = files.reduce((s,x)=>s+x.size,0)
+    for (const file of files) { if (total<=limit) break; try { fs.unlinkSync(file.path); total -= file.size } catch(e){} }
+    return true
+  } catch(e) { return false }
 })
 
 // Cette méthode sera appelée quant Electron aura fini

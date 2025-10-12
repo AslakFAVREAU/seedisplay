@@ -1,0 +1,6 @@
+provider: github
+owner: AslakFAVREAU
+repo: seedisplay
+updaterCacheDirName: seedisplay-updater
+publisherName:
+  - SEE

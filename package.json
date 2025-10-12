@@ -1,52 +1,65 @@
 {
   "name": "seedisplay",
   "version": "1.8.0",
-  "description": "",
+  "description": "SEE Display Application",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "mocha --exit",
+    "test": "mocha test/**/*.test.js --exit",
     "dist": "electron-builder",
-    "publish": "electron-builder --win -p always"
+    "publish": "electron-builder --publish=always"
   },
-  "build": {
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "AslakFAVREAU",
-        "repo": "seedisplay"
-      }
-    ],
-    "appId": "com.github.AslakFAVREAU.seedisplay",
-    "afterSign": "./build/notarize.js",
-    "win": {
-      "target": "nsis"
-    },
-    "nsis": {
-      "oneClick": false
-    }
-  },
-  "author": "Evenement SOE",
-  "license": "ISC",
+  "keywords": [
+    "electron",
+    "display",
+    "slideshow"
+  ],
+  "author": "SEE",
+  "license": "MIT",
   "devDependencies": {
     "electron": "^38.2.2",
     "electron-builder": "^26.0.12",
-    "mocha": "^10.2.0"
+    "mocha": "^10.0.0"
   },
   "dependencies": {
-    "axios": "^1.12.2",
-    "bootstrap": "^4.6.2",
-    "config": "^3.3.12",
-    "csv-parse": "^4.16.3",
-    "csv-parser": "^2.3.5",
-    "electron-builder-squirrel-windows": "^26.0.12",
-    "electron-log": "^4.4.8",
-    "electron-notarize": "^1.2.2",
-    "electron-packager": "^17.1.2",
-    "electron-updater": "^6.6.2",
-    "jquery": "^3.7.1",
-    "node-fetch": "^2.6.1",
-    "popper.js": "^1.16.1",
-    "ssl-root-cas": "^1.3.1"
+    "axios": "^1.6.8",
+    "electron-log": "^5.0.0",
+    "electron-updater": "^6.6.2"
+  },
+  "build": {
+    "appId": "fr.see.seedisplay",
+    "productName": "SEE Display",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!test",
+      "!docs",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+    ],
+    "win": {
+      "target": "dir",
+      "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "AslakFAVREAU",
+      "repo": "seedisplay"
+    },
+    "nsis": false,
+    "portable": false,
+    "compression": "store"
   }
 }
