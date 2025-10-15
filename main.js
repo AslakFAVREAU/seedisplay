@@ -40,13 +40,25 @@ function sendStatusToWindow(text) {
   win.webContents.send('message', text);
 }
 function createDefaultWindow() {
+  // Détecter le mode de production
+  const isProduction = process.env.NODE_ENV === 'production' || !process.defaultApp;
+  
   win = new BrowserWindow({
+    fullscreen: true, // Toujours en plein écran
+    show: false, // Ne pas afficher immédiatement
+    frame: false, // Pas de frame (bordure Windows)
+    autoHideMenuBar: true, // Toujours masquer la barre de menu
+    alwaysOnTop: isProduction, // Premier plan en production
+    skipTaskbar: isProduction, // Ne pas afficher dans la barre des tâches en production
+    kiosk: isProduction, // Mode kiosk en production (masque la barre des tâches)
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: require('path').join(__dirname, 'preload.js')
+      preload: require('path').join(__dirname, 'preload.js'),
+      devTools: !isProduction // Désactiver DevTools en production
     }
   });
+  
   // Forward renderer console messages to main log so we can see them in the terminal
   try {
     win.webContents.on('console-message', (event, level, message, line, sourceId) => {
@@ -56,11 +68,41 @@ function createDefaultWindow() {
   } catch (e) {
     log.warn('Could not attach console-message listener to default window', e);
   }
-  win.webContents.openDevTools();
+  
+  // Ouvrir DevTools uniquement en mode développement
+  if (!isProduction) {
+    win.webContents.openDevTools();
+    log.info('Mode développement - DevTools activés');
+  } else {
+    log.info('Mode production - Mode kiosk activé, application au premier plan');
+  }
+  
+  // Afficher la fenêtre une fois prête
+  win.once('ready-to-show', () => {
+    win.show();
+    
+    // Passer immédiatement en plein écran
+    win.setFullScreen(true);
+    
+    // S'assurer que la fenêtre est au premier plan
+    if (isProduction) {
+      win.focus();
+      win.setAlwaysOnTop(true, 'screen-saver');
+    }
+    
+    if (isProduction) {
+      // En mode production, charger l'application principale
+      win.loadURL(`file://${__dirname}/index.html`);
+    } else {
+      // En mode développement, charger la page de version
+      win.loadURL(`file://${__dirname}/version.html#v${app.getVersion()}`);
+    }
+  });
+  
   win.on('closed', () => {
     win = null;
   });
-  win.loadURL(`file://${__dirname}/version.html#v${app.getVersion()}`);
+  
   return win;
 }
 autoUpdater.on('checking-for-update', () => {
@@ -90,9 +132,59 @@ app.on('ready', function() {
   Menu.setApplicationMenu(menu);
 
   createDefaultWindow();
+  
+  // Raccourcis clavier globaux pour le mode production
+  const { globalShortcut } = require('electron');
+  
+  // Ctrl+Shift+K pour quitter l'application
+  globalShortcut.register('CommandOrControl+Shift+K', () => {
+    log.info('Fermeture de l\'application via Ctrl+Shift+K');
+    app.quit();
+  });
+  
+  // F11 pour basculer le plein écran
+  globalShortcut.register('F11', () => {
+    if (win) {
+      const isFullScreen = win.isFullScreen();
+      win.setFullScreen(!isFullScreen);
+      log.info(`Plein écran ${!isFullScreen ? 'activé' : 'désactivé'}`);
+    }
+  });
+  
+  // Ctrl+Shift+I pour ouvrir DevTools en cas d'urgence (même en production)
+  globalShortcut.register('CommandOrControl+Shift+I', () => {
+    if (win && win.webContents) {
+      win.webContents.toggleDevTools();
+      log.info('DevTools basculés');
+    }
+  });
+  
+  // Ctrl+R pour recharger
+  globalShortcut.register('CommandOrControl+R', () => {
+    if (win && win.webContents) {
+      win.webContents.reload();
+      log.info('Application rechargée');
+    }
+  });
+  
+  // Alt+F4 ou Ctrl+Q pour quitter
+  globalShortcut.register('Alt+F4', () => {
+    app.quit();
+  });
+  
+  globalShortcut.register('CommandOrControl+Q', () => {
+    app.quit();
+  });
 });
+
 app.on('window-all-closed', () => {
   app.quit();
+});
+
+app.on('will-quit', () => {
+  // Nettoyer les raccourcis clavier
+  const { globalShortcut } = require('electron');
+  globalShortcut.unregisterAll();
 });
 
 
@@ -181,8 +273,12 @@ function createWindow () {
   } catch (e) {
     log.warn('Could not attach console-message listener to index window', e);
   }
-  // Ouvre les DevTools.
-  win.webContents.openDevTools()
+  
+  // Ouvrir DevTools uniquement en mode développement
+  const isProduction = process.env.NODE_ENV === 'production' || !process.defaultApp;
+  if (!isProduction) {
+    win.webContents.openDevTools();
+  }
 }
 
 // Listen for renderer log messages from preload

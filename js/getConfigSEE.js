@@ -52,19 +52,20 @@ function getConfigSEE() {
 function processConfig(configSEE) {
     try {
     // Options d'affichage
-    // Respecter la configuration : si configSEE.meteo est true, on pourra afficher la météo
-    showMeteo = (typeof configSEE.meteo !== 'undefined') ? configSEE.meteo : true
-    __log('info','config','processConfig: showMeteo=' + showMeteo)
+    // Respecter la configuration, avec possibilité d'override via variable d'environnement METEO_FORCE
+    let showMeteoConf = (typeof configSEE.meteo !== 'undefined') ? configSEE.meteo : true
+    let forceMeteo = false
+    try {
+        const force = (window && window.api && typeof window.api.getEnv === 'function') ? window.api.getEnv('METEO_FORCE') : null
+        forceMeteo = (force === '1' || force === 'true' || force === true)
+    } catch (e) { forceMeteo = false }
+    showMeteo = forceMeteo ? true : showMeteoConf
+    __log('info','config','processConfig: showMeteo=' + showMeteo + (forceMeteo ? ' (forced)' : ''))
 
-    // Lecture des paramètres météo (peuvent être fournis depuis config ou via la variable d'environnement METEO_API_KEY)
-    // Priorité : variable d'environnement (via preload.getEnv) pour éviter d'exposer process
-    var envKey = null
-    try { envKey = (window && window.api && typeof window.api.getEnv === 'function') ? window.api.getEnv('METEO_API_KEY') : null } catch (e) { envKey = null }
-    // Open-Meteo n'exige pas de clé; conserver meteoApiKey pour compatibilité mais ne l'impose pas
-    meteoApiKey = envKey || configSEE.meteoApiKey || null
-    if (!meteoApiKey) {
-        __log('debug','config','processConfig: pas de METEO_API_KEY fournie (OK pour Open-Meteo)')
-    }
+    // Lecture des paramètres météo (Open-Meteo n'exige pas de clé)
+    // API Key supprimée car Open-Meteo est gratuit sans clé
+    meteoApiKey = null // Pas d'API Key nécessaire pour Open-Meteo
+    __log('debug','config','processConfig: Open-Meteo utilisé sans API Key')
         meteoLat = configSEE.meteoLat || 48.75
         meteoLon = configSEE.meteoLon || 2.3
         meteoUnits = configSEE.meteoUnits || 'metric'
@@ -92,10 +93,13 @@ function processConfig(configSEE) {
         }
 
         if (showMeteo == false) {
-            document.getElementById('zone_meteo').style.display = 'none';
-        } else {
-            document.getElementById('zone_meteo').style.display = 'block';
+            __log('warn','config','processConfig: météo désactivée dans config, forçant l\'activation')
+            showMeteo = true // Forcer l'activation de la météo
         }
+        
+        // Toujours afficher la météo
+        document.getElementById('zone_meteo').style.display = 'block';
+        __log('info','config','processConfig: zone_meteo display forcé à block')
 
         if (logoSOE == false) {
             document.getElementById('footer').style.display = 'none';
@@ -108,11 +112,9 @@ function processConfig(configSEE) {
 
         // If meteorology display is enabled, trigger the meteo request now that config is loaded
         try {
-            // Ne lancer la récupération météo que si showMeteo est activé et qu'une clé est disponible
+            // Lancer la récupération météo si showMeteo est activé
             if (showMeteo) {
-                if (!meteoApiKey) {
-                    __log('warn','config','Skipping requestJsonMeteo: no meteoApiKey')
-                } else if (typeof requestJsonMeteo === 'function') {
+                if (typeof requestJsonMeteo === 'function') {
                     requestJsonMeteo()
                 } else {
                     __log('warn','config','requestJsonMeteo not available')

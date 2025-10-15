@@ -69,57 +69,68 @@ const getMeteo = async () => {
 // requestJsonMeteo : récupère les données météo via Open-Meteo et met à jour le DOM
 const requestJsonMeteo = async () => {
   try {
+    __log('info','meteo','requestJsonMeteo: début de la récupération météo')
     const data = await getMeteo()
-    if (!data) return
+    if (!data) {
+      __log('warn','meteo','requestJsonMeteo: aucune donnée reçue')
+      return
+    }
 
-    // Current
+    __log('info','meteo','requestJsonMeteo: données reçues', data)
+
+    // Current weather (aujourd'hui)
     try {
       if (data.current_weather) {
         const cur = data.current_weather
         const tempElem = document.getElementById('todayTemp')
-        if (tempElem && typeof cur.temperature !== 'undefined') tempElem.innerHTML = Math.round(cur.temperature) + ' \u00b0C'
+        if (tempElem && typeof cur.temperature !== 'undefined') {
+          tempElem.innerHTML = Math.round(cur.temperature) + '°'
+          __log('info','meteo','Température aujourd\'hui mise à jour:', Math.round(cur.temperature) + '°')
+        }
         const iconElem = document.getElementById('todayImgMeteo')
-        // Open-Meteo current_weather does not give sunrise/sunset; use daily[0]
-        const isDay = true
-        if (iconElem && typeof cur.weathercode !== 'undefined') iconElem.src = mapCodeToIcon(cur.weathercode, isDay)
+        if (iconElem && typeof cur.weathercode !== 'undefined') {
+          iconElem.src = mapCodeToIcon(cur.weathercode, true)
+          __log('info','meteo','Icône aujourd\'hui mise à jour:', cur.weathercode)
+        }
       }
-  } catch (e) { __log('warn','meteo','current update error', e) }
+    } catch (e) { __log('warn','meteo','current update error', e) }
 
     // Daily forecasts: use daily arrays
     if (data.daily) {
       const days = data.daily
-      // daily arrays: temperature_2m_max, temperature_2m_min, weathercode, sunrise, sunset
-      for (let i = 0; i <= 4; i++) {
-        const idx = i
+      __log('info','meteo','Daily data:', days)
+      
+      // Loop through j=1 to 4 (demain, d+2, d+3, d+4)
+      for (let j = 1; j <= 4; j++) {
+        const idx = j // Index dans le tableau daily (0=aujourd'hui, 1=demain, etc.)
         try {
           const tempMax = days.temperature_2m_max && days.temperature_2m_max[idx]
-          const tempMin = days.temperature_2m_min && days.temperature_2m_min[idx]
           const code = days.weathercode && days.weathercode[idx]
-          const sunrise = days.sunrise && days.sunrise[idx]
-          const sunset = days.sunset && days.sunset[idx]
 
-          if (i === 0) {
-            // Today sunrise/sunset
-            const sr = document.getElementById('todaySunRise')
-            const ss = document.getElementById('todaySunSet')
-            if (sr) sr.innerHTML = format_time_iso(sunrise)
-            if (ss) ss.innerHTML = format_time_iso(sunset)
-          } else {
-            const j = i
-            const tempElem = document.getElementById('Tempd+' + j)
-            if (tempElem && typeof tempMax !== 'undefined') tempElem.innerHTML = Math.round(tempMax) + ' \u00b0C'
-            const imgElem = document.getElementById('ImgMeteod+' + j)
-            if (imgElem && typeof code !== 'undefined') imgElem.src = mapCodeToIcon(code, true)
-            const sr = document.getElementById('SunRise+' + j)
-            const ss = document.getElementById('SunSet+' + j)
-            if (sr) sr.innerHTML = format_time_iso(sunrise)
-            if (ss) ss.innerHTML = format_time_iso(sunset)
-            if (j > 1) {
-              const dateEl = document.getElementById('dateJourd+' + j)
-              if (dateEl && days.time && days.time[idx]) dateEl.innerHTML = jourFr(new Date(days.time[idx]).getTime() / 1000)
+          // Mise à jour température
+          const tempElem = document.getElementById('Tempd+' + j)
+          if (tempElem && typeof tempMax !== 'undefined') {
+            tempElem.innerHTML = Math.round(tempMax) + '°'
+            __log('info','meteo','Température d+' + j + ' mise à jour:', Math.round(tempMax) + '°')
+          }
+          
+          // Mise à jour icône
+          const imgElem = document.getElementById('ImgMeteod+' + j)
+          if (imgElem && typeof code !== 'undefined') {
+            imgElem.src = mapCodeToIcon(code, true)
+            __log('info','meteo','Icône d+' + j + ' mise à jour:', code)
+          }
+          
+          // Mise à jour jour (pour d+2, d+3, d+4)
+          if (j >= 2) {
+            const dateEl = document.getElementById('dateJourd+' + j)
+            if (dateEl && days.time && days.time[idx]) {
+              const dayName = jourFr(new Date(days.time[idx]).getTime() / 1000)
+              dateEl.innerHTML = dayName
+              __log('info','meteo','Jour d+' + j + ' mis à jour:', dayName)
             }
           }
-  } catch (e) { __log('warn','meteo','daily update error', e) }
+        } catch (e) { __log('warn','meteo','daily update error for d+' + j, e) }
       }
     }
   } catch (e) {

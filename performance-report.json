@@ -1,0 +1,13 @@
+{
+  "timestamp": "2025-10-12T19:56:00.114Z",
+  "duration": 16697,
+  "memoryStats": {
+    "average": 11,
+    "peak": 12,
+    "samples": 14
+  },
+  "errors": [],
+  "recommendations": [
+    "Performance satisfaisante"
+  ]
+}

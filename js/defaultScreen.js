@@ -136,7 +136,6 @@ if (monthGif == 11)
         document.getElementById("pageDefault").style.display = "none";        
         LoopDiapo()
 
-
        
        
     },
