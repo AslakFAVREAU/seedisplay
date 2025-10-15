@@ -7,155 +7,200 @@ if (typeof window !== 'undefined') {
     var __log = function(level, tag, ...args) { try { if (console && typeof console[level] === 'function') return console[level](tag, ...args); return console.log(tag, ...args) } catch(e){ try{ console.log(tag, ...args) }catch(_){} } }
 }
 
-function LoopDiapo() {
+/**
+ * Système d'affichage séquentiel simplifié avec slides
+ * - Un seul élément actif à la fois (classe .active)
+ * - Transitions CSS pures (opacity via .active)
+ * - Pas de manipulation complexe de display
+ */
 
-    // Resolve source array for playback (prefer ArrayMedia, fallback to ArrayDiapo)
-    ArrayLoop = (ArrayMedia && ArrayMedia.length) ? ArrayMedia : (ArrayDiapo || []);
+// Variables globales
+let currentSlideIndex = 0; // Index du slide actuellement affiché (0=divVideo1, 1=divVideo2, 2=divImg1, 3=divImg2)
+let currentMediaIndex = 0; // Index dans ArrayLoop
+let mediaLoop = [];
+let loopTimeout = null;
 
-    __log('info','diapo','LoopDiapo: start numImage=' + numImage + ' player=' + player + ' playerLoad=' + playerLoad + ' imgShow=' + imgShow + ' imgLoad=' + imgLoad)
-    __log('debug','diapo','playerLoad=' + playerLoad + ' player=' + player)
+// Mapping des slides
+const SLIDES = {
+    VIDEO1: { id: 'divVideo1', index: 0, type: 'video', videoId: 'video1', sourceId: 'srcVideo1' },
+    VIDEO2: { id: 'divVideo2', index: 1, type: 'video', videoId: 'video2', sourceId: 'srcVideo2' },
+    IMG1: { id: 'divImg1', index: 2, type: 'image' },
+    IMG2: { id: 'divImg2', index: 3, type: 'image' }
+};
 
-    // Vérification de la disponibilité des médias
-    if (!ArrayLoop || ArrayLoop.length === 0) {
-        __log('warn','diapo','ArrayLoop empty, falling back to default screen')
-        defaultScreen()
-        return
-    }
+const SLIDE_ORDER = [SLIDES.VIDEO1, SLIDES.VIDEO2, SLIDES.IMG1, SLIDES.IMG2];
 
-    // If we've reached end of loop, wrap to start for continuous sequential playback
-    if (numImage >= ArrayLoop.length) {
-        __log('info','diapo','fin de boucle, wrapping to start')
-        numImage = 0
-        // continue playback from beginning
-    }
-
-    // Affichage du media courant
-    const current = ArrayLoop[numImage]
-    if (!current) {
-        __log('warn','diapo','no current media at index', numImage)
-        defaultScreen()
-        return
-    }
-
-    __log('info','diapo','displaying media at index ' + numImage + ': type=' + current[0] + ' file=' + current[1])
-
-    if (current[0] === 'video') {
-        __log('info','diapo','video player '+ player + ' start for index ' + numImage)
-        
-        // Masquer les divs d'images et afficher le player vidéo
-        if (typeof smoothTransition === 'function') {
-            smoothTransition('divImg1', 'divVideo' + player, () => {
-                try { document.getElementById("video" + player).play() } catch(e){ __log('error','diapo','video play failed', e) }
-            })
-            smoothTransition('divImg2', 'divVideo' + player)
-        } else {
-            try { document.getElementById("divImg1").style.display = "none" } catch(e){}
-            try { document.getElementById("divImg2").style.display = "none" } catch(e){}
-            try { document.getElementById("divVideo" + player).style.display = "block" } catch(e){}
-            try { document.getElementById("video" + player).play() } catch(e){ __log('error','diapo','video play failed', e) }
-        }
-        
-        __log('debug','diapo','video displayed on player ' + player)
-        
-        // Précharger le média suivant (wrap-around)
-        const nextIndex = (numImage + 1) % ArrayLoop.length;
-        const nextPlayerLoad = (player == 1) ? 2 : 1;
-        if (ArrayLoop[nextIndex]) {
-            if (ArrayLoop[nextIndex][0] === 'video') {
-                __log('info','diapo','preloading next video at index ' + nextIndex + ' to player ' + nextPlayerLoad)
-                const urlVideo = pathMedia + ArrayLoop[nextIndex][1].replace("%20", '%2520')
-                try { document.getElementById("srcVideo" + nextPlayerLoad).src = urlVideo } catch(e){}
-                try { document.getElementById("video" + nextPlayerLoad).load() } catch(e){}
-            } else if (ArrayLoop[nextIndex][0] === 'img') {
-                __log('info','diapo','preloading next image at index ' + nextIndex + ' to divImg' + imgLoad)
-                const url = pathMedia + ArrayLoop[nextIndex][1].replace("%20", '%2520')
-                const urlFinal = "url('" + url + "')"
-                try { document.getElementById("divImg" + imgLoad).style.backgroundImage = urlFinal } catch(e){}
+/**
+ * Active un slide et désactive tous les autres
+ */
+function activateSlide(slideIndex) {
+    __log('info', 'diapo', 'activating slide index ' + slideIndex);
+    
+    SLIDE_ORDER.forEach((slide, idx) => {
+        const element = document.getElementById(slide.id);
+        if (element) {
+            if (idx === slideIndex) {
+                element.classList.add('active');
+            } else {
+                element.classList.remove('active');
             }
         }
-        
-        // Toggle player pour le prochain affichage
-        player = nextPlayerLoad
-        numImage++
-        
-    } else if (current[0] === 'img') {
-        __log('info','diapo','displaying image at index ' + numImage + ' on divImg' + imgShow)
-        
-        // Calculer le div opposé (celui qu'on va cacher)
-        const prevImgDiv = (imgShow == 1) ? 2 : 1;
-        
-        // 1. Cacher immédiatement les vidéos (sans transition pour éviter les interférences)
-        try { 
-            document.getElementById("divVideo1").style.display = "none"
-            document.getElementById("divVideo2").style.display = "none" 
-        } catch(e){}
-        
-        // 2. Cross-fade propre entre les deux divs d'image
-        const currentImgDiv = document.getElementById("divImg" + imgShow)
-        const oldImgDiv = document.getElementById("divImg" + prevImgDiv)
-        
+    });
+    
+    currentSlideIndex = slideIndex;
+}
+
+/**
+ * Trouve le prochain slide disponible pour un type de média donné
+ */
+function getNextSlideForMediaType(mediaType) {
+    const isVideo = mediaType === 'video';
+    const availableSlides = SLIDE_ORDER.filter(s => 
+        isVideo ? s.type === 'video' : s.type === 'image'
+    );
+    
+    // Trouver le prochain slide du bon type qui n'est pas actif
+    let nextSlide = availableSlides.find(s => s.index !== currentSlideIndex);
+    
+    // Si tous les slides du type sont utilisés, prendre le premier disponible
+    if (!nextSlide) {
+        nextSlide = availableSlides[0];
+    }
+    
+    return nextSlide;
+}
+
+/**
+ * Précharge un média dans un slide
+ */
+function preloadMedia(media, slide) {
+    if (!media || !slide) return;
+    
+    const url = pathMedia + media[1].replace("%20", '%2520');
+    
+    if (slide.type === 'video') {
+        __log('info', 'diapo', 'preloading video in ' + slide.id + ': ' + media[1]);
         try {
-            // Préparer le nouveau div (visible mais transparent)
-            currentImgDiv.style.display = "block"
-            currentImgDiv.style.opacity = "0"
-            
-            // Faire apparaître le nouveau en fade-in
-            setTimeout(() => {
-                currentImgDiv.style.opacity = "1"
-                // Simultanément, faire disparaître l'ancien en fade-out
-                if (oldImgDiv) {
-                    oldImgDiv.style.opacity = "0"
-                    // Après la transition, cacher complètement l'ancien div
-                    setTimeout(() => {
-                        oldImgDiv.style.display = "none"
-                    }, 300)
-                }
-                
-                // Précharger le média suivant APRÈS la transition (400ms total = 50 + 300 + 50 de marge)
-                setTimeout(() => {
-                    const nextIndex = (numImage + 1) % ArrayLoop.length;
-                    const nextImgLoad = (imgShow == 1) ? 2 : 1;
-                    if (ArrayLoop[nextIndex]) {
-                        if (ArrayLoop[nextIndex][0] === 'img') {
-                            __log('info','diapo','preloading next image at index ' + nextIndex + ' to divImg' + nextImgLoad)
-                            const url = pathMedia + ArrayLoop[nextIndex][1].replace("%20", '%2520')
-                            const urlFinal = "url('" + url + "')"
-                            try { document.getElementById("divImg" + nextImgLoad).style.backgroundImage = urlFinal } catch(e){}
-                        } else if (ArrayLoop[nextIndex][0] === 'video') {
-                            __log('info','diapo','preloading next video at index ' + nextIndex + ' to player ' + playerLoad)
-                            const urlVideo = pathMedia + ArrayLoop[nextIndex][1].replace("%20", '%2520')
-                            try { document.getElementById("srcVideo" + playerLoad).src = urlVideo } catch(e){}
-                            try { document.getElementById("video" + playerLoad).load() } catch(e){}
-                        }
-                    }
-                }, 350)
-            }, 50)
+            document.getElementById(slide.sourceId).src = url;
+            document.getElementById(slide.videoId).load();
         } catch(e) {
-            __log('error','diapo','transition error: ' + e.message)
+            __log('error', 'diapo', 'failed to preload video: ' + e.message);
         }
-        
-        // Toggle imgLoad et imgShow pour le prochain affichage
-        const nextImgLoad = (imgShow == 1) ? 2 : 1;
-        imgLoad = nextImgLoad
-        imgShow = nextImgLoad
-        
-        // Programmer le prochain média
-        const delay = (current[2] && Number(current[2]) > 0) ? Number(current[2]) * 1000 : 5000
-        __log('debug','diapo','scheduling next media in ' + (delay/1000) + ' seconds')
-        setTimeout(function () {
-            numImage++
-            LoopDiapo()
-        }, delay);
-        
     } else {
-        __log('warn','diapo','unknown media type at index ' + numImage + ': ' + current[0])
-        numImage++
-        // Retry avec le prochain média au lieu de s'arrêter
-        setTimeout(() => LoopDiapo(), 100)
+        __log('info', 'diapo', 'preloading image in ' + slide.id + ': ' + media[1]);
+        try {
+            const urlFinal = "url('" + url + "')";
+            document.getElementById(slide.id).style.backgroundImage = urlFinal;
+        } catch(e) {
+            __log('error', 'diapo', 'failed to preload image: ' + e.message);
+        }
     }
 }
 
+/**
+ * Affiche un média
+ */
+function showMedia(mediaIndex) {
+    if (!mediaLoop || mediaLoop.length === 0) {
+        __log('warn', 'diapo', 'mediaLoop empty, falling back to default screen');
+        defaultScreen();
+        return;
+    }
+    
+    // Wrap-around pour boucle continue
+    if (mediaIndex >= mediaLoop.length) {
+        __log('info', 'diapo', 'end of loop, wrapping to start');
+        mediaIndex = 0;
+    }
+    
+    const media = mediaLoop[mediaIndex];
+    currentMediaIndex = mediaIndex;
+    
+    __log('info', 'diapo', 'showing media ' + mediaIndex + ': type=' + media[0] + ' file=' + media[1]);
+    
+    // Déterminer le slide à utiliser
+    const slide = getNextSlideForMediaType(media[0]);
+    
+    // Précharger le média dans le slide si ce n'est pas déjà fait
+    preloadMedia(media, slide);
+    
+    // Activer le slide (déclenche la transition CSS)
+    activateSlide(slide.index);
+    
+    // Si c'est une vidéo, la lancer
+    if (slide.type === 'video') {
+        try {
+            const videoEl = document.getElementById(slide.videoId);
+            videoEl.play().catch(e => {
+                __log('error', 'diapo', 'failed to play video: ' + e.message);
+            });
+        } catch(e) {
+            __log('error', 'diapo', 'video play error: ' + e.message);
+        }
+    }
+    
+    // Précharger le prochain média (pendant que celui-ci s'affiche)
+    const nextMediaIndex = (mediaIndex + 1) % mediaLoop.length;
+    const nextMedia = mediaLoop[nextMediaIndex];
+    if (nextMedia) {
+        const nextSlide = getNextSlideForMediaType(nextMedia[0]);
+        // Attendre 500ms (après la transition) avant de précharger
+        setTimeout(() => {
+            preloadMedia(nextMedia, nextSlide);
+        }, 500);
+    }
+    
+    // Programmer le prochain média
+    const delay = (media[2] && Number(media[2]) > 0) ? Number(media[2]) * 1000 : 5000;
+    __log('debug', 'diapo', 'scheduling next media in ' + (delay/1000) + ' seconds');
+    
+    loopTimeout = setTimeout(() => {
+        showMedia(currentMediaIndex + 1);
+    }, delay);
+}
 
+/**
+ * Démarre la boucle d'affichage
+ */
+function LoopDiapo() {
+    // Annuler tout timeout précédent
+    if (loopTimeout) {
+        clearTimeout(loopTimeout);
+        loopTimeout = null;
+    }
+    
+    // Charger la liste des médias (préférer ArrayMedia, fallback à ArrayDiapo)
+    mediaLoop = (ArrayMedia && ArrayMedia.length) ? ArrayMedia : (ArrayDiapo || []);
+    
+    __log('info', 'diapo', 'LoopDiapo start with ' + mediaLoop.length + ' media');
+    
+    if (!mediaLoop || mediaLoop.length === 0) {
+        __log('warn', 'diapo', 'no media to display');
+        defaultScreen();
+        return;
+    }
+    
+    // Commencer à l'index 0
+    currentMediaIndex = 0;
+    showMedia(0);
+}
 
-
-
+/**
+ * Arrête la boucle d'affichage
+ */
+function stopLoopDiapo() {
+    if (loopTimeout) {
+        clearTimeout(loopTimeout);
+        loopTimeout = null;
+    }
+    
+    // Désactiver tous les slides
+    SLIDE_ORDER.forEach(slide => {
+        const element = document.getElementById(slide.id);
+        if (element) {
+            element.classList.remove('active');
+        }
+    });
+    
+    __log('info', 'diapo', 'LoopDiapo stopped');
+}
