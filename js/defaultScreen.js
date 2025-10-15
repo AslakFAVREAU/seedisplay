@@ -63,7 +63,10 @@ if (monthGif == 11)
     document.getElementById("divVideo1").style.display = "none";
     document.getElementById("divVideo2").style.display = "none";
     document.getElementById("pagePsaume").style.display = "none";
-    document.getElementById("pageDefault").style.display = "block";
+    
+    // Cacher le conteneur de médias et afficher pageDefault
+    try { document.getElementById("mediaContainer").classList.remove("active") } catch(e){}
+    document.getElementById("pageDefault").style.display = "flex";
     url = "blank.jpg";
     document.getElementById("divImg1").style.backgroundImage = "url(" + url + ")";
     document.getElementById("divImg2").style.backgroundImage = "url(" + url + ")";

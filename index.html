@@ -80,8 +80,14 @@
       left: 0;
       width: 100vw;
       height: 100vh;
-      z-index: 0;
+      z-index: 10;
       background: black;
+      display: none; /* Caché par défaut, affiché uniquement pendant le diaporama */
+    }
+    
+    /* Conteneur visible pendant le diaporama */
+    #mediaContainer.active {
+      display: block;
     }
 
     /* Slides de médias - tous positionnés en absolute et empilés */

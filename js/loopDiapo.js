@@ -180,6 +180,14 @@ function LoopDiapo() {
         return;
     }
     
+    // Cacher pageDefault et afficher le conteneur de médias
+    try {
+        document.getElementById('pageDefault').style.display = 'none';
+        document.getElementById('mediaContainer').classList.add('active');
+    } catch(e) {
+        __log('error', 'diapo', 'failed to show mediaContainer: ' + e.message);
+    }
+    
     // Commencer à l'index 0
     currentMediaIndex = 0;
     showMedia(0);
@@ -201,6 +209,14 @@ function stopLoopDiapo() {
             element.classList.remove('active');
         }
     });
+    
+    // Cacher le conteneur de médias et réafficher pageDefault
+    try {
+        document.getElementById('mediaContainer').classList.remove('active');
+        document.getElementById('pageDefault').style.display = 'flex';
+    } catch(e) {
+        __log('error', 'diapo', 'failed to hide mediaContainer: ' + e.message);
+    }
     
     __log('info', 'diapo', 'LoopDiapo stopped');
 }
