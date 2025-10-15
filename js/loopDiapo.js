@@ -9,8 +9,8 @@ if (typeof window !== 'undefined') {
 
 function LoopDiapo() {
 
-    // Partie en fin de boucle
-    ArrayLoop = ArrayMedia
+    // Resolve source array for playback (prefer ArrayMedia, fallback to ArrayDiapo)
+    ArrayLoop = (ArrayMedia && ArrayMedia.length) ? ArrayMedia : (ArrayDiapo || []);
 
     __log('info','diapo','LoopDiapo: start numImage=' + numImage + ' player=' + player + ' playerLoad=' + playerLoad + ' imgShow=' + imgShow + ' imgLoad=' + imgLoad)
     __log('debug','diapo','playerLoad=' + playerLoad + ' player=' + player)
@@ -22,29 +22,29 @@ function LoopDiapo() {
         return
     }
 
-    // Si on est en fin de boucle on renvoi vers l'affichage par default
+    // If we've reached end of loop, wrap to start for continuous sequential playback
     if (numImage >= ArrayLoop.length) {
-        __log('info','diapo','fin de boucle on repart dans default')
+        __log('info','diapo','fin de boucle, wrapping to start')
         numImage = 0
-        defaultScreen()
-        return
+        // continue playback from beginning
     }
 
-    // Préchargement du media suivant si présent
-    if ((numImage + 1) < ArrayLoop.length) {
-        if (ArrayLoop[numImage + 1][0] === 'video') {
-            __log('debug','diapo','index+1 existe et est video at index ' + (numImage+1))
-            __log('info','diapo','preloading next video at index ' + (numImage+1))
-            const urlVideo = pathMedia + ArrayLoop[numImage + 1][1].replace("%20", '%2520')
+    // Préchargement du media suivant (wrap-around)
+    const nextIndex = (numImage + 1) % ArrayLoop.length;
+    if (ArrayLoop[nextIndex]) {
+        if (ArrayLoop[nextIndex][0] === 'video') {
+            __log('debug','diapo','next index is video at index ' + nextIndex)
+            __log('info','diapo','preloading next video at index ' + nextIndex)
+            const urlVideo = pathMedia + ArrayLoop[nextIndex][1].replace("%20", '%2520')
             try { document.getElementById("srcVideo" + playerLoad).src = urlVideo } catch(e){}
             try { document.getElementById("video" + playerLoad).load() } catch(e){}
             // toggle playerLoad
             playerLoad = (playerLoad == 1) ? 2 : 1
             __log('info','diapo','New player load is player' + playerLoad)
             __log('debug','diapo','video preloaded to player ' + playerLoad)
-        } else if (ArrayLoop[numImage + 1][0] === 'img') {
-            __log('info','diapo','preloading next image at index ' + (numImage+1))
-            const url = pathMedia + ArrayLoop[numImage + 1][1].replace("%20", '%2520')
+        } else if (ArrayLoop[nextIndex][0] === 'img') {
+            __log('info','diapo','preloading next image at index ' + nextIndex)
+            const url = pathMedia + ArrayLoop[nextIndex][1].replace("%20", '%2520')
             const urlFinal = "url('" + url + "')"
             try { document.getElementById("divImg" + imgLoad).style.backgroundImage = urlFinal } catch(e){}
             imgLoad = (imgLoad == 1) ? 2 : 1
