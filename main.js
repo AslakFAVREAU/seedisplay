@@ -246,21 +246,24 @@ app.on('ready', function() {
 
 function createWindow () {
   // Cree la fenetre du navigateur.
+  const isProduction = process.env.NODE_ENV === 'production' || !process.defaultApp;
   const win = new BrowserWindow({
     icon: 'assets/Flavicon.png',
     width: 800,
     height: 600,
-    fullscreen : false, 
-    frame:true,
-    alwaysOnTop :false,    
+    // En production, s'assurer que la fenêtre est sans bordure, pleine et au premier plan
+    fullscreen: isProduction || true,
+    frame: !isProduction ? true : false,
+    alwaysOnTop: isProduction ? true : false,
+    kiosk: isProduction ? true : false,
     webPreferences: {
       nodeIntegration: false,
       nativeWindowOpen: true,
       contextIsolation: true,
       preload: require('path').join(__dirname, 'preload.js'),
-      devTools: true
+      devTools: !isProduction
     }
-    })
+  })
 
   // et charger le fichier index.html de l'application.
   win.loadFile('index.html')
@@ -275,7 +278,6 @@ function createWindow () {
   }
   
   // Ouvrir DevTools uniquement en mode développement
-  const isProduction = process.env.NODE_ENV === 'production' || !process.defaultApp;
   if (!isProduction) {
     win.webContents.openDevTools();
   }
