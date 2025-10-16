@@ -8,8 +8,8 @@ if (typeof window !== 'undefined') {
 }
 
 /**
- * Système d'affichage ultra-simple avec display: block/none
- * Pas de CSS transitions complexes, juste show/hide direct
+ * Système d'affichage OPTIMISÉ avec préchargement et transitions CUT
+ * ZERO flash noir - précharge le suivant puis transition instantanée
  * 
  * Note: imgShow, imgLoad, player sont déclarés globalement dans index.html
  * pour être accessibles par defaultScreen.js et autres scripts
@@ -18,22 +18,32 @@ if (typeof window !== 'undefined') {
 let currentMediaIndex = 0;
 let mediaLoop = [];
 let loopTimeout = null;
+let currentVisibleDiv = null; // Track quel div est actuellement visible
 
 // imgShow, player sont maintenant des variables globales (déclarées dans index.html)
+
+/**
+ * Cache TOUS les éléments média SAUF celui spécifié
+ */
+function hideAllMediaExcept(exceptId) {
+    try {
+        const ids = ['divImg1', 'divImg2', 'divVideo1', 'divVideo2'];
+        ids.forEach(id => {
+            if (id !== exceptId) {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            }
+        });
+    } catch(e) {
+        __log('error', 'diapo', 'hideAllMediaExcept error: ' + e.message);
+    }
+}
 
 /**
  * Cache TOUS les éléments média
  */
 function hideAllMedia() {
-    __log('debug', 'diapo', 'hiding all media');
-    try {
-        document.getElementById('divImg1').style.display = 'none';
-        document.getElementById('divImg2').style.display = 'none';
-        document.getElementById('divVideo1').style.display = 'none';
-        document.getElementById('divVideo2').style.display = 'none';
-    } catch(e) {
-        __log('error', 'diapo', 'hideAllMedia error: ' + e.message);
-    }
+    hideAllMediaExcept(null);
 }
 
 /**
@@ -76,8 +86,6 @@ function showMedia(mediaIndex) {
     
     __log('info', 'diapo', 'showing #' + mediaIndex + '/' + mediaLoop.length + ' type=' + mediaType + ' file=' + mediaFile + ' delay=' + (delay/1000) + 's');
     
-    // Pas de hideAllMedia ici - on le fait juste avant d'afficher le nouveau média pour éviter le flash noir
-    
     if (mediaType === 'video') {
         // Utiliser player (1 ou 2)
         const videoId = 'video' + player;
@@ -88,49 +96,63 @@ function showMedia(mediaIndex) {
         
         try {
             const url = pathMedia + mediaFile.replace("%20", '%2520');
+            const divEl = document.getElementById(divId);
             const sourceEl = document.getElementById(sourceId);
             const videoEl = document.getElementById(videoId);
-            const divEl = document.getElementById(divId);
             
-            // Supprimer les anciens event listeners pour éviter les doublons
-            const oldVideo = videoEl.cloneNode(true);
-            videoEl.parentNode.replaceChild(oldVideo, videoEl);
+            // S'assurer que loop est désactivé
+            videoEl.loop = false;
+            videoEl.removeAttribute('loop');
+            
+            // Nettoyer les anciens event listeners en clonant
+            const newVideoEl = videoEl.cloneNode(true);
+            videoEl.parentNode.replaceChild(newVideoEl, videoEl);
+            
+            // Récupérer les nouveaux éléments
             const freshVideoEl = document.getElementById(videoId);
             const freshSourceEl = document.getElementById(sourceId);
+            const freshDivEl = document.getElementById(divId);
             
-            // Charger
+            // S'assurer que loop est OFF
+            freshVideoEl.loop = false;
+            freshVideoEl.removeAttribute('loop');
+            
+            // Charger la vidéo
             freshSourceEl.src = url;
             freshVideoEl.load();
             
-            // Cacher l'ancien, afficher le nouveau - pas de délai pour éviter le flash noir
-            hideAllMedia();
-            divEl.style.display = 'block';
-            __log('debug', 'diapo', divId + ' displayed');
+            // Fonction pour afficher la vidéo quand prête
+            const showVideo = () => {
+                __log('debug', 'diapo', 'video ready, displaying');
+                hideAllMediaExcept(divId);
+                freshDivEl.style.display = 'block';
+                currentVisibleDiv = divId;
+                
+                freshVideoEl.play().catch(e => {
+                    __log('error', 'diapo', 'video play failed: ' + e.message);
+                    setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
+                });
+            };
+            
+            // Écouter plusieurs événements pour robustesse
+            freshVideoEl.addEventListener('loadeddata', showVideo, { once: true });
             
             // Écouter la fin de la vidéo
             freshVideoEl.addEventListener('ended', () => {
-                __log('info', 'diapo', 'video ended, showing next media');
-                showMedia(currentMediaIndex + 1);
+                __log('info', 'diapo', 'video ended, next in 200ms');
+                setTimeout(() => showMedia(currentMediaIndex + 1), 200);
             }, { once: true });
             
             // Écouter les erreurs
             freshVideoEl.addEventListener('error', (e) => {
-                __log('error', 'diapo', 'video error event: ' + e.message);
-                // Passer au suivant après 2 secondes en cas d'erreur
+                __log('error', 'diapo', 'video error: ' + (e.message || 'load failed'));
                 setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
             }, { once: true });
-            
-            // Lancer la vidéo
-            freshVideoEl.play().catch(e => {
-                __log('error', 'diapo', 'video play failed: ' + e.message);
-                // Passer au suivant après 2 secondes si play échoue
-                setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
-            });
             
             // Toggle pour la prochaine
             player = (player === 1) ? 2 : 1;
             
-            // NE PAS programmer de timeout pour les vidéos - on attend l'événement 'ended'
+            // NE PAS programmer de timeout pour les vidéos
             return;
             
         } catch(e) {
@@ -144,29 +166,46 @@ function showMedia(mediaIndex) {
         // Utiliser imgShow (1 ou 2)
         const divId = 'divImg' + imgShow;
         
-        __log('debug', 'diapo', 'loading image in ' + divId);
+        __log('debug', 'diapo', 'preloading image in ' + divId);
         
         try {
             const url = pathMedia + mediaFile.replace("%20", '%2520');
-            __log('debug', 'diapo', 'pathMedia=' + pathMedia + ' full URL=' + url);
-            
             const divEl = document.getElementById(divId);
+            
             if (!divEl) {
                 __log('error', 'diapo', divId + ' NOT FOUND in DOM!');
                 return;
             }
             
-            __log('debug', 'diapo', divId + ' element found, setting backgroundImage');
+            // Précharger l'image EN ARRIÈRE-PLAN
+            divEl.style.display = 'none';
             
-            // Charger l'image en background
-            divEl.style.backgroundImage = "url('" + url + "')";
+            // Créer un Image object pour précharger
+            const img = new Image();
+            img.onload = () => {
+                __log('debug', 'diapo', 'image preloaded, applying background and switching');
+                
+                // Appliquer le background
+                divEl.style.backgroundImage = "url('" + url + "')";
+                
+                // TRANSITION CUT : cacher l'ancien, afficher le nouveau INSTANTANÉMENT
+                hideAllMediaExcept(divId);
+                divEl.style.display = 'block';
+                currentVisibleDiv = divId;
+                
+                __log('info', 'diapo', divId + ' NOW DISPLAYED! (CUT transition)');
+            };
             
-            __log('debug', 'diapo', 'backgroundImage set, current display=' + divEl.style.display);
+            img.onerror = () => {
+                __log('error', 'diapo', 'image preload failed, trying direct display');
+                // Fallback : afficher quand même
+                divEl.style.backgroundImage = "url('" + url + "')";
+                hideAllMediaExcept(divId);
+                divEl.style.display = 'block';
+                currentVisibleDiv = divId;
+            };
             
-            // Cacher l'ancien, afficher le nouveau - pas de délai pour éviter le flash noir
-            hideAllMedia();
-            divEl.style.display = 'block';
-            __log('info', 'diapo', divId + ' NOW DISPLAYED! display=' + divEl.style.display);
+            img.src = url;
             
             // Toggle pour la prochaine
             imgShow = (imgShow === 1) ? 2 : 1;

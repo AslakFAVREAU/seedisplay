@@ -2,6 +2,27 @@ const { app, Menu, BrowserWindow } = require('electron');
 const log = require('electron-log');
 const updater = require("electron-updater");
 const autoUpdater = updater.autoUpdater;
+
+//-------------------------------------------------------------------
+// Performance & Hardware Acceleration
+// Optimisations pour lecture vidéo fluide et transitions CUT
+//-------------------------------------------------------------------
+// Activer l'accélération matérielle pour les vidéos
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+
+// Optimisations pour les codecs vidéo
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization');
+
+// Smooth scrolling et rendering
+app.commandLine.appendSwitch('enable-smooth-scrolling');
+app.commandLine.appendSwitch('enable-accelerated-2d-canvas');
+app.commandLine.appendSwitch('disable-frame-rate-limit');
+
+log.info('Hardware acceleration enabled for smooth video playback');
+
 //-------------------------------------------------------------------
 // Logging
 //

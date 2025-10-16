@@ -40,7 +40,7 @@
     "appId": "fr.see.seedisplay",
     "productName": "SEE Display",
     "directories": {
-      "output": "dist"
+      "output": "dist/v${version}"
     },
     "files": [
       "**/*",
