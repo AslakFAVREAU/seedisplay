@@ -46,10 +46,25 @@ function showMedia(mediaIndex) {
         return;
     }
     
-    // Wrap-around
+    // Wrap-around - afficher pageDefault entre chaque cycle
     if (mediaIndex >= mediaLoop.length) {
-        __log('info', 'diapo', 'end of loop, restarting');
-        mediaIndex = 0;
+        __log('info', 'diapo', 'end of loop, showing pageDefault then restarting');
+        
+        // Cacher tous les médias
+        hideAllMedia();
+        
+        // Cacher le container, afficher pageDefault
+        document.getElementById('mediaContainer').style.display = 'none';
+        document.getElementById('pageDefault').style.display = 'flex';
+        
+        // Redémarrer après 5 secondes
+        loopTimeout = setTimeout(() => {
+            document.getElementById('pageDefault').style.display = 'none';
+            document.getElementById('mediaContainer').style.display = 'block';
+            showMedia(0);
+        }, 5000);
+        
+        return;
     }
     
     const media = mediaLoop[mediaIndex];
@@ -61,8 +76,7 @@ function showMedia(mediaIndex) {
     
     __log('info', 'diapo', 'showing #' + mediaIndex + '/' + mediaLoop.length + ' type=' + mediaType + ' file=' + mediaFile + ' delay=' + (delay/1000) + 's');
     
-    // Cacher tout d'abord
-    hideAllMedia();
+    // Pas de hideAllMedia ici - on le fait juste avant d'afficher le nouveau média pour éviter le flash noir
     
     if (mediaType === 'video') {
         // Utiliser player (1 ou 2)
@@ -82,16 +96,15 @@ function showMedia(mediaIndex) {
             sourceEl.src = url;
             videoEl.load();
             
-            // Afficher immédiatement (ou après un petit délai)
-            setTimeout(() => {
-                divEl.style.display = 'block';
-                __log('debug', 'diapo', divId + ' displayed');
-                
-                // Lancer la vidéo
-                videoEl.play().catch(e => {
-                    __log('error', 'diapo', 'video play failed: ' + e.message);
-                });
-            }, 50);
+            // Cacher l'ancien, afficher le nouveau - pas de délai pour éviter le flash noir
+            hideAllMedia();
+            divEl.style.display = 'block';
+            __log('debug', 'diapo', divId + ' displayed');
+            
+            // Lancer la vidéo
+            videoEl.play().catch(e => {
+                __log('error', 'diapo', 'video play failed: ' + e.message);
+            });
             
             // Toggle pour la prochaine
             player = (player === 1) ? 2 : 1;
@@ -123,12 +136,10 @@ function showMedia(mediaIndex) {
             
             __log('debug', 'diapo', 'backgroundImage set, current display=' + divEl.style.display);
             
-            // Afficher immédiatement
-            setTimeout(() => {
-                divEl.style.display = 'block';
-                __log('info', 'diapo', divId + ' NOW DISPLAYED! display=' + divEl.style.display);
-                __log('info', 'diapo', 'computed style: ' + window.getComputedStyle(divEl).display);
-            }, 50);
+            // Cacher l'ancien, afficher le nouveau - pas de délai pour éviter le flash noir
+            hideAllMedia();
+            divEl.style.display = 'block';
+            __log('info', 'diapo', divId + ' NOW DISPLAYED! display=' + divEl.style.display);
             
             // Toggle pour la prochaine
             imgShow = (imgShow === 1) ? 2 : 1;

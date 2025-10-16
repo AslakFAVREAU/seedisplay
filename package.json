@@ -55,17 +55,34 @@
       "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
     ],
     "win": {
-      "target": "dir",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
       "signAndEditExecutable": false,
       "verifyUpdateCodeSignature": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "license": "LICENSE"
+    },
+    "portable": {
+      "artifactName": "SEE-Display-Portable-${version}.exe"
     },
     "publish": {
       "provider": "github",
       "owner": "AslakFAVREAU",
       "repo": "seedisplay"
     },
-    "nsis": false,
-    "portable": false,
-    "compression": "store"
+    "compression": "normal"
   }
 }
