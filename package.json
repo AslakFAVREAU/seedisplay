@@ -8,7 +8,12 @@
     "start:prod": "cross-env NODE_ENV=production electron .",
     "test": "mocha test/**/*.test.js --exit",
     "test:performance": "mocha test/performance.test.js --timeout 120000",
-    "dist": "electron-builder",
+    "version:patch": "npm version patch --no-git-tag-version",
+    "version:minor": "npm version minor --no-git-tag-version",
+    "version:major": "npm version major --no-git-tag-version",
+    "prebuild": "npm run version:patch",
+    "build": "electron-builder",
+    "dist": "npm run prebuild && npm run build && git add package.json && git commit -m \"chore: version bump to $(node -p \"require('./package.json').version\")\"",
     "publish": "electron-builder --publish=always"
   },
   "keywords": [

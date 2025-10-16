@@ -92,25 +92,52 @@ function showMedia(mediaIndex) {
             const videoEl = document.getElementById(videoId);
             const divEl = document.getElementById(divId);
             
+            // Supprimer les anciens event listeners pour éviter les doublons
+            const oldVideo = videoEl.cloneNode(true);
+            videoEl.parentNode.replaceChild(oldVideo, videoEl);
+            const freshVideoEl = document.getElementById(videoId);
+            const freshSourceEl = document.getElementById(sourceId);
+            
             // Charger
-            sourceEl.src = url;
-            videoEl.load();
+            freshSourceEl.src = url;
+            freshVideoEl.load();
             
             // Cacher l'ancien, afficher le nouveau - pas de délai pour éviter le flash noir
             hideAllMedia();
             divEl.style.display = 'block';
             __log('debug', 'diapo', divId + ' displayed');
             
+            // Écouter la fin de la vidéo
+            freshVideoEl.addEventListener('ended', () => {
+                __log('info', 'diapo', 'video ended, showing next media');
+                showMedia(currentMediaIndex + 1);
+            }, { once: true });
+            
+            // Écouter les erreurs
+            freshVideoEl.addEventListener('error', (e) => {
+                __log('error', 'diapo', 'video error event: ' + e.message);
+                // Passer au suivant après 2 secondes en cas d'erreur
+                setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
+            }, { once: true });
+            
             // Lancer la vidéo
-            videoEl.play().catch(e => {
+            freshVideoEl.play().catch(e => {
                 __log('error', 'diapo', 'video play failed: ' + e.message);
+                // Passer au suivant après 2 secondes si play échoue
+                setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
             });
             
             // Toggle pour la prochaine
             player = (player === 1) ? 2 : 1;
             
+            // NE PAS programmer de timeout pour les vidéos - on attend l'événement 'ended'
+            return;
+            
         } catch(e) {
             __log('error', 'diapo', 'video error: ' + e.message);
+            // Passer au suivant en cas d'erreur
+            setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
+            return;
         }
         
     } else if (mediaType === 'img') {
@@ -147,13 +174,13 @@ function showMedia(mediaIndex) {
         } catch(e) {
             __log('error', 'diapo', 'image error: ' + e.message);
         }
+        
+        // Programmer le prochain (seulement pour les images)
+        __log('debug', 'diapo', 'scheduling next in ' + (delay/1000) + 's');
+        loopTimeout = setTimeout(() => {
+            showMedia(currentMediaIndex + 1);
+        }, delay);
     }
-    
-    // Programmer le prochain
-    __log('debug', 'diapo', 'scheduling next in ' + (delay/1000) + 's');
-    loopTimeout = setTimeout(() => {
-        showMedia(currentMediaIndex + 1);
-    }, delay);
 }
 
 /**
