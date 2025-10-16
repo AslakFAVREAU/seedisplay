@@ -73,7 +73,7 @@
       font-size: 100%;
     }
 
-    /* Conteneur de médias - système de slides avec z-index */
+    /* Conteneur de médias - simple, caché par défaut */
     #mediaContainer {
       position: fixed;
       top: 0;
@@ -82,37 +82,21 @@
       height: 100vh;
       z-index: 10;
       background: black;
-      display: none; /* Caché par défaut, affiché uniquement pendant le diaporama */
-    }
-    
-    /* Conteneur visible pendant le diaporama */
-    #mediaContainer.active {
-      display: block;
+      display: none;
     }
 
-    /* Slides de médias - tous positionnés en absolute et empilés */
-    .media-slide {
+    /* Divs d'images et vidéos - cachés par défaut, positionnés en absolute */
+    #divImg1, #divImg2, #divVideo1, #divVideo2 {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      opacity: 0;
-      z-index: 1;
-      transition: opacity 0.5s ease-in-out;
-      pointer-events: none;
+      display: none;
     }
 
-    /* Slide actif - visible au premier plan */
-    .media-slide.active {
-      opacity: 1;
-      z-index: 2;
-      pointer-events: auto;
-    }
-
-    /* Configuration des divs d'images */
-    #divImg1,
-    #divImg2 {
+    /* Configuration spécifique des divs d'images */
+    #divImg1, #divImg2 {
       background-image: url("default.jpg");
       background-position: center;
       background-repeat: no-repeat;
@@ -411,20 +395,20 @@
     </div>
   </div>
 
-  <!-- Conteneur de médias avec système de slides -->
+  <!-- Conteneur de médias simple -->
   <div id="mediaContainer">
-    <div class="media-slide" id="divVideo1">
+    <div id="divVideo1">
       <video class="videoPlayer" id="video1" width="100%" height="100%">
         <source id="srcVideo1" src="" type="video/mp4" />
       </video>
     </div>
-    <div class="media-slide" id="divVideo2">
+    <div id="divVideo2">
       <video class="videoPlayer" id="video2" width="100%" height="100%">
         <source id="srcVideo2" src="" type="video/mp4" />
       </video>
     </div>
-    <div class="media-slide" id="divImg1"></div>
-    <div class="media-slide" id="divImg2"></div>
+    <div id="divImg1"></div>
+    <div id="divImg2"></div>
   </div>
 
   <div id="pagePsaume">
