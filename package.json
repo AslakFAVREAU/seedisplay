@@ -1,6 +1,6 @@
 {
   "name": "seedisplay",
-  "version": "1.8.0",
+  "version": "1.8.2",
   "description": "SEE Display Application",
   "main": "main.js",
   "scripts": {
@@ -63,11 +63,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "signAndEditExecutable": false,
