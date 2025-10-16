@@ -71,28 +71,58 @@ function getNextSlideForMediaType(mediaType) {
 }
 
 /**
- * Précharge un média dans un slide
+ * Précharge un média dans un slide (avec callback optionnel)
  */
-function preloadMedia(media, slide) {
-    if (!media || !slide) return;
+function preloadMedia(media, slide, callback) {
+    if (!media || !slide) {
+        if (callback) callback();
+        return;
+    }
     
     const url = pathMedia + media[1].replace("%20", '%2520');
     
     if (slide.type === 'video') {
         __log('info', 'diapo', 'preloading video in ' + slide.id + ': ' + media[1]);
         try {
+            const videoEl = document.getElementById(slide.videoId);
             document.getElementById(slide.sourceId).src = url;
-            document.getElementById(slide.videoId).load();
+            videoEl.load();
+            // Vidéo prête quand 'loadeddata' se déclenche
+            videoEl.addEventListener('loadeddata', function onLoaded() {
+                videoEl.removeEventListener('loadeddata', onLoaded);
+                __log('debug', 'diapo', 'video loaded: ' + media[1]);
+                if (callback) callback();
+            }, { once: true });
+            // Timeout de sécurité
+            setTimeout(() => {
+                if (callback) callback();
+            }, 2000);
         } catch(e) {
             __log('error', 'diapo', 'failed to preload video: ' + e.message);
+            if (callback) callback();
         }
     } else {
         __log('info', 'diapo', 'preloading image in ' + slide.id + ': ' + media[1]);
         try {
             const urlFinal = "url('" + url + "')";
-            document.getElementById(slide.id).style.backgroundImage = urlFinal;
+            const slideEl = document.getElementById(slide.id);
+            
+            // Créer une image temporaire pour détecter le chargement
+            const img = new Image();
+            img.onload = function() {
+                slideEl.style.backgroundImage = urlFinal;
+                __log('debug', 'diapo', 'image loaded: ' + media[1]);
+                if (callback) callback();
+            };
+            img.onerror = function() {
+                __log('error', 'diapo', 'failed to load image: ' + media[1]);
+                slideEl.style.backgroundImage = urlFinal; // Charger quand même
+                if (callback) callback();
+            };
+            img.src = url;
         } catch(e) {
             __log('error', 'diapo', 'failed to preload image: ' + e.message);
+            if (callback) callback();
         }
     }
 }
@@ -121,34 +151,36 @@ function showMedia(mediaIndex) {
     // Déterminer le slide à utiliser
     const slide = getNextSlideForMediaType(media[0]);
     
-    // Précharger le média dans le slide si ce n'est pas déjà fait
-    preloadMedia(media, slide);
-    
-    // Activer le slide (déclenche la transition CSS)
-    activateSlide(slide.index);
-    
-    // Si c'est une vidéo, la lancer
-    if (slide.type === 'video') {
-        try {
-            const videoEl = document.getElementById(slide.videoId);
-            videoEl.play().catch(e => {
-                __log('error', 'diapo', 'failed to play video: ' + e.message);
-            });
-        } catch(e) {
-            __log('error', 'diapo', 'video play error: ' + e.message);
+    // Précharger le média dans le slide, puis l'activer une fois chargé
+    preloadMedia(media, slide, function() {
+        __log('debug', 'diapo', 'media ready, activating slide');
+        
+        // Activer le slide (déclenche la transition CSS)
+        activateSlide(slide.index);
+        
+        // Si c'est une vidéo, la lancer
+        if (slide.type === 'video') {
+            try {
+                const videoEl = document.getElementById(slide.videoId);
+                videoEl.play().catch(e => {
+                    __log('error', 'diapo', 'failed to play video: ' + e.message);
+                });
+            } catch(e) {
+                __log('error', 'diapo', 'video play error: ' + e.message);
+            }
         }
-    }
-    
-    // Précharger le prochain média (pendant que celui-ci s'affiche)
-    const nextMediaIndex = (mediaIndex + 1) % mediaLoop.length;
-    const nextMedia = mediaLoop[nextMediaIndex];
-    if (nextMedia) {
-        const nextSlide = getNextSlideForMediaType(nextMedia[0]);
-        // Attendre 500ms (après la transition) avant de précharger
-        setTimeout(() => {
-            preloadMedia(nextMedia, nextSlide);
-        }, 500);
-    }
+        
+        // Précharger le prochain média (pendant que celui-ci s'affiche)
+        const nextMediaIndex = (mediaIndex + 1) % mediaLoop.length;
+        const nextMedia = mediaLoop[nextMediaIndex];
+        if (nextMedia) {
+            const nextSlide = getNextSlideForMediaType(nextMedia[0]);
+            // Attendre 500ms (après la transition) avant de précharger
+            setTimeout(() => {
+                preloadMedia(nextMedia, nextSlide);
+            }, 500);
+        }
+    });
     
     // Programmer le prochain média
     const delay = (media[2] && Number(media[2]) > 0) ? Number(media[2]) * 1000 : 5000;
