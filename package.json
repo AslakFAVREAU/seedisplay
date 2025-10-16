@@ -1,6 +1,6 @@
 {
   "name": "seedisplay",
-  "version": "1.8.4",
+  "version": "1.8.6",
   "description": "SEE Display Application",
   "main": "main.js",
   "scripts": {
@@ -46,6 +46,8 @@
       "**/*",
       "!test",
       "!docs",
+      "!dist/**/*",
+      "!scripts",
       "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
       "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
       "!**/node_modules/*.d.ts",
