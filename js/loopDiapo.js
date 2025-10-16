@@ -107,15 +107,26 @@ function showMedia(mediaIndex) {
         
         try {
             const url = pathMedia + mediaFile.replace("%20", '%2520');
+            __log('debug', 'diapo', 'pathMedia=' + pathMedia + ' full URL=' + url);
+            
             const divEl = document.getElementById(divId);
+            if (!divEl) {
+                __log('error', 'diapo', divId + ' NOT FOUND in DOM!');
+                return;
+            }
+            
+            __log('debug', 'diapo', divId + ' element found, setting backgroundImage');
             
             // Charger l'image en background
             divEl.style.backgroundImage = "url('" + url + "')";
             
+            __log('debug', 'diapo', 'backgroundImage set, current display=' + divEl.style.display);
+            
             // Afficher immédiatement
             setTimeout(() => {
                 divEl.style.display = 'block';
-                __log('debug', 'diapo', divId + ' displayed');
+                __log('info', 'diapo', divId + ' NOW DISPLAYED! display=' + divEl.style.display);
+                __log('info', 'diapo', 'computed style: ' + window.getComputedStyle(divEl).display);
             }, 50);
             
             // Toggle pour la prochaine
@@ -158,11 +169,19 @@ function LoopDiapo() {
     
     // Cacher pageDefault, afficher mediaContainer
     try {
-        document.getElementById('pageDefault').style.display = 'none';
+        const pageDefault = document.getElementById('pageDefault');
+        pageDefault.style.display = 'none';
+        __log('info', 'diapo', 'pageDefault hidden');
+        
         const container = document.getElementById('mediaContainer');
-        if (container) {
-            container.style.display = 'block';
+        if (!container) {
+            __log('error', 'diapo', 'mediaContainer NOT FOUND!');
+            return;
         }
+        
+        container.style.display = 'block';
+        __log('info', 'diapo', 'mediaContainer displayed, computed style: ' + window.getComputedStyle(container).display);
+        
     } catch(e) {
         __log('error', 'diapo', 'container display error: ' + e.message);
     }
@@ -172,6 +191,7 @@ function LoopDiapo() {
     imgShow = 1;
     player = 1;
     
+    __log('info', 'diapo', 'calling showMedia(0)');
     showMedia(0);
 }
 
