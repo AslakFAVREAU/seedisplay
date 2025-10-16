@@ -84,18 +84,30 @@ function createDefaultWindow() {
   try {
     win.webContents.on('console-message', (event, level, message, line, sourceId) => {
       // Log messages coming from the renderer process so they appear in the main process logs
-      log.info(`[renderer] ${message} (level=${level}, ${sourceId}:${line})`);
+      log.info(`[renderer-${level}] ${message} (${sourceId}:${line})`);
     });
   } catch (e) {
     log.warn('Could not attach console-message listener to default window', e);
   }
+  
+  // Raccourci pour ouvrir DevTools même en production
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+      event.preventDefault();
+      if (win.webContents.isDevToolsOpened()) {
+        win.webContents.closeDevTools();
+      } else {
+        win.webContents.openDevTools();
+      }
+    }
+  });
   
   // Ouvrir DevTools uniquement en mode développement
   if (!isProduction) {
     win.webContents.openDevTools();
     log.info('Mode développement - DevTools activés');
   } else {
-    log.info('Mode production - Mode kiosk activé, application au premier plan');
+    log.info('Mode production - Mode kiosk activé, Ctrl+Shift+I pour DevTools');
   }
   
   // Afficher la fenêtre une fois prête

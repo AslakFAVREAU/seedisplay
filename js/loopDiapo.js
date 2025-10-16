@@ -121,21 +121,34 @@ function showMedia(mediaIndex) {
             freshSourceEl.src = url;
             freshVideoEl.load();
             
+            __log('info', 'diapo', 'video load() called, waiting for loadeddata event');
+            
             // Fonction pour afficher la vidéo quand prête
             const showVideo = () => {
-                __log('debug', 'diapo', 'video ready, displaying');
+                __log('debug', 'diapo', 'video ready (loadeddata), displaying');
                 hideAllMediaExcept(divId);
                 freshDivEl.style.display = 'block';
                 currentVisibleDiv = divId;
                 
+                __log('info', 'diapo', 'video display set, duration=' + freshVideoEl.duration + 's, canplay=' + (freshVideoEl.readyState >= 3));
+                
                 freshVideoEl.play().catch(e => {
-                    __log('error', 'diapo', 'video play failed: ' + e.message);
+                    __log('error', 'diapo', 'video play() failed: ' + e.message);
                     setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
                 });
             };
             
             // Écouter plusieurs événements pour robustesse
             freshVideoEl.addEventListener('loadeddata', showVideo, { once: true });
+            
+            // Logger le chargement des données
+            freshVideoEl.addEventListener('loadstart', () => {
+                __log('debug', 'diapo', 'video loadstart event');
+            }, { once: true });
+            
+            freshVideoEl.addEventListener('canplay', () => {
+                __log('debug', 'diapo', 'video canplay event (readyState=' + freshVideoEl.readyState + ')');
+            });
             
             // Écouter la fin de la vidéo
             freshVideoEl.addEventListener('ended', () => {
