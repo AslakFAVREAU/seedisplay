@@ -417,9 +417,13 @@
 
   </div>
 
-
-
-
+  <script>
+    // Déclaration des variables globales AVANT le chargement des scripts
+    // Ces variables sont utilisées par loopDiapo.js, defaultScreen.js, etc.
+    var imgShow = 1;
+    var imgLoad = 1;
+    var player = 1;
+  </script>
 
   <script src="js/loopDiapo.js"></script>
   <script src="js/dateHeure.js"></script>
@@ -552,8 +556,8 @@
     const pathSEE = "C:/SEE/"
     const pathMedia = "C:/SEE/media/"
 
-    // Variables pour compatibilité (déclarées dans loopDiapo.js maintenant)
-    // imgShow, imgLoad, player sont maintenant gérés par loopDiapo.js
+    // Variables pour compatibilité
+    // imgShow, imgLoad, player sont déclarés globalement en haut du fichier
     var noplayer = 2  // Conservé pour compatibilité
     var playerLoad = 1  // Conservé pour compatibilité
     var numImage = 0

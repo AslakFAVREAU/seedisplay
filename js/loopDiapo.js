@@ -10,15 +10,16 @@ if (typeof window !== 'undefined') {
 /**
  * Système d'affichage ultra-simple avec display: block/none
  * Pas de CSS transitions complexes, juste show/hide direct
+ * 
+ * Note: imgShow, imgLoad, player sont déclarés globalement dans index.html
+ * pour être accessibles par defaultScreen.js et autres scripts
  */
 
 let currentMediaIndex = 0;
 let mediaLoop = [];
 let loopTimeout = null;
 
-// Divs à alterner (images et vidéos)
-let imgShow = 1;  // 1 ou 2
-let player = 1;   // 1 ou 2
+// imgShow, player sont maintenant des variables globales (déclarées dans index.html)
 
 /**
  * Cache TOUS les éléments média
