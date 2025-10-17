@@ -417,12 +417,37 @@
 
   </div>
 
+  <!-- Phase 2: DisplayState module (must load BEFORE loopDiapo.js) -->
+  <script src="js/DisplayState.js"></script>
+
   <script>
-    // Déclaration des variables globales AVANT le chargement des scripts
-    // Ces variables sont utilisées par loopDiapo.js, defaultScreen.js, etc.
-    var imgShow = 1;
-    var imgLoad = 1;
-    var player = 1;
+    // Phase 2: Initialize DisplayState (replaces imgShow, imgLoad, player)
+    window.displayState = new DisplayState();
+    
+    // Backward compatibility: Map old global variables to DisplayState
+    // This allows gradual migration of loopDiapo.js
+    Object.defineProperty(window, 'imgShow', {
+      get: () => window.displayState.activePlayer,
+      set: (val) => {
+        if (val !== window.displayState.activePlayer) {
+          window.displayState.togglePlayer();
+        }
+      }
+    });
+    
+    Object.defineProperty(window, 'imgLoad', {
+      get: () => window.displayState.getInactivePlayer(),
+      set: () => {} // Read-only in new pattern
+    });
+    
+    Object.defineProperty(window, 'player', {
+      get: () => window.displayState.activePlayer,
+      set: (val) => {
+        if (val !== window.displayState.activePlayer) {
+          window.displayState.togglePlayer();
+        }
+      }
+    });
   </script>
 
   <script src="js/loopDiapo.js"></script>
