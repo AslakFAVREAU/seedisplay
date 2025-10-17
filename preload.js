@@ -154,6 +154,78 @@ contextBridge.exposeInMainWorld('api', {
   },
   log: (level, msg) => {
     ipcRenderer.send('renderer-log', { level, msg })
+  },
+  // Phase 2 Week 3: Binary download with MediaCache support
+  // Downloads url to relativePath, using ETag validation and LRU disk cache
+  saveBinaryWithCache: async (relativePath, url, cacheOptions = {}) => {
+    if (hasNode) {
+      try {
+        const p = safeJoin(BASE_PATH, relativePath)
+        const dir = path.dirname(p)
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+        
+        // Get ETag info from cache metadata (if it exists)
+        const cacheMetadataPath = p + '.metadata.json'
+        let existingETag = null
+        let existingLastModified = null
+        
+        try {
+          if (fs.existsSync(cacheMetadataPath)) {
+            const metadata = JSON.parse(fs.readFileSync(cacheMetadataPath, 'utf8'))
+            existingETag = metadata.etag
+            existingLastModified = metadata.lastModified
+          }
+        } catch(e) { /* ignore corrupted metadata */ }
+        
+        // Build request headers for conditional fetch
+        const headers = {}
+        if (existingETag) headers['If-None-Match'] = existingETag
+        if (existingLastModified) headers['If-Modified-Since'] = existingLastModified
+        
+        try {
+          const res = await axios.get(url, { 
+            responseType: 'arraybuffer',
+            headers,
+            validateStatus: (status) => status === 200 || status === 304
+          })
+          
+          // 304 Not Modified - file is still valid
+          if (res.status === 304) {
+            ipcRenderer.send('renderer-log', { level: 'info', msg: 'preload.saveBinaryWithCache: 304 Not Modified, using cached file: ' + p })
+            return { success: true, cached: true, size: fs.statSync(p).size }
+          }
+          
+          // 200 OK - save new file
+          const buf = Buffer.from(res.data)
+          fs.writeFileSync(p, buf)
+          
+          // Save cache metadata (ETag, Last-Modified)
+          const metadata = {
+            url,
+            timestamp: Date.now(),
+            size: buf.length,
+            etag: res.headers['etag'] || null,
+            lastModified: res.headers['last-modified'] || null
+          }
+          fs.writeFileSync(cacheMetadataPath, JSON.stringify(metadata, null, 2))
+          
+          ipcRenderer.send('renderer-log', { level: 'info', msg: 'preload.saveBinaryWithCache wrote: ' + p + ' (' + buf.length + ' bytes)' })
+          
+          // Prune old media (best-effort)
+          try { ipcRenderer.invoke('preload-pruneMedia') } catch(e){}
+          
+          return { success: true, cached: false, size: buf.length }
+        } catch(e) {
+          ipcRenderer.send('renderer-log', { level: 'error', msg: 'preload.saveBinaryWithCache fetch failed: ' + String(e) })
+          throw e
+        }
+      } catch(e) {
+        ipcRenderer.send('renderer-log', { level: 'error', msg: 'preload.saveBinaryWithCache failed: ' + String(e) })
+        return { success: false, error: String(e) }
+      }
+    }
+    // Fallback to IPC call for sandboxed preload
+    return await ipcRenderer.invoke('preload-saveBinaryWithCache', relativePath, url, cacheOptions)
   }
   ,
   onMessage: (callback) => {
