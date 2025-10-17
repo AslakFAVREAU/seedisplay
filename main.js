@@ -245,20 +245,16 @@ if (process.env.NODE_ENV === 'development') {
 // Gestion des erreurs d'update
 autoUpdater.on('error', (error) => {
   log.error('Update error:', error);
-  if (win) {
-    sendStatusToWindow('Erreur de mise à jour: ' + error.message);
-  }
+  // Pas de notification - log seulement
 });
 
-// Amélioration de la gestion des updates
+// Auto-update silencieuse et immédiate
 autoUpdater.on('update-downloaded', (info) => {
-  log.info('Update downloaded, will install on restart');
-  sendStatusToWindow('Mise à jour téléchargée. Redémarrage dans 5 secondes...');
+  log.info('Update downloaded, installing immediately');
+  log.info('New version: ' + info.version);
   
-  // Installation automatique après 5 secondes
-  setTimeout(() => {
-    autoUpdater.quitAndInstall(false, true);
-  }, 5000);
+  // Redémarrage immédiat et silencieux - pas de notification
+  autoUpdater.quitAndInstall(false, true);
 });
 
 app.on('ready', function() {
