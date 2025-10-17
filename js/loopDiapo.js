@@ -19,8 +19,26 @@ let currentMediaIndex = 0;
 let mediaLoop = [];
 let loopTimeout = null;
 let currentVisibleDiv = null; // Track quel div est actuellement visible
+let pauseLoop = false; // NEW: Flag pour rester sur pageDefault en mode édition
 
-// imgShow, player sont maintenant des variables globales (déclarées dans index.html)
+// DEBUG: Variable globale accessible de la console
+// Lire DEBUG_MODE depuis preload API si disponible
+window.DEBUG_MODE = false; // Change à true pour bloquer sur pageDefault
+
+// Au démarrage, vérifier si DEBUG_MODE est passé par npm
+(async () => {
+    try {
+        if (window.api && window.api.getEnv) {
+            const debugEnv = await window.api.getEnv('DEBUG_MODE');
+            if (debugEnv === 'true') {
+                window.DEBUG_MODE = true;
+                __log('info', 'diapo', '🔧 DEBUG_MODE activated via npm start:debug');
+            }
+        }
+    } catch(e) {
+        // Silently fail if API not available
+    }
+})();
 
 /**
  * Cache TOUS les éléments média SAUF celui spécifié
@@ -50,6 +68,16 @@ function hideAllMedia() {
  * Affiche un média - version ultra-simple
  */
 function showMedia(mediaIndex) {
+    if (window.DEBUG_MODE) {
+        __log('info', 'diapo', 'DEBUG_MODE=true - staying on pageDefault');
+        return;
+    }
+    
+    if (pauseLoop) {
+        __log('info', 'diapo', 'pauseLoop is TRUE - staying on pageDefault');
+        return;
+    }
+    
     if (!mediaLoop || mediaLoop.length === 0) {
         __log('warn', 'diapo', 'no media to display');
         defaultScreen();
@@ -247,6 +275,19 @@ function LoopDiapo() {
         loopTimeout = null;
     }
     
+    // CHECK DEBUG_MODE FIRST - si activé, rester sur pageDefault
+    if (window.DEBUG_MODE) {
+        __log('info', 'diapo', '🔧 DEBUG_MODE=true - staying on pageDefault, NOT starting loop');
+        try {
+            document.getElementById('pageDefault').style.display = 'flex';
+            const container = document.getElementById('mediaContainer');
+            if (container) container.style.display = 'none';
+        } catch(e) {
+            __log('error', 'diapo', 'debug mode setup error: ' + e.message);
+        }
+        return;
+    }
+    
     // Charger les médias
     mediaLoop = (ArrayMedia && ArrayMedia.length) ? ArrayMedia : (ArrayDiapo || []);
     
@@ -309,5 +350,60 @@ function stopLoopDiapo() {
         document.getElementById('pageDefault').style.display = 'flex';
     } catch(e) {
         __log('error', 'diapo', 'stop error: ' + e.message);
+    }
+}
+
+/**
+ * PAUSE sur pageDefault - reste bloqué pour édition graphique via DevTools
+ * Utilisation: pauseOnPageDefault() dans la console DevTools
+ */
+function pauseOnPageDefault() {
+    __log('info', 'diapo', 'PAUSE: locking on pageDefault for graphic editing');
+    
+    pauseLoop = true;
+    
+    if (loopTimeout) {
+        clearTimeout(loopTimeout);
+        loopTimeout = null;
+    }
+    
+    // Cacher tous les médias
+    hideAllMedia();
+    
+    // Afficher pageDefault et le garder visible
+    try {
+        const container = document.getElementById('mediaContainer');
+        if (container) {
+            container.style.display = 'none';
+        }
+        const pageDefault = document.getElementById('pageDefault');
+        pageDefault.style.display = 'flex';
+        __log('info', 'diapo', 'PAUSED on pageDefault - use resumeLoop() to continue');
+    } catch(e) {
+        __log('error', 'diapo', 'pause error: ' + e.message);
+    }
+}
+
+/**
+ * Reprend la boucle après pauseOnPageDefault()
+ * Utilisation: resumeLoop() dans la console DevTools
+ */
+function resumeLoop() {
+    __log('info', 'diapo', 'RESUME: unlocking loop');
+    
+    pauseLoop = false;
+    
+    // Redémarrer la boucle
+    try {
+        const pageDefault = document.getElementById('pageDefault');
+        pageDefault.style.display = 'none';
+        const container = document.getElementById('mediaContainer');
+        if (container) {
+            container.style.display = 'block';
+        }
+        showMedia(0);
+        __log('info', 'diapo', 'loop resumed');
+    } catch(e) {
+        __log('error', 'diapo', 'resume error: ' + e.message);
     }
 }

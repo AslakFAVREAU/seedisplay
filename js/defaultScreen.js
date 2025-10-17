@@ -13,11 +13,17 @@ function defaultScreen() {
 
 const monthGif = dateGif.getMonth();
 __log('debug','default','monthGif=' + monthGif)
+
+// Afficher GIF uniquement en décembre (mois 11), sinon le cacher
 if (monthGif == 11)
 {
     document.getElementById("gifNoel").style.display = "block";   
-}
+    __log('info','default','December detected - showing Christmas GIF');
     restart("imgGif","logo/gifNoel.gif")
+} else {
+    document.getElementById("gifNoel").style.display = "none";
+    __log('debug','default','Not December - hiding Christmas GIF');
+}
     // On remet le compteur de la loop à 0
     numImage = 0;
     __log('debug','default','init=' + init)

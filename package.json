@@ -5,6 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "start:debug": "cross-env DEBUG_MODE=true electron .",
     "start:prod": "cross-env NODE_ENV=production electron .",
     "test": "mocha test/**/*.test.js --exit",
     "test:performance": "mocha test/performance.test.js --timeout 120000",

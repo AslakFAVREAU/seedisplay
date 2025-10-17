@@ -49,28 +49,40 @@
       min-height: 100vh;
     }
 
-    /* Page par défaut en layout flex centré */
+    /* Page par défaut en layout flex centré - 100% hauteur écran */
   #pageDefault {
       background-image: url('logo/back.jpg');
       background-size: cover;
       background-repeat: no-repeat;
-      min-height: 100vh;
       height: 100vh;
       width: 100vw;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: space-between;
-      /* Répartition avec espacement automatique */
-      padding: 4vh 4vw 8vh;
+      justify-content: flex-start;
+      padding: 4vh 4vw 4vh;
+      padding-bottom: 70px;
       box-sizing: border-box;
       position: relative;
       overflow: hidden;
-      gap: 4vh;
+      gap: 0;
     }
 
     #divHeure {
       font-size: 100%;
+      flex: 0 0 auto;
+    }
+    
+    /* titleMain - contenu flexible */
+    #titleMain {
+      flex: 0 0 auto;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      gap: 0;
     }
 
     /* Conteneur de médias - simple, caché par défaut */
@@ -155,7 +167,7 @@
       margin-bottom: 1rem;
     }
 
-    /* Zone météo - 2/6 - séparée et entre titleMain et bottomBar */
+    /* Zone météo - responsive et flexible */
     #zone_meteo {
       width: 100%;
       flex: 0 0 auto;
@@ -164,24 +176,25 @@
       justify-content: center;
       overflow: visible;
       padding: 0;
-      min-height: 160px;
-      margin: 4vh 0;
+      min-height: auto;
+      margin: 2vh 0;
     }
     
-    /* Container des tuiles météo */
+    /* Container des tuiles météo - responsive */
     .meteo-container {
       display: flex;
       flex-direction: row;
       justify-content: center;
       align-items: stretch;
-      gap: 24px;
-      width: auto;
-      max-width: none;
+      gap: 12px;
+      width: 90%;
+      max-width: 1200px;
       padding: 0;
       margin: 0 auto;
+      flex-wrap: wrap;
     }
     
-    /* Tuiles météo individuelles */
+    /* Tuiles météo individuelles - responsive */
     .meteo-card {
       display: flex;
       flex-direction: column;
@@ -189,22 +202,22 @@
       justify-content: center;
       background: linear-gradient(135deg, rgb(220, 230, 240) 0%, rgb(240, 245, 250) 100%);
       border-radius: 16px;
-      padding: 24px 18px;
-      min-width: 155px;
-      max-width: 200px;
-      flex: 1 1 0;
+      padding: 16px 12px;
+      min-width: 120px;
+      max-width: 160px;
+      flex: 1 1 auto;
       box-shadow: 0 4px 20px rgba(0,0,0,0.3);
       border: 1px solid rgb(200, 210, 220);
     }
     
-    /* Icône météo */
+    /* Icône météo - responsive */
     .meteo-icon {
-      width: 63px;
-      height: 63px;
+      width: 50px;
+      height: 50px;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
     
     .meteo-icon img {
@@ -213,64 +226,67 @@
       object-fit: contain;
     }
     
-    /* Température */
+    /* Température - responsive */
     .meteo-temp {
-      font-size: 2.2rem;
+      font-size: 1.6rem;
       font-weight: 300;
       color: #2c3e50;
-      margin-bottom: 8px;
+      margin-bottom: 4px;
       line-height: 1;
     }
     
-    /* Jour */
+    /* Jour - responsive */
     .meteo-day {
-      font-size: 0.9rem;
+      font-size: 0.8rem;
       font-weight: 600;
       color: #34495e;
       text-transform: lowercase;
       text-align: center;
     }
 
-    /* Week div avec le même style que les cartes météo */
+    /* Week div - responsive et centered */
     #weekDiv {
-      width: 607px; /* 3 tuiles × 189px + 2 gaps × 20px */
-      flex: 0 0 auto;
+      width: 90%;
+      max-width: 600px;
+      flex: 1 1 auto;
       display: flex;
       align-items: center;
       justify-content: center;
       background: linear-gradient(135deg, rgb(220, 230, 240) 0%, rgb(240, 245, 250) 100%);
       border-radius: 16px;
-      padding: 28px 20px;
+      padding: 20px 15px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.3);
       border: 1px solid rgb(200, 210, 220);
-      margin: 4vh auto;
+      margin: 2vh auto;
       overflow: visible;
-      text-align: center; /* Centrer le texte */
+      text-align: center;
+      min-height: 100px;
     }
 
     #weekDiv h2 {
-      font-size: 3rem;
+      font-size: clamp(2rem, 8vw, 3rem);
       margin: 0;
     }
     
-    /* Barre du bas (footer) - FIXE en bas de page */
+    /* Barre du bas (footer) - FIXE en bas de page + responsive */
   #bottomBar { 
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
     width: 100%; 
-    /* 1/6 de la hauteur */
+    height: auto;
+    min-height: 60px;
     display: flex; 
     flex-direction: column; 
     justify-content: center;
     align-items: center;
-    padding: 1.5vh 0;
+    padding: 1vh 0;
     z-index: 100;
-    background: transparent;
+    background: rgba(0, 0, 0, 0.3);
   }
   
-  /* Footer centré avec logo */
+  /* Footer centré avec logo - responsive */
   #footer { 
     width: 100%; 
     padding: 0;
@@ -280,7 +296,7 @@
     text-align: center;
   }
   #footer img { 
-    height: 40px;
+    height: clamp(30px, 6vh, 50px);
     display: block;
     margin: 0 auto;
     filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5));
@@ -321,7 +337,7 @@
 
 
   <div id="pageDefault">
-    <div id="gifNoel" style="display:none;height: auto;position:absolute; z-index: 2;">
+    <div id="gifNoel" style="display:none;height: auto;position:fixed;right:15%;top:0;z-index:50;">
       <img id="imgGif" src="logo/gifNoel.gif">
     </div>
     
