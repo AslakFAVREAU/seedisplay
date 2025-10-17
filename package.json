@@ -1,6 +1,6 @@
 {
   "name": "seedisplay",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "description": "SEE Display Application",
   "main": "main.js",
   "scripts": {
@@ -12,6 +12,7 @@
     "version:patch": "npm version patch --no-git-tag-version",
     "version:minor": "npm version minor --no-git-tag-version",
     "version:major": "npm version major --no-git-tag-version",
+    "icons": "node scripts/generate-icons.js",
     "build": "electron-builder",
     "dist": "npm run version:patch && npm run build && git add package.json && git commit -m \"chore: bump version to v$(node -p \\\"require('./package.json').version\\\")\"",
     "publish": "electron-builder --publish=always"
@@ -27,7 +28,9 @@
     "cross-env": "^10.1.0",
     "electron": "^38.2.2",
     "electron-builder": "^26.0.12",
-    "mocha": "^10.0.0"
+    "mocha": "^10.0.0",
+    "png-to-ico": "^2.1.8",
+    "sharp": "^0.33.0"
   },
   "dependencies": {
     "axios": "^1.6.8",
@@ -64,6 +67,12 @@
     "win": {
       "target": [
         {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
           "target": "portable",
           "arch": [
             "x64"
@@ -71,13 +80,22 @@
         }
       ],
       "signAndEditExecutable": false,
-      "verifyUpdateCodeSignature": false
+      "verifyUpdateCodeSignature": false,
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
+      "shortcutName": "SEE Display",
+      "artifactName": "SEE-Display-Setup-${version}.exe",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
       "license": "LICENSE"
     },
     "portable": {
@@ -88,6 +106,13 @@
       "owner": "AslakFAVREAU",
       "repo": "seedisplay"
     },
-    "compression": "normal"
+    "compression": "normal",
+    "icon": "build/icon.ico",
+    "mac": {
+      "icon": "build/icon.icns"
+    },
+    "linux": {
+      "icon": "build/icon.png"
+    }
   }
 }
