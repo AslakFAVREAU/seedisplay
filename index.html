@@ -417,12 +417,30 @@
 
   </div>
 
-  <!-- Phase 2: DisplayState module (must load BEFORE loopDiapo.js) -->
+  <!-- Phase 2 Week 1: DisplayState module (must load BEFORE loopDiapo.js) -->
   <script src="js/DisplayState.js"></script>
 
+  <!-- Phase 2 Week 2: ErrorHandler + ApiManager (resilience layer) -->
+  <script src="js/ErrorHandler.js"></script>
+  <script src="js/ApiManager.js"></script>
+
   <script>
-    // Phase 2: Initialize DisplayState (replaces imgShow, imgLoad, player)
+    // Phase 2 Week 1: Initialize DisplayState (replaces imgShow, imgLoad, player)
     window.displayState = new DisplayState();
+    
+    // Phase 2 Week 2: Initialize ErrorHandler and ApiManager (resilience layer)
+    window.errorHandler = new ErrorHandler({
+      maxRetries: 3,
+      retryDelay: 1000,
+      failureThreshold: 5,
+      recoveryTimeout: 30000,
+      logger: window.logger || console
+    });
+    
+    // Initialize ApiManager with ErrorHandler
+    if (window.apiManager) {
+      window.apiManager.init(window.errorHandler);
+    }
     
     // Backward compatibility: Map old global variables to DisplayState
     // This allows gradual migration of loopDiapo.js

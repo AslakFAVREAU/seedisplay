@@ -57,6 +57,13 @@ const getMeteo = async () => {
   const lon = (typeof meteoLon !== 'undefined') ? meteoLon : 2.3
   // Request current weather plus daily summary (max 4 days)
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&daily=temperature_2m_max,temperature_2m_min,weathercode,sunrise,sunset&current_weather=true&timezone=auto&forecast_days=5`
+  
+  // Phase 2 Week 2: Use ApiManager if available (with ErrorHandler resilience)
+  if (typeof window !== 'undefined' && window.apiManager) {
+    return await window.apiManager.getMeteoWithErrorHandling(url)
+  }
+  
+  // Fallback to direct axios call if ApiManager not available
   try {
     const res = await axios.get(url)
     return res && res.data ? res.data : null

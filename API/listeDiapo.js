@@ -57,8 +57,17 @@ try { module.exports = { listeDiapo } } catch (e) { }
 const getDiapoJson = async () => {
     try {
   _log('info','diapo','getDiapoJson: fetching ' + urlAPI)
+      
+      // Phase 2 Week 2: Use ApiManager if available (with ErrorHandler resilience)
+      if (typeof window !== 'undefined' && window.apiManager) {
+        const res = await window.apiManager.getDiapoWithErrorHandling(urlAPI)
+        _log('info','diapo','getDiapoJson: fetch success via ApiManager ' + (res && res.status))
+        return res
+      }
+      
+      // Fallback to direct axios call if ApiManager not available
       const res = await axios.get(urlAPI)
-  _log('info','diapo','getDiapoJson: fetch success ' + (res && res.status))
+      _log('info','diapo','getDiapoJson: fetch success (direct axios) ' + (res && res.status))
       return res
     } catch (error) {
   _log('error','diapo','getDiapoJson: error', error && error.message)
