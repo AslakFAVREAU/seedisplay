@@ -1,0 +1,202 @@
+
+// Local safe logger
+if (typeof window !== 'undefined') {
+    window.__log = window.__log || function(level, tag, ...args) { try { if (window.logger && typeof window.logger[level] === 'function') return window.logger[level](tag, ...args); if (console && typeof console[level] === 'function') return console[level](tag, ...args); return console.log(tag, ...args) } catch(e){ try{ console.log(tag, ...args) }catch(_){} } }
+    var __log = window.__log
+} else {
+    var __log = function(level, tag, ...args) { try { if (console && typeof console[level] === 'function') return console[level](tag, ...args); return console.log(tag, ...args) } catch(e){ try{ console.log(tag, ...args) }catch(_){} } }
+}
+
+/**
+ * Système d'affichage ultra-simple avec display: block/none
+ * Pas de CSS transitions complexes, juste show/hide direct
+ */
+
+let currentMediaIndex = 0;
+let mediaLoop = [];
+let loopTimeout = null;
+
+// Divs à alterner (images et vidéos)
+let imgShow = 1;  // 1 ou 2
+let player = 1;   // 1 ou 2
+
+/**
+ * Cache TOUS les éléments média
+ */
+function hideAllMedia() {
+    __log('debug', 'diapo', 'hiding all media');
+    try {
+        document.getElementById('divImg1').style.display = 'none';
+        document.getElementById('divImg2').style.display = 'none';
+        document.getElementById('divVideo1').style.display = 'none';
+        document.getElementById('divVideo2').style.display = 'none';
+    } catch(e) {
+        __log('error', 'diapo', 'hideAllMedia error: ' + e.message);
+    }
+}
+
+/**
+ * Affiche un média - version ultra-simple
+ */
+function showMedia(mediaIndex) {
+    if (!mediaLoop || mediaLoop.length === 0) {
+        __log('warn', 'diapo', 'no media to display');
+        defaultScreen();
+        return;
+    }
+    
+    // Wrap-around
+    if (mediaIndex >= mediaLoop.length) {
+        __log('info', 'diapo', 'end of loop, restarting');
+        mediaIndex = 0;
+    }
+    
+    const media = mediaLoop[mediaIndex];
+    const mediaType = media[0];
+    const mediaFile = media[1];
+    const delay = (media[2] && Number(media[2]) > 0) ? Number(media[2]) * 1000 : 5000;
+    
+    currentMediaIndex = mediaIndex;
+    
+    __log('info', 'diapo', 'showing #' + mediaIndex + '/' + mediaLoop.length + ' type=' + mediaType + ' file=' + mediaFile + ' delay=' + (delay/1000) + 's');
+    
+    // Cacher tout d'abord
+    hideAllMedia();
+    
+    if (mediaType === 'video') {
+        // Utiliser player (1 ou 2)
+        const videoId = 'video' + player;
+        const divId = 'divVideo' + player;
+        const sourceId = 'srcVideo' + player;
+        
+        __log('debug', 'diapo', 'loading video in ' + divId);
+        
+        try {
+            const url = pathMedia + mediaFile.replace("%20", '%2520');
+            const sourceEl = document.getElementById(sourceId);
+            const videoEl = document.getElementById(videoId);
+            const divEl = document.getElementById(divId);
+            
+            // Charger
+            sourceEl.src = url;
+            videoEl.load();
+            
+            // Afficher immédiatement (ou après un petit délai)
+            setTimeout(() => {
+                divEl.style.display = 'block';
+                __log('debug', 'diapo', divId + ' displayed');
+                
+                // Lancer la vidéo
+                videoEl.play().catch(e => {
+                    __log('error', 'diapo', 'video play failed: ' + e.message);
+                });
+            }, 50);
+            
+            // Toggle pour la prochaine
+            player = (player === 1) ? 2 : 1;
+            
+        } catch(e) {
+            __log('error', 'diapo', 'video error: ' + e.message);
+        }
+        
+    } else if (mediaType === 'img') {
+        // Utiliser imgShow (1 ou 2)
+        const divId = 'divImg' + imgShow;
+        
+        __log('debug', 'diapo', 'loading image in ' + divId);
+        
+        try {
+            const url = pathMedia + mediaFile.replace("%20", '%2520');
+            const divEl = document.getElementById(divId);
+            
+            // Charger l'image en background
+            divEl.style.backgroundImage = "url('" + url + "')";
+            
+            // Afficher immédiatement
+            setTimeout(() => {
+                divEl.style.display = 'block';
+                __log('debug', 'diapo', divId + ' displayed');
+            }, 50);
+            
+            // Toggle pour la prochaine
+            imgShow = (imgShow === 1) ? 2 : 1;
+            
+        } catch(e) {
+            __log('error', 'diapo', 'image error: ' + e.message);
+        }
+    }
+    
+    // Programmer le prochain
+    __log('debug', 'diapo', 'scheduling next in ' + (delay/1000) + 's');
+    loopTimeout = setTimeout(() => {
+        showMedia(currentMediaIndex + 1);
+    }, delay);
+}
+
+/**
+ * Démarre la boucle
+ */
+function LoopDiapo() {
+    __log('info', 'diapo', 'LoopDiapo starting');
+    
+    // Annuler timeout précédent
+    if (loopTimeout) {
+        clearTimeout(loopTimeout);
+        loopTimeout = null;
+    }
+    
+    // Charger les médias
+    mediaLoop = (ArrayMedia && ArrayMedia.length) ? ArrayMedia : (ArrayDiapo || []);
+    
+    __log('info', 'diapo', 'loaded ' + mediaLoop.length + ' media');
+    
+    if (!mediaLoop || mediaLoop.length === 0) {
+        __log('warn', 'diapo', 'no media available');
+        defaultScreen();
+        return;
+    }
+    
+    // Cacher pageDefault, afficher mediaContainer
+    try {
+        document.getElementById('pageDefault').style.display = 'none';
+        const container = document.getElementById('mediaContainer');
+        if (container) {
+            container.style.display = 'block';
+        }
+    } catch(e) {
+        __log('error', 'diapo', 'container display error: ' + e.message);
+    }
+    
+    // Démarrer à l'index 0
+    currentMediaIndex = 0;
+    imgShow = 1;
+    player = 1;
+    
+    showMedia(0);
+}
+
+/**
+ * Arrête la boucle
+ */
+function stopLoopDiapo() {
+    __log('info', 'diapo', 'stopping LoopDiapo');
+    
+    if (loopTimeout) {
+        clearTimeout(loopTimeout);
+        loopTimeout = null;
+    }
+    
+    // Cacher tous les médias
+    hideAllMedia();
+    
+    // Cacher le container, afficher pageDefault
+    try {
+        const container = document.getElementById('mediaContainer');
+        if (container) {
+            container.style.display = 'none';
+        }
+        document.getElementById('pageDefault').style.display = 'flex';
+    } catch(e) {
+        __log('error', 'diapo', 'stop error: ' + e.message);
+    }
+}

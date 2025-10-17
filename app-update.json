@@ -1,0 +1,16 @@
+{
+  "dev-update-server": {
+    "url": "http://localhost:3000",
+    "channel": "latest",
+    "enabled": false
+  },
+  "production": {
+    "provider": "github",
+    "owner": "AslakFAVREAU",
+    "repo": "seedisplay",
+    "releaseType": "release"
+  },
+  "autoDownload": true,
+  "allowPrerelease": false,
+  "fullChangelog": true
+}

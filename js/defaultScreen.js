@@ -13,11 +13,17 @@ function defaultScreen() {
 
 const monthGif = dateGif.getMonth();
 __log('debug','default','monthGif=' + monthGif)
+
+// Afficher GIF uniquement en décembre (mois 11), sinon le cacher
 if (monthGif == 11)
 {
     document.getElementById("gifNoel").style.display = "block";   
-}
+    __log('info','default','December detected - showing Christmas GIF');
     restart("imgGif","logo/gifNoel.gif")
+} else {
+    document.getElementById("gifNoel").style.display = "none";
+    __log('debug','default','Not December - hiding Christmas GIF');
+}
     // On remet le compteur de la loop à 0
     numImage = 0;
     __log('debug','default','init=' + init)
@@ -63,7 +69,10 @@ if (monthGif == 11)
     document.getElementById("divVideo1").style.display = "none";
     document.getElementById("divVideo2").style.display = "none";
     document.getElementById("pagePsaume").style.display = "none";
-    document.getElementById("pageDefault").style.display = "block";
+    
+    // Cacher le conteneur de médias et afficher pageDefault
+    try { document.getElementById("mediaContainer").classList.remove("active") } catch(e){}
+    document.getElementById("pageDefault").style.display = "flex";
     url = "blank.jpg";
     document.getElementById("divImg1").style.backgroundImage = "url(" + url + ")";
     document.getElementById("divImg2").style.backgroundImage = "url(" + url + ")";
@@ -135,7 +144,6 @@ if (monthGif == 11)
     setTimeout(function () {
         document.getElementById("pageDefault").style.display = "none";        
         LoopDiapo()
-
 
        
        
