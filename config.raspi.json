@@ -1,0 +1,19 @@
+{
+  "api_url": "YOUR_API_URL",
+  "refresh_interval": 300000,
+  "media_cache_limit": 150,
+  "max_concurrent_downloads": 2,
+  "enable_weather": true,
+  "enable_hardware_acceleration": true,
+  "video_quality": "1080p",
+  "debug_mode": false,
+  "kiosk_mode": true,
+  "_comment": "Raspberry Pi 5 optimized configuration",
+  "_notes": {
+    "media_cache_limit": "150MB recommended for 4GB RAM Pi 5",
+    "refresh_interval": "300000ms = 5 minutes, increase if network is slow",
+    "max_concurrent_downloads": "2 recommended for Pi 5, reduce to 1 for Pi 4",
+    "video_quality": "1080p for Pi 5, 720p for Pi 4, 480p for lower end",
+    "kiosk_mode": "Enable for production deployment with auto-start"
+  }
+}

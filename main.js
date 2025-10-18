@@ -5,24 +5,41 @@ const autoUpdater = updater.autoUpdater;
 const path = require('path');
 
 //-------------------------------------------------------------------
+// Raspberry Pi Optimizations
+// Apply platform-specific optimizations for ARM64 devices
+//-------------------------------------------------------------------
+const PiOptimizer = require('./js/RaspberryPiOptimizer');
+const isRaspberryPi = PiOptimizer.applyOptimizations(app);
+
+if (isRaspberryPi) {
+  log.info('Running on Raspberry Pi - platform optimizations applied');
+} else {
+  log.info('Running on standard platform');
+}
+
+//-------------------------------------------------------------------
 // Performance & Hardware Acceleration
 // Optimisations pour lecture vidéo fluide et transitions CUT
 //-------------------------------------------------------------------
-// Activer l'accélération matérielle pour les vidéos
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-zero-copy');
-app.commandLine.appendSwitch('disable-software-rasterizer');
+// Note: Raspberry Pi optimizations already applied above
+// These are additional optimizations for all platforms
+if (!isRaspberryPi) {
+  // Standard platform optimizations
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+  app.commandLine.appendSwitch('enable-gpu-rasterization');
+  app.commandLine.appendSwitch('enable-zero-copy');
+  app.commandLine.appendSwitch('disable-software-rasterizer');
 
-// Optimisations pour les codecs vidéo
-app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization');
+  // Optimisations pour les codecs vidéo
+  app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization');
 
-// Smooth scrolling et rendering
-app.commandLine.appendSwitch('enable-smooth-scrolling');
-app.commandLine.appendSwitch('enable-accelerated-2d-canvas');
-app.commandLine.appendSwitch('disable-frame-rate-limit');
+  // Smooth scrolling et rendering
+  app.commandLine.appendSwitch('enable-smooth-scrolling');
+  app.commandLine.appendSwitch('enable-accelerated-2d-canvas');
+  app.commandLine.appendSwitch('disable-frame-rate-limit');
 
-log.info('Hardware acceleration enabled for smooth video playback');
+  log.info('Hardware acceleration enabled for smooth video playback');
+}
 
 //-------------------------------------------------------------------
 // Logging
@@ -413,7 +430,15 @@ ipcMain.handle('preload-pruneMedia', async () => {
 // Cette méthode sera appelée quant Electron aura fini
 // de s'initialiser et prêt à créer des fenêtres de navigation.
 // Certaines APIs peuvent être utilisées uniquement quant cet événement est émit.
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  createWindow();
+  
+  // Start Raspberry Pi system monitoring if on Pi
+  if (isRaspberryPi) {
+    PiOptimizer.startSystemMonitoring(300000); // Log every 5 minutes
+    log.info('[Raspberry Pi] System monitoring enabled');
+  }
+});
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

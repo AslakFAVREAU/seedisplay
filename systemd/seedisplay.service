@@ -1,0 +1,44 @@
+[Unit]
+Description=SEE Display Kiosk Application
+Documentation=https://github.com/AslakFAVREAU/seedisplay
+After=graphical.target network-online.target
+Wants=graphical.target network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+
+# Environment variables
+Environment=DISPLAY=:0
+Environment=NODE_ENV=production
+Environment=XAUTHORITY=/home/pi/.Xauthority
+Environment=HOME=/home/pi
+
+# Working directory (adjust if needed)
+WorkingDirectory=/opt/seedisplay
+
+# Start command
+ExecStart=/usr/bin/npm start
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=200
+StartLimitBurst=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=seedisplay
+
+# Resource limits (optional)
+# LimitNOFILE=65536
+# MemoryMax=2G
+
+# Security (optional hardening)
+# NoNewPrivileges=true
+# PrivateTmp=true
+
+[Install]
+WantedBy=graphical.target
