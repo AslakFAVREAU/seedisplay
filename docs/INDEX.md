@@ -1,53 +1,89 @@
 # 📚 Documentation Index - SEE Display
 
+Last Updated: October 18, 2025
+
 ## 🚀 Quick Start
 - **[QUICKSTART.md](./QUICKSTART.md)** - Démarrage rapide (dev & debug)
-- **[LAUNCH_MODES.md](../LAUNCH_MODES.md)** - Modes de lancement (start, start:debug, start:prod)
+- **[../LAUNCH_MODES.md](../LAUNCH_MODES.md)** - Modes de lancement (start, start:debug, start:prod)
+- **[../README.md](../README.md)** - Vue d'ensemble du projet
 
-## 📖 Project Overview
-- **[README.md](../README.md)** - Vue d'ensemble du projet
-- **[ANALYSIS.md](../ANALYSIS.md)** - Analyse initiale et 9 axes d'amélioration
+## 📂 Documentation Structure
 
-## 🏗️ Architecture & Phases
+### 📋 Main Docs (Root)
+- **[../README.md](../README.md)** - Main project documentation
+- **[../CHANGELOG.md](../CHANGELOG.md)** - Version history
+- **[../LAUNCH_MODES.md](../LAUNCH_MODES.md)** - Application launch modes
+- **[../BUILD_INSTALLER_GUIDE.md](../BUILD_INSTALLER_GUIDE.md)** - Build & installer guide
+- **[../ICONS_QUICKSTART.md](../ICONS_QUICKSTART.md)** - Icon generation quickstart
 
-### Phase 1: Architecture Modernization
-- **[phases/PHASE1_SUMMARY.md](./phases/PHASE1_SUMMARY.md)** - Résumé Phase 1
-- **[phases/README_PHASE1.md](./phases/README_PHASE1.md)** - Guide Phase 1
-- **Modules créés:**
-  - `js/DisplayState.js` - State machine événementielle
-  - `js/ErrorHandler.js` - Circuit breaker pattern
-  - `js/MediaCache.js` - LRU cache with ETag
+### 📖 Guides ([guides/](./guides/))
+- **[guides/HOW_TO_CREATE_GITHUB_ISSUE.md](./guides/HOW_TO_CREATE_GITHUB_ISSUE.md)** - GitHub issue automation
+- **[guides/GITHUB_ISSUE_TEMPLATE_DISPLAY_RATIO.md](./guides/GITHUB_ISSUE_TEMPLATE_DISPLAY_RATIO.md)** - Display ratio issue template
+- **[../INTEGRATION_GUIDE.md](../INTEGRATION_GUIDE.md)** - Module integration guide
 
-### Phase 2: Integration & Resilience
-- **[phases/PHASE2_COMPLETE.md](./phases/PHASE2_COMPLETE.md)** - Complet Phase 2
-- **[phases/PHASE2_RESUME_FR.md](./phases/PHASE2_RESUME_FR.md)** - Résumé FR Phase 2
-- **Sous-phases:**
-  - Week 1: DisplayState integration → [phases/PHASE2_WEEK1.md](./phases/PHASE2_WEEK1.md)
-  - Week 2: ErrorHandler + ApiManager → Integration test coverage
-  - Week 3: MediaCache + MediaCacheManager → [phases/PHASE2_WEEK4.md](./phases/PHASE2_WEEK4.md)
-- **Modules créés:**
-  - `js/ApiManager.js` - API resilience wrapper
-  - `js/MediaCacheManager.js` - Preload orchestration
+### 🏗️ Features ([features/](./features/))
+- **[features/SECURITY_AUDIT_GUIDE.md](./features/SECURITY_AUDIT_GUIDE.md)** - Security audit procedures
+- **[features/SECURITY_AUDIT_REPORT.md](./features/SECURITY_AUDIT_REPORT.md)** - Latest security audit report
 
-### Phase 3: UI/UX & Responsive Design
-- **[phases/PHASE3_UI_RESPONSIVE.md](./phases/PHASE3_UI_RESPONSIVE.md)** - Design responsive et debug
-- **Changements:**
-  - Layout responsive avec flexbox
-  - DEBUG_MODE flag pour édition graphique
-  - GIF Noël conditionnel (décembre seulement)
-  - CSS improvements (margins, z-index)
+### 🛠️ Setup ([setup/](./setup/))
+- **[setup/DEBUG_MODE.md](./setup/DEBUG_MODE.md)** - Debug mode configuration
+- **[setup/INSTALLER_SIDEBAR_CUSTOMIZATION.md](./setup/INSTALLER_SIDEBAR_CUSTOMIZATION.md)** - NSIS installer sidebar customization
 
-## 🔧 Technical Guides
+### 📚 Project Phases ([phases/](./phases/))
+- **[phases/PHASE1_COMPLETE.md](./phases/PHASE1_COMPLETE.md)** - Phase 1: Architecture modernization
+- **[phases/PHASE2_COMPLETE.md](./phases/PHASE2_COMPLETE.md)** - Phase 2: Integration & resilience
+- **[phases/PHASE3_UI_RESPONSIVE.md](./phases/PHASE3_UI_RESPONSIVE.md)** - Phase 3: UI/UX & responsive design
 
-### Development
-- **[INTEGRATION_GUIDE.md](../INTEGRATION_GUIDE.md)** - Guide d'intégration des modules
-- **[BUILD_GUIDE.md](../BUILD_GUIDE.md)** - Guide de build & distribution
+### 📦 Archive ([archived/](./archived/))
+Historical development documentation and session notes. See [archived/](./archived/) for:
+- `AUTO_UPDATE*.md` - Auto-update feature docs
+- `PHASE*.md` - Session notes from development phases
+- `REFACTOR_*.md` - Refactoring notes
+- `*_WEEK*.md` - Weekly progress reports
+
+## 🎯 Current Status
+
+### Completed
+✅ v1.9.3 with custom branding (NSIS sidebar + taskbar icon)  
+✅ 132/132 tests passing  
+✅ 0 security vulnerabilities  
+✅ GitHub Issues created for next features (#1, #2)  
+✅ Repository cleanup & organization (Oct 18, 2025)  
+
+### In Progress
+� TODO #5: Multi-ratio display support (Issue #1)  
+🔄 TODO #6: CEC energy management (Issue #2)  
+
+## 📊 Key Modules
+
+### Core System
+- `main.js` - Main Electron process
+- `preload.js` - Security bridge with API exposure
+- `index.html` + `js/` - Renderer process
+- `API/listeDiapo.js` - Presentation parsing engine
 
 ### Features
-- **[AUTO_UPDATE.md](../AUTO_UPDATE.md)** - Système d'auto-update
-- **[features/](./features/)** - Documentation des features individuelles
+- `js/DisplayState.js` - State machine (event-driven)
+- `js/ErrorHandler.js` - Circuit breaker pattern
+- `js/MediaCache.js` - LRU cache with ETag
+- `js/ApiManager.js` - API resilience wrapper
+- `js/MediaCacheManager.js` - Preload orchestration
+- `js/meteo.js` - Open-Meteo weather API
+- `js/dateHeure.js` - Date/time display
+- `js/ephe.js` - Ephemeris calculations
 
-## 📊 Completion & Status
+## 🔗 External References
+
+- **GitHub Repo**: https://github.com/AslakFAVREAU/seedisplay
+- **Open-Meteo API**: https://open-meteo.com/
+- **Electron Docs**: https://www.electronjs.org/docs
+
+## 📝 Notes
+
+- All documentation is maintained in Markdown format
+- Session summaries and detailed notes are archived in `./archived/` for reference
+- For latest changes, refer to [../CHANGELOG.md](../CHANGELOG.md)
+- Development phases are documented in `./phases/` for historical context
 - **[COMPLETION_REPORT.md](../COMPLETION_REPORT.md)** - Rapport de complétion
 - **[SUCCESS.md](../SUCCESS.md)** - Célébration Phase 1
 - **[CHANGELOG.md](../CHANGELOG.md)** - Historique des changements
