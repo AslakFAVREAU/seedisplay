@@ -2,6 +2,7 @@ const { app, Menu, BrowserWindow } = require('electron');
 const log = require('electron-log');
 const updater = require("electron-updater");
 const autoUpdater = updater.autoUpdater;
+const path = require('path');
 
 //-------------------------------------------------------------------
 // Performance & Hardware Acceleration
@@ -64,7 +65,11 @@ function createDefaultWindow() {
   // Détecter le mode de production
   const isProduction = process.env.NODE_ENV === 'production' || !process.defaultApp;
   
+  // Load app icon from build directory
+  const appIcon = path.join(__dirname, 'build', 'icon.ico');
+  
   win = new BrowserWindow({
+    icon: appIcon, // Add window icon for taskbar
     fullscreen: true, // Toujours en plein écran
     show: false, // Ne pas afficher immédiatement
     frame: false, // Pas de frame (bordure Windows)
