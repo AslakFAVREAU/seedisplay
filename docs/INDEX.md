@@ -28,6 +28,8 @@ Last Updated: October 18, 2025
 ### 🛠️ Setup ([setup/](./setup/))
 - **[setup/DEBUG_MODE.md](./setup/DEBUG_MODE.md)** - Debug mode configuration
 - **[setup/INSTALLER_SIDEBAR_CUSTOMIZATION.md](./setup/INSTALLER_SIDEBAR_CUSTOMIZATION.md)** - NSIS installer sidebar customization
+- **[setup/RASPBERRY_PI_5_SETUP.md](./setup/RASPBERRY_PI_5_SETUP.md)** - Complete Raspberry Pi 5 installation guide
+- **[setup/HARDWARE_COMPATIBILITY.md](./setup/HARDWARE_COMPATIBILITY.md)** - Hardware compatibility matrix & benchmarks
 
 ### 📚 Project Phases ([phases/](./phases/))
 - **[phases/PHASE1_COMPLETE.md](./phases/PHASE1_COMPLETE.md)** - Phase 1: Architecture modernization
