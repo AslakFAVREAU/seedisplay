@@ -1,6 +1,6 @@
 {
   "name": "seedisplay",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "description": "SEE Display Application",
   "main": "main.js",
   "scripts": {
@@ -90,6 +90,7 @@
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico",
+      "installerSidebar": "build/installer-sidebar.bmp",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "SEE Display",
