@@ -80,7 +80,7 @@ function createDefaultWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: require('path').join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.js'),
       devTools: !isProduction // Désactiver DevTools en production
     }
   });
@@ -325,7 +325,6 @@ ipcMain.on('renderer-log', (event, { level, msg }) => {
 
 // Provide handlers for preload fallback when native modules are unavailable in preload
 const fs = require('fs')
-const path = require('path')
 const axios = require('axios')
 const BASE_PATH = 'C:/SEE/'
 
