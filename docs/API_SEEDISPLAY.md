@@ -34,10 +34,22 @@ Récupère la configuration complète d'un écran et ses diaporamas actifs.
   "status": "active",
   "ecranId": 13,
   "ecranNom": "Écran Accueil",
-  "orientation": "paysage",
-  "dimensions": "1920x1080",
+  "orientation": "landscape",
   "ratio": "16:9",
+  "dimensions": "1920x1080",
   "luminosite": 80,
+  "modeNuit": {
+    "actif": true,
+    "luminositeNuit": 25,
+    "heureDebut": "22:00",
+    "heureFin": "07:00"
+  },
+  "programmation": {
+    "active": true,
+    "heureDemarrage": "07:00",
+    "heureExtinction": "22:00",
+    "joursFonctionnement": [1, 2, 3, 4, 5]
+  },
   "refreshInterval": 300,
   "diapos": [...]
 }
@@ -54,11 +66,49 @@ Récupère la configuration complète d'un écran et ses diaporamas actifs.
 | `status` | string | `"active"` = en service, `"sleep"` = hors plage horaire |
 | `ecranId` | integer | ID de l'écran |
 | `ecranNom` | string | Nom de l'écran |
-| `orientation` | string | `"paysage"` ou `"portrait"` |
-| `dimensions` | string | Résolution (ex: `"1920x1080"`) |
+| `orientation` | string | `"landscape"` ou `"portrait"` |
 | `ratio` | string | Ratio calculé (ex: `"16:9"`, `"16:10"`, `"9:16"`) |
-| `luminosite` | integer | Luminosité actuelle (0-100) |
+| `dimensions` | string | Résolution (ex: `"1920x1080"`) |
+| `luminosite` | integer | Luminosité actuelle (0-100), ajustée automatiquement si mode nuit actif |
 | `refreshInterval` | integer | Intervalle de refresh en secondes |
+
+### Mode Nuit (luminosité adaptative)
+
+```json
+"modeNuit": {
+  "actif": true,
+  "luminositeNuit": 25,
+  "heureDebut": "22:00",
+  "heureFin": "07:00"
+}
+```
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `actif` | boolean | Mode nuit activé ou non |
+| `luminositeNuit` | integer | Luminosité pendant la nuit (0-100) |
+| `heureDebut` | string | Heure de début du mode nuit (format `"HH:mm"`) |
+| `heureFin` | string | Heure de fin du mode nuit (format `"HH:mm"`) |
+
+> **Note**: Le champ `luminosite` retourne automatiquement la valeur ajustée selon l'heure (luminosité normale ou luminosité nuit).
+
+### Programmation horaire de l'écran
+
+```json
+"programmation": {
+  "active": true,
+  "heureDemarrage": "07:00",
+  "heureExtinction": "22:00",
+  "joursFonctionnement": [1, 2, 3, 4, 5]
+}
+```
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `active` | boolean | Programmation horaire activée ou non |
+| `heureDemarrage` | string | Heure de démarrage quotidien (format `"HH:mm"`) |
+| `heureExtinction` | string | Heure d'extinction quotidienne (format `"HH:mm"`) |
+| `joursFonctionnement` | array | Jours autorisés (0=Dim, 1=Lun, ..., 6=Sam) |
 
 ### Statut "sleep" (hors plage horaire)
 
@@ -69,19 +119,21 @@ Quand l'écran est configuré pour s'éteindre pendant certaines heures :
   "status": "sleep",
   "ecranId": 13,
   "ecranNom": "Écran Accueil",
-  "orientation": "paysage",
+  "orientation": "landscape",
+  "ratio": "16:9",
   "dimensions": "1920x1080",
-  "typeHorsPlage": "black",
+  "luminosite": 0,
+  "typeHorsPlage": "noir",
   "imageHorsPlage": null,
-  "prochainDemarrage": "06:00",
+  "prochainDemarrage": "07:00",
   "diapos": []
 }
 ```
 
 | Champ | Type | Description |
 |-------|------|-------------|
-| `typeHorsPlage` | string | `"black"` = écran noir, `"image"` = afficher une image |
-| `imageHorsPlage` | string\|null | URL de l'image à afficher (si `typeHorsPlage = "image"`) |
+| `typeHorsPlage` | string | `"noir"` = écran noir, `"logo"` = logo SEE, `"image"` = image personnalisée |
+| `imageHorsPlage` | string\|null | Chemin de l'image à afficher (si `typeHorsPlage = "image"`) |
 | `prochainDemarrage` | string\|null | Heure de prochain réveil (format `"HH:mm"`) |
 
 ---
@@ -468,7 +520,178 @@ function applyOrientation(ecranData) {
 
 ---
 
-## 🛠️ Gestion des erreurs
+## � Gestion de la luminosité
+
+L'API retourne la luminosité actuelle et les paramètres du mode nuit. L'écran d'affichage peut ajuster son CSS en fonction.
+
+### Implémentation JavaScript
+
+```javascript
+/**
+ * Applique la luminosité à l'écran via un filtre CSS
+ * @param {Object} ecranData - Données de l'API
+ */
+function applyLuminosite(ecranData) {
+  const luminosite = ecranData.luminosite || 100;
+  const container = document.body;
+  
+  // Appliquer un filtre brightness (0-100 → 0-1)
+  const brightness = luminosite / 100;
+  container.style.filter = `brightness(${brightness})`;
+  
+  __log('info', 'config', `Luminosité appliquée: ${luminosite}%`);
+}
+
+/**
+ * Gère le mode nuit localement (si l'écran veut gérer lui-même)
+ * @param {Object} modeNuit - Configuration du mode nuit
+ */
+function handleModeNuit(modeNuit) {
+  if (!modeNuit || !modeNuit.actif) return;
+  
+  const now = new Date();
+  const currentTime = now.toTimeString().slice(0, 5); // "HH:mm"
+  
+  const heureDebut = modeNuit.heureDebut || "22:00";
+  const heureFin = modeNuit.heureFin || "07:00";
+  
+  // Vérifier si on est en mode nuit
+  let isNightMode = false;
+  if (heureDebut > heureFin) {
+    // Cas où la nuit chevauche minuit (ex: 22:00 → 07:00)
+    isNightMode = currentTime >= heureDebut || currentTime < heureFin;
+  } else {
+    // Cas classique
+    isNightMode = currentTime >= heureDebut && currentTime < heureFin;
+  }
+  
+  if (isNightMode) {
+    const luminositeNuit = modeNuit.luminositeNuit || 25;
+    document.body.style.filter = `brightness(${luminositeNuit / 100})`;
+    __log('info', 'config', `Mode nuit actif: ${luminositeNuit}%`);
+  }
+}
+```
+
+### CSS pour transition douce
+
+```css
+/* Transition douce lors du changement de luminosité */
+body {
+  transition: filter 2s ease-in-out;
+}
+
+/* Overlay pour assombrir l'écran (alternative au filter) */
+.luminosity-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, var(--darkness-level, 0));
+  pointer-events: none;
+  z-index: 9999;
+  transition: background 2s ease-in-out;
+}
+```
+
+### Méthode alternative: overlay noir
+
+```javascript
+/**
+ * Alternative: utiliser un overlay noir pour réduire la luminosité
+ * Plus compatible avec certains navigateurs
+ */
+function applyLuminositeOverlay(luminosite) {
+  let overlay = document.getElementById('luminosity-overlay');
+  
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'luminosity-overlay';
+    overlay.className = 'luminosity-overlay';
+    document.body.appendChild(overlay);
+  }
+  
+  // luminosite 100 = overlay transparent, luminosite 0 = overlay noir total
+  const darkness = 1 - (luminosite / 100);
+  overlay.style.setProperty('--darkness-level', darkness);
+}
+```
+
+---
+
+## 😴 Gestion du mode Sleep
+
+Quand l'API retourne `status: "sleep"`, l'écran doit réagir selon `typeHorsPlage`:
+
+```javascript
+/**
+ * Gère le mode sleep de l'écran
+ * @param {Object} data - Réponse de l'API
+ */
+function handleSleepMode(data) {
+  __log('info', 'config', 'Écran en mode sleep');
+  
+  // Arrêter la boucle de diaporama
+  stopLoopDiapo();
+  
+  // Masquer le contenu
+  document.getElementById('mediaContainer').style.display = 'none';
+  document.getElementById('pageDefault').style.display = 'none';
+  
+  // Afficher selon le type
+  const sleepContainer = document.getElementById('sleepContainer') || createSleepContainer();
+  sleepContainer.style.display = 'flex';
+  
+  switch (data.typeHorsPlage) {
+    case 'noir':
+      sleepContainer.style.background = '#000';
+      sleepContainer.innerHTML = '';
+      break;
+      
+    case 'logo':
+      sleepContainer.style.background = '#000';
+      sleepContainer.innerHTML = '<img src="assets/logo-see.png" alt="SEE" style="max-width: 200px; opacity: 0.3;">';
+      break;
+      
+    case 'image':
+      if (data.imageHorsPlage) {
+        sleepContainer.style.backgroundImage = `url(${data.imageHorsPlage})`;
+        sleepContainer.style.backgroundSize = 'cover';
+        sleepContainer.style.backgroundPosition = 'center';
+      }
+      break;
+  }
+  
+  // Programmer le prochain check pour le réveil
+  if (data.prochainDemarrage) {
+    __log('info', 'config', `Prochain réveil prévu à ${data.prochainDemarrage}`);
+    scheduleWakeupCheck(data.prochainDemarrage);
+  }
+}
+
+function createSleepContainer() {
+  const container = document.createElement('div');
+  container.id = 'sleepContainer';
+  container.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  `;
+  document.body.appendChild(container);
+  return container;
+}
+```
+
+---
+
+## �🛠️ Gestion des erreurs
 
 ### Codes de réponse HTTP
 
