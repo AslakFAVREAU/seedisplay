@@ -15,6 +15,15 @@ Documentation de l'API pour le projet **seedisplay** (affichage dynamique sur é
 
 ---
 
+> 🆕 **Mise à jour Décembre 2025**: L'API retourne maintenant une structure enrichie avec :
+> - `timeline` : liste pré-calculée des médias à afficher (optimisé)
+> - `diapos` : détails complets des diaporamas avec `programmation` imbriqué
+> - Noms de champs en **camelCase** (`dateDebut`, `dateFin`, `type`, `priorite`)
+> 
+> Le client seedisplay supporte les deux formats (legacy PascalCase et nouveau camelCase).
+
+---
+
 ## 📡 Endpoint Principal
 
 ### GET `/see/API/diapo/{idEcran}`
@@ -27,33 +36,78 @@ Récupère la configuration complète d'un écran et ses diaporamas actifs.
 |-----------|------|-------------|
 | `idEcran` | integer | ID unique de l'écran |
 
-#### Réponse (JSON)
+#### Réponse (JSON) - Format Réel
 
 ```json
 {
   "status": "active",
-  "ecranId": 13,
+  "ecranId": 1,
   "ecranNom": "Écran Accueil",
   "orientation": "landscape",
   "ratio": "16:9",
-  "dimensions": "1920x1080",
-  "luminosite": 80,
+  "dimensions": { "width": 1920, "height": 1080 },
+  "luminosite": 50,
   "modeNuit": {
-    "actif": true,
-    "luminositeNuit": 25,
-    "heureDebut": "22:00",
-    "heureFin": "07:00"
+    "actif": false,
+    "luminositeNuit": 50,
+    "heureDebut": null,
+    "heureFin": null
   },
   "programmation": {
-    "active": true,
-    "heureDemarrage": "07:00",
-    "heureExtinction": "22:00",
-    "joursFonctionnement": [1, 2, 3, 4, 5]
+    "active": false,
+    "heureDemarrage": null,
+    "heureExtinction": null,
+    "joursFonctionnement": []
   },
-  "refreshInterval": 300,
+  "refreshInterval": "300",
+  "serverTime": "2025-12-25T22:50:23+00:00",
+  "totalDiapos": 2,
+  "totalMedias": 14,
+  "timeline": [...],
   "diapos": [...]
 }
 ```
+
+---
+
+## 🚀 Timeline (Optimisé)
+
+L'API fournit une `timeline` pré-calculée avec tous les médias dans l'ordre d'affichage. **C'est la méthode recommandée** pour le client car le serveur a déjà filtré et trié les médias.
+
+```json
+"timeline": [
+  {
+    "ordre": 1,
+    "diapoId": 4,
+    "diapoNom": "test",
+    "diapoType": "programme",
+    "diapoPriorite": 0,
+    "mediaId": 16,
+    "mediaNom": "diapositive6",
+    "mediaType": "img",
+    "mediaFichier": "EVENEMENT-SOE-diapositive6-694d06ebe7071.jpg",
+    "mediaUrl": "/uploads/see/media/EVENEMENT-SOE-diapositive6-694d06ebe7071.jpg",
+    "duree": 5,
+    "transition": "cut"
+  },
+  ...
+]
+```
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `ordre` | integer | Position dans la séquence |
+| `diapoId` | integer | ID du diaporama source |
+| `diapoNom` | string | Nom du diaporama |
+| `diapoType` | string | `"standard"`, `"programme"`, `"prioritaire"` |
+| `diapoPriorite` | integer | Niveau de priorité (0-10) |
+| `mediaId` | integer | ID du média |
+| `mediaNom` | string | Nom du média |
+| `mediaType` | string | `"img"` ou `"video"` |
+| `mediaFichier` | string | Nom du fichier |
+| `mediaUrl` | string | Chemin relatif du fichier |
+| `duree` | integer | Durée d'affichage en secondes |
+| `transition` | string | Type de transition (`"cut"`) |
 
 ---
 
