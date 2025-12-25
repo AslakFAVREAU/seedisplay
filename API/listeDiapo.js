@@ -292,7 +292,31 @@ const getDiapoJson = async () => {
   const requestJsonDiapo = async () => {
     const JsonDiapo = await getDiapoJson()
     if (JsonDiapo) {
-      ArrayDiapo = listeDiapo(JsonDiapo.data)
+      const apiData = JsonDiapo.data;
+      
+      // Vérifier si l'écran est en mode sleep
+      if (apiData && apiData.status === 'sleep') {
+        _log('info', 'diapo', 'API returned sleep status');
+        if (typeof window !== 'undefined' && window.sleepManager) {
+          window.sleepManager.enterSleepMode(apiData);
+        }
+        return;
+      }
+      
+      // Si on était en sleep et maintenant actif, sortir du mode sleep
+      if (typeof window !== 'undefined' && window.sleepManager && window.sleepManager.isSleeping) {
+        _log('info', 'diapo', 'Exiting sleep mode - API now active');
+        window.sleepManager.exitSleepMode();
+      }
+      
+      // Appliquer la luminosité si présente
+      if (apiData && typeof apiData.luminosite === 'number' && typeof window !== 'undefined') {
+        if (window.sleepManager) {
+          window.sleepManager.applyLuminosity(apiData.luminosite);
+        }
+      }
+      
+      ArrayDiapo = listeDiapo(apiData)
 
       // Si aucune diapo n'est fournie, afficher l'écran par défaut pour éviter écran vide
       if (!ArrayDiapo || ArrayDiapo.length === 0) {
