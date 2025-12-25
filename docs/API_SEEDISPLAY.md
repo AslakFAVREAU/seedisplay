@@ -138,24 +138,98 @@ Quand l'écran est configuré pour s'éteindre pendant certaines heures :
 
 ---
 
-## 📋 Structure d'un Diapo
+## 📋 Structure de la réponse complète
 
-Chaque élément dans le tableau `diapos` :
+L'API retourne deux éléments clés :
+- **`timeline`** : Liste pré-calculée des médias actifs maintenant (pour affichage immédiat)
+- **`diapos`** : Liste complète des diapos avec toutes leurs règles (pour fonctionnement autonome)
 
 ```json
 {
-  "id": 42,
-  "NomDiapo": "Annonces Janvier",
-  "DateDebutDiapo": "2025-01-01T00:00:00+01:00",
-  "DateFinDiapo": "2025-01-31T23:59:59+01:00",
-  "TypeDiapo": "standard",
-  "Priorite": 0,
-  "HeureDebut": "08:00:00",
-  "HeureFin": "18:00:00",
-  "JoursSemaine": [1, 2, 3, 4, 5],
-  "PlagesHoraires": null,
-  "ligneMedia": [...]
+  "status": "active",
+  "serverTime": "2025-01-15T14:30:00+01:00",
+  "ecranId": 13,
+  "ecranNom": "Écran Accueil",
+  "orientation": "landscape",
+  "ratio": "16:9",
+  "dimensions": "1920x1080",
+  "luminosite": 80,
+  "modeNuit": { ... },
+  "programmation": { ... },
+  "refreshInterval": 300,
+  "totalDiapos": 3,
+  "totalMedias": 12,
+  "timeline": [ ... ],
+  "diapos": [ ... ]
 }
+```
+
+### Timeline (médias actifs maintenant)
+
+La `timeline` est une liste plate des médias à afficher **immédiatement**, pré-calculée par le serveur :
+
+```json
+"timeline": [
+  {
+    "ordre": 1,
+    "diapoId": 42,
+    "diapoNom": "Annonces Urgentes",
+    "diapoType": "prioritaire",
+    "diapoPriorite": 10,
+    "mediaId": 123,
+    "mediaNom": "Alerte Météo",
+    "mediaType": "img",
+    "mediaFichier": "alerte_meteo.jpg",
+    "mediaUrl": "/uploads/see/media/alerte_meteo.jpg",
+    "duree": 15,
+    "transition": "cut"
+  },
+  ...
+]
+```
+
+### Diapos (règles complètes pour fonctionnement autonome)
+
+Les `diapos` contiennent **toutes les règles de programmation** pour que seedisplay puisse fonctionner **en cas de perte de connexion** :
+
+```json
+"diapos": [
+  {
+    "id": 42,
+    "nom": "Annonces Janvier",
+    "actif": true,
+    
+    "dateDebut": "2025-01-01T00:00:00+01:00",
+    "dateFin": "2025-01-31T23:59:59+01:00",
+    
+    "type": "standard",
+    "priorite": 0,
+    
+    "programmation": {
+      "mode": "simple",
+      "heureDebut": "08:00",
+      "heureFin": "18:00",
+      "joursSemaine": [1, 2, 3, 4, 5],
+      "plagesHoraires": null
+    },
+    
+    "medias": [
+      {
+        "ordre": 1,
+        "duree": 10,
+        "mediaId": 123,
+        "nom": "Promo Janvier",
+        "type": "img",
+        "fichier": "promo_janvier.jpg",
+        "url": "/uploads/see/media/promo_janvier.jpg"
+      },
+      ...
+    ],
+    "totalMedias": 5,
+    "dureeTotale": 50
+  },
+  ...
+]
 ```
 
 ### Champs du Diapo
@@ -163,16 +237,143 @@ Chaque élément dans le tableau `diapos` :
 | Champ | Type | Description |
 |-------|------|-------------|
 | `id` | integer | ID unique du diapo |
-| `NomDiapo` | string | Nom du diaporama |
-| `DateDebutDiapo` | ISO8601 | Date/heure de début de validité |
-| `DateFinDiapo` | ISO8601 | Date/heure de fin de validité |
-| `TypeDiapo` | string | Type de diaporama (voir ci-dessous) |
-| `Priorite` | integer | Niveau de priorité (0-10) |
-| `HeureDebut` | string\|null | Heure de début d'affichage (format `"HH:mm:ss"`) |
-| `HeureFin` | string\|null | Heure de fin d'affichage (format `"HH:mm:ss"`) |
-| `JoursSemaine` | array\|null | Jours autorisés (0=Dim, 1=Lun, ..., 6=Sam) |
-| `PlagesHoraires` | object\|null | Plages horaires avancées par jour |
-| `ligneMedia` | array | Liste des médias du diaporama |
+| `nom` | string | Nom du diaporama |
+| `actif` | boolean | Diapo activé ou inhibé |
+| `dateDebut` | ISO8601 | Date/heure de début de validité |
+| `dateFin` | ISO8601 | Date/heure de fin de validité |
+| `type` | string | `"standard"`, `"programme"` ou `"prioritaire"` |
+| `priorite` | integer | Niveau de priorité (0-10, 10 = max) |
+| `programmation.mode` | string | `"simple"` ou `"avance"` |
+| `programmation.heureDebut` | string | Heure début (mode simple) |
+| `programmation.heureFin` | string | Heure fin (mode simple) |
+| `programmation.joursSemaine` | array | Jours autorisés [0-6] (0=Dim) |
+| `programmation.plagesHoraires` | object | Plages par jour (mode avancé) |
+| `medias` | array | Liste des médias ordonnée |
+| `totalMedias` | integer | Nombre de médias |
+| `dureeTotale` | integer | Durée totale en secondes |
+
+---
+
+## 🔌 Fonctionnement hors ligne
+
+Grâce aux règles complètes dans `diapos`, seedisplay peut :
+
+1. **Continuer à afficher** même sans connexion
+2. **Appliquer les règles de programmation** localement
+3. **Respecter les priorités** et les dates de validité
+4. **Gérer les changements d'horaire** (passage mode nuit, etc.)
+
+### Implémentation recommandée
+
+```javascript
+// Cache local des diapos
+let cachedDiapos = [];
+let lastSync = null;
+
+async function syncWithServer() {
+  try {
+    const response = await fetch(API_URL);
+    const data = await response.json();
+    
+    // Sauvegarder les diapos complets pour fonctionnement hors ligne
+    cachedDiapos = data.diapos;
+    lastSync = new Date(data.serverTime);
+    
+    // Sauvegarder en localStorage pour persistance
+    localStorage.setItem('see_diapos', JSON.stringify(cachedDiapos));
+    localStorage.setItem('see_lastSync', lastSync.toISOString());
+    
+    // Utiliser la timeline pré-calculée
+    return data.timeline;
+    
+  } catch (error) {
+    console.warn('Connexion perdue, utilisation du cache local');
+    
+    // Charger depuis localStorage
+    const cached = localStorage.getItem('see_diapos');
+    if (cached) {
+      cachedDiapos = JSON.parse(cached);
+      // Recalculer la timeline localement
+      return calculateTimelineLocally(cachedDiapos);
+    }
+    
+    return [];
+  }
+}
+
+/**
+ * Calcule la timeline localement (mode hors ligne)
+ */
+function calculateTimelineLocally(diapos) {
+  const now = new Date();
+  const timeline = [];
+  
+  // Filtrer les diapos actifs
+  const activeDiapos = diapos.filter(diapo => {
+    if (!diapo.actif) return false;
+    
+    // Vérifier période
+    if (diapo.dateDebut && new Date(diapo.dateDebut) > now) return false;
+    if (diapo.dateFin && new Date(diapo.dateFin) < now) return false;
+    
+    // Vérifier programmation
+    if (diapo.type === 'programme' || diapo.type === 'prioritaire') {
+      if (!isInProgrammation(diapo.programmation, now)) return false;
+    }
+    
+    return true;
+  });
+  
+  // Trier par priorité
+  activeDiapos.sort((a, b) => {
+    if (a.type === 'prioritaire' && b.type !== 'prioritaire') return -1;
+    if (b.type === 'prioritaire' && a.type !== 'prioritaire') return 1;
+    return (b.priorite || 0) - (a.priorite || 0);
+  });
+  
+  // Construire la timeline
+  let ordre = 1;
+  for (const diapo of activeDiapos) {
+    for (const media of diapo.medias) {
+      timeline.push({
+        ordre: ordre++,
+        diapoId: diapo.id,
+        diapoNom: diapo.nom,
+        diapoType: diapo.type,
+        ...media
+      });
+    }
+  }
+  
+  return timeline;
+}
+
+/**
+ * Vérifie si l'heure actuelle est dans la programmation
+ */
+function isInProgrammation(prog, now) {
+  const currentDay = now.getDay(); // 0=Dim
+  const currentTime = now.toTimeString().slice(0, 5); // "HH:mm"
+  const joursFr = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  
+  // Mode avancé
+  if (prog.mode === 'avance' && prog.plagesHoraires) {
+    const plages = prog.plagesHoraires[joursFr[currentDay]] || [];
+    return plages.some(p => currentTime >= p.debut && currentTime <= p.fin);
+  }
+  
+  // Mode simple
+  if (prog.joursSemaine && prog.joursSemaine.length > 0) {
+    if (!prog.joursSemaine.includes(currentDay)) return false;
+  }
+  
+  if (prog.heureDebut && prog.heureFin) {
+    if (currentTime < prog.heureDebut || currentTime > prog.heureFin) return false;
+  }
+  
+  return true;
+}
+```
 
 ---
 
