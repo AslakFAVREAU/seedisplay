@@ -44,6 +44,137 @@
       pointer-events: none;
     }
 
+    /* Écran de configuration initiale (1er démarrage) */
+    #setupScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #e8e8e8;
+      z-index: 10000;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 40px 20px;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      box-sizing: border-box;
+    }
+
+    #setupScreen.active {
+      display: flex;
+    }
+
+    .setup-header {
+      text-align: center;
+    }
+
+    .setup-header img {
+      max-width: 300px;
+      height: auto;
+    }
+
+    .setup-container {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 40px 50px;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      max-width: 450px;
+      width: 90%;
+    }
+
+    .setup-container p {
+      font-size: 1.1rem;
+      color: #666;
+      margin-bottom: 30px;
+    }
+
+    .setup-input-group {
+      margin: 20px 0;
+    }
+
+    .setup-input-group label {
+      display: block;
+      font-size: 1rem;
+      margin-bottom: 10px;
+      text-align: left;
+      color: #333;
+      font-weight: 500;
+    }
+
+    .setup-input-group input {
+      width: 100%;
+      padding: 15px 20px;
+      font-size: 1.2rem;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      background: #fff;
+      color: #333;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.3s;
+      box-sizing: border-box;
+      height: 56px;
+    }
+
+    .setup-input-group input:focus {
+      border-color: #4a90d9;
+    }
+
+    .setup-input-group select {
+      width: 100%;
+      padding: 15px;
+      font-size: 1.1rem;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      background: #fff;
+      color: #333;
+      outline: none;
+      cursor: pointer;
+      box-sizing: border-box;
+      height: 56px;
+    }
+
+    .setup-input-group select:focus {
+      border-color: #4a90d9;
+    }
+
+    .setup-btn {
+      background: #4a90d9;
+      color: white;
+      border: none;
+      padding: 15px 50px;
+      font-size: 1.2rem;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: background-color 0.2s;
+    }
+
+    .setup-btn:hover {
+      background: #3a7bc8;
+    }
+
+    .setup-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .setup-error {
+      color: #d9534f;
+      margin-top: 15px;
+      font-size: 0.9rem;
+      min-height: 20px;
+    }
+
+    .setup-status {
+      margin-top: 20px;
+      font-size: 0.9rem;
+      opacity: 0.7;
+    }
+
     /* Hauteur et layout des pages */
     #pagePsaume {
       min-height: 100vh;
@@ -324,6 +455,42 @@
     </div>
   </div>
 
+  <!-- Écran de configuration initiale (1er démarrage) -->
+  <div id="setupScreen">
+    <!-- Logo SEE en haut -->
+    <div class="setup-header">
+      <img src="logo/see.png" alt="SEE">
+    </div>
+    
+    <!-- Formulaire de configuration -->
+    <div class="setup-container">
+      <p>Bienvenue! Entrez l'ID de cet écran pour commencer.</p>
+      
+      <div class="setup-input-group">
+        <label for="setupIdEcran">ID de l'écran</label>
+        <input type="number" id="setupIdEcran" placeholder="Ex: 1" min="1" autofocus>
+      </div>
+      
+      <div class="setup-input-group">
+        <label for="setupEnv">Environnement</label>
+        <select id="setupEnv">
+          <option value="prod">Production (soek.fr)</option>
+          <option value="local">Local (127.0.0.1:8000)</option>
+        </select>
+      </div>
+      
+      <button class="setup-btn" id="setupSubmit" onclick="submitSetup()">Valider</button>
+      
+      <div class="setup-error" id="setupError"></div>
+      <div class="setup-status" id="setupStatus"></div>
+    </div>
+    
+    <!-- Logo SOE en bas -->
+    <div class="setup-footer">
+      <img src="logo/soe.png" alt="SOE" style="max-width: 150px; height: auto;">
+    </div>
+  </div>
+
   <!-- Debug overlay: will show renderer console logs inside the window -->
   <div id="debugLog" style="position:fixed;left:10px;bottom:10px;z-index:9999;color:#fff;background:rgba(0,0,0,0.7);max-height:200px;overflow:auto;padding:8px;border-radius:6px;font-size:12px;min-width:300px;max-width:600px;display:none"></div>
   <!--<h1>Hello World!</h1>
@@ -495,6 +662,12 @@
   <script src="js/meteo.js"></script>
   <script src="js/restartGif.js"></script>
   <script src="js/defaultScreen.js"></script>
+  
+  <!-- New Architecture: Managers -->
+  <script src="js/ConfigManager.js"></script>
+  <script src="js/DiapoManager.js"></script>
+  <script src="js/MediaPlayer.js"></script>
+  <script src="js/SleepManager.js"></script>
 
   <script>
     // Gestion de l'écran de chargement
@@ -656,10 +829,130 @@
       setTimeout(() => hideLoadingScreen(), 1000); // Délai pour voir l'interface se charger
     }
   }
+
+  // ==================== SETUP SCREEN FUNCTIONS ====================
+  
+  /**
+   * Affiche l'écran de configuration initiale
+   */
+  function showSetupScreen() {
+    __log('info','setup','Showing setup screen (first run)')
+    document.getElementById('loadingScreen').style.display = 'none'
+    document.getElementById('setupScreen').classList.add('active')
+    document.getElementById('setupIdEcran').focus()
+  }
+
+  /**
+   * Cache l'écran de configuration
+   */
+  function hideSetupScreen() {
+    document.getElementById('setupScreen').classList.remove('active')
+  }
+
+  /**
+   * Soumet la configuration initiale
+   */
+  async function submitSetup() {
+    const idEcran = parseInt(document.getElementById('setupIdEcran').value)
+    const env = document.getElementById('setupEnv').value
+    const errorDiv = document.getElementById('setupError')
+    const statusDiv = document.getElementById('setupStatus')
+    const submitBtn = document.getElementById('setupSubmit')
+
+    // Validation
+    if (!idEcran || idEcran < 1) {
+      errorDiv.textContent = '⚠️ Veuillez entrer un ID valide (nombre > 0)'
+      return
+    }
+
+    errorDiv.textContent = ''
+    statusDiv.textContent = '🔄 Vérification de la connexion au serveur...'
+    submitBtn.disabled = true
+
+    try {
+      // Construire l'URL de test selon l'environnement
+      const baseUrl = env === 'local' 
+        ? 'http://127.0.0.1:8000' 
+        : 'https://soek.fr'
+      const testUrl = `${baseUrl}/see/API/diapo/${idEcran}`
+      
+      __log('info','setup','Testing API connection:', testUrl)
+      statusDiv.textContent = '🔄 Connexion à ' + baseUrl + '...'
+
+      // Tester la connexion à l'API
+      const response = await fetch(testUrl, { 
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(10000) // 10s timeout
+      })
+
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      if (!data.ecranId) {
+        throw new Error('Réponse invalide: ecranId manquant')
+      }
+
+      __log('info','setup','API test successful, ecranNom:', data.ecranNom)
+      statusDiv.textContent = `✅ Écran trouvé: "${data.ecranNom}"`
+
+      // Sauvegarder la configuration
+      const newConfig = {
+        idEcran: idEcran,
+        env: env,
+        // Valeurs par défaut (seront écrasées par l'API)
+        meteo: true,
+        meteoLat: 48.8566,
+        meteoLon: 2.3522,
+        meteoUnits: 'metric',
+        logoSOE: true,
+        weekNo: true,
+        weekType: false,
+        weekDisplay: true
+      }
+
+      // Sauvegarder via preload API
+      if (window.api && typeof window.api.writeFile === 'function') {
+        await window.api.writeFile('configSEE.json', JSON.stringify(newConfig, null, 2))
+        __log('info','setup','Config saved successfully')
+      } else {
+        throw new Error('API writeFile non disponible')
+      }
+
+      statusDiv.textContent = '✅ Configuration sauvegardée! Redémarrage...'
+      
+      // Attendre un peu puis recharger
+      setTimeout(() => {
+        window.location.reload()
+      }, 1500)
+
+    } catch (err) {
+      __log('error','setup','Setup failed:', err.message)
+      errorDiv.textContent = `❌ Erreur: ${err.message}`
+      statusDiv.textContent = ''
+      submitBtn.disabled = false
+    }
+  }
+
+  // Rendre submitSetup accessible globalement pour le onclick
+  window.submitSetup = submitSetup
+
+  // ==================== END SETUP SCREEN FUNCTIONS ====================
   
   // Récupération asynchrone de la configuration (préférer config sur disque ou variables d'environnement)
   window.api.getConfig().then((config) => {
     __log('info','bootstrap','api.getConfig returned', config)
+    
+    // Vérifier si c'est le premier démarrage (pas de config ou pas d'idEcran)
+    if (!config || !config.idEcran) {
+      __log('info','bootstrap','No idEcran found - first run, showing setup screen')
+      showSetupScreen()
+      return // Ne pas continuer le bootstrap normal
+    }
+    
     // Apply config values to globals expected by the legacy code
     try {
       // Expose la config au code legacy qui s'attend à trouver window.configSEE
@@ -682,8 +975,9 @@
     }
   }).catch((err) => {
     __log('error','bootstrap','window.api.getConfig failed', err)
-    configLoaded = true;
-    checkLoadingComplete();
+    // En cas d'erreur de lecture config, afficher l'écran de setup
+    __log('info','bootstrap','Config read failed - showing setup screen')
+    showSetupScreen()
   })
 
 
@@ -699,7 +993,16 @@
     Fonction pour téléharger les img sur le ecran
     */
     async function download(nomMedia) {
-      urlMedia = "https://soek.fr/uploads/see/media/" + nomMedia
+      // Use the helper function from defaultScreen.js if available, otherwise determine locally
+      var mediaBaseUrl = 'https://soek.fr/uploads/see/media/'
+      try {
+        if (typeof getMediaBaseUrl === 'function') {
+          mediaBaseUrl = getMediaBaseUrl()
+        } else if (window.configSEE && window.configSEE.env === 'local') {
+          mediaBaseUrl = 'http://127.0.0.1:8000/uploads/see/media/'
+        }
+      } catch(e) {}
+      urlMedia = mediaBaseUrl + nomMedia
       if (window && window.api && typeof window.api.fetchJson === 'function') {
         try {
           // fetchJson returns parsed JSON; for binary download we would add another API. Keep a simple fetch via renderer if allowed.

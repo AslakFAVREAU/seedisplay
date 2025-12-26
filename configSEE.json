@@ -3,10 +3,10 @@
   "meteoLat": 48.75,
   "meteoLon": 2.3,
   "meteoUnits": "metric",
-  "idEcran": 13,
+  "idEcran": 1,
   "weekDisplay": true,
   "weekNo": true,
   "weekType": true,
   "logoSOE": true,
-  "env": "prod"
+  "env": "local"
 }

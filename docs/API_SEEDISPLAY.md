@@ -138,9 +138,122 @@ Quand l'écran est configuré pour s'éteindre pendant certaines heures :
 
 ---
 
+## ⚙️ Configuration Client
+
+> ⚠️ **TODO Symfony**: Ajouter ces champs dans l'entité `Ecran` et les inclure dans la réponse API.
+> Ces paramètres permettent de configurer l'affichage côté client (seedisplay) depuis le back-office.
+
+### Structure `config`
+
+```json
+{
+  "status": "active",
+  "ecranId": 13,
+  // ... autres champs existants ...
+  
+  "config": {
+    "meteo": {
+      "actif": true,
+      "latitude": 48.8566,
+      "longitude": 2.3522,
+      "units": "metric"
+    },
+    "affichage": {
+      "logoSOE": true,
+      "weekNo": true,
+      "weekType": true,
+      "weekDisplay": true
+    }
+  }
+}
+```
+
+### Configuration Météo
+
+| Champ | Type | Requis | Description |
+|-------|------|--------|-------------|
+| `meteo.actif` | boolean | Oui | Afficher le widget météo |
+| `meteo.latitude` | float | Si actif | Latitude en décimal (-90.0 à 90.0) |
+| `meteo.longitude` | float | Si actif | Longitude en décimal (-180.0 à 180.0) |
+| `meteo.units` | string | Non | `"metric"` (°C, km/h) ou `"imperial"` (°F, mph). Défaut: `"metric"` |
+
+#### Format Latitude/Longitude
+
+- **Type**: Nombre décimal (float)
+- **Précision**: 4-6 décimales recommandées
+- **Exemples**:
+  - Paris: `48.8566`, `2.3522`
+  - Lyon: `45.7640`, `4.8357`
+  - Bordeaux: `44.8378`, `-0.5792` (longitude négative = Ouest)
+
+### Configuration Affichage
+
+| Champ | Type | Défaut | Description |
+|-------|------|--------|-------------|
+| `affichage.logoSOE` | boolean | `true` | Afficher le logo SOE |
+| `affichage.weekNo` | boolean | `true` | Afficher le numéro de semaine |
+| `affichage.weekType` | boolean | `false` | Afficher "Paire/Impaire" au lieu de "Semaine" |
+| `affichage.weekDisplay` | boolean | `true` | Afficher la zone semaine |
+
+### Implémentation Symfony suggérée
+
+```php
+// Entité Ecran - Nouveaux champs à ajouter
+
+// Météo
+#[ORM\Column(type: 'boolean', options: ['default' => true])]
+private bool $meteoActif = true;
+
+#[ORM\Column(type: 'float', nullable: true)]
+#[Assert\Range(min: -90, max: 90, notInRangeMessage: 'Latitude: -90 à 90')]
+private ?float $meteoLatitude = null;
+
+#[ORM\Column(type: 'float', nullable: true)]
+#[Assert\Range(min: -180, max: 180, notInRangeMessage: 'Longitude: -180 à 180')]
+private ?float $meteoLongitude = null;
+
+#[ORM\Column(type: 'string', length: 10, options: ['default' => 'metric'])]
+#[Assert\Choice(choices: ['metric', 'imperial'])]
+private string $meteoUnits = 'metric';
+
+// Affichage
+#[ORM\Column(type: 'boolean', options: ['default' => true])]
+private bool $affichageLogoSOE = true;
+
+#[ORM\Column(type: 'boolean', options: ['default' => true])]
+private bool $affichageWeekNo = true;
+
+#[ORM\Column(type: 'boolean', options: ['default' => false])]
+private bool $affichageWeekType = false;
+
+#[ORM\Column(type: 'boolean', options: ['default' => true])]
+private bool $affichageWeekDisplay = true;
+```
+
+```php
+// Dans le Controller API - Ajouter à la réponse
+$response['config'] = [
+    'meteo' => [
+        'actif' => $ecran->isMeteoActif(),
+        'latitude' => $ecran->getMeteoLatitude(),
+        'longitude' => $ecran->getMeteoLongitude(),
+        'units' => $ecran->getMeteoUnits(),
+    ],
+    'affichage' => [
+        'logoSOE' => $ecran->isAffichageLogoSOE(),
+        'weekNo' => $ecran->isAffichageWeekNo(),
+        'weekType' => $ecran->isAffichageWeekType(),
+        'weekDisplay' => $ecran->isAffichageWeekDisplay(),
+    ],
+];
+```
+
+---
+
 ## 📋 Structure de la réponse complète
 
-L'API retourne deux éléments clés :
+L'API retourne trois éléments clés :
+- **`config`** : Configuration client (météo, affichage) - voir section précédente
 - **`timeline`** : Liste pré-calculée des médias actifs maintenant (pour affichage immédiat)
 - **`diapos`** : Liste complète des diapos avec toutes leurs règles (pour fonctionnement autonome)
 
@@ -156,6 +269,10 @@ L'API retourne deux éléments clés :
   "luminosite": 80,
   "modeNuit": { ... },
   "programmation": { ... },
+  "config": {
+    "meteo": { "actif": true, "latitude": 48.8566, "longitude": 2.3522, "units": "metric" },
+    "affichage": { "logoSOE": true, "weekNo": true, "weekType": false, "weekDisplay": true }
+  },
   "refreshInterval": 300,
   "totalDiapos": 3,
   "totalMedias": 12,

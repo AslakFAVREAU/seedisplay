@@ -329,12 +329,23 @@ const axios = require('axios')
 const BASE_PATH = 'C:/SEE/'
 
 ipcMain.handle('preload-getConfig', async () => {
+  const p = path.join(BASE_PATH, 'configSEE.json')
+  log.info('[main] preload-getConfig: checking path', p)
   try {
-    const p = path.join(BASE_PATH, 'configSEE.json')
-    if (!fs.existsSync(p)) return null
+    const exists = fs.existsSync(p)
+    log.info('[main] preload-getConfig: exists =', exists)
+    if (!exists) {
+      log.warn('[main] preload-getConfig: file not found at', p)
+      return null
+    }
     const raw = fs.readFileSync(p, 'utf8')
-    return JSON.parse(raw)
-  } catch (e) { return null }
+    const parsed = JSON.parse(raw)
+    log.info('[main] preload-getConfig: loaded config', JSON.stringify(parsed))
+    return parsed
+  } catch (e) {
+    log.error('[main] preload-getConfig: error', e.message)
+    return null
+  }
 })
 
 ipcMain.handle('preload-readFile', async (evt, relative) => {

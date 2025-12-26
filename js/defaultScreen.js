@@ -7,6 +7,119 @@ if (typeof window !== 'undefined') {
     var __log = function(level, tag, ...args) { try { if (console && typeof console[level] === 'function') return console[level](tag, ...args); return console.log(tag, ...args) } catch(e){ try{ console.log(tag, ...args) }catch(_){} } }
 }
 
+/**
+ * Get base URL for media files based on environment
+ * Uses window.configSEE.env to determine local vs production
+ */
+function getMediaBaseUrl() {
+    try {
+        if (typeof window !== 'undefined' && window.configSEE && window.configSEE.env === 'local') {
+            return 'http://127.0.0.1:8000/uploads/see/media/'
+        }
+    } catch(e) {}
+    return 'https://soek.fr/uploads/see/media/'
+}
+
+/**
+ * Show sleep screen when API returns status "sleep"
+ * Uses typeHorsPlage to determine display type:
+ * - "noir" (default): black screen
+ * - "image": show imageHorsPlage
+ * Shows next wakeup time if available (prochainDemarrage)
+ */
+function showSleepScreen() {
+    __log('info','sleep','showSleepScreen called')
+    
+    // Hide all media displays
+    try { document.getElementById("divImg1").style.display = "none" } catch(e) {}
+    try { document.getElementById("divImg2").style.display = "none" } catch(e) {}
+    try { document.getElementById("divVideo1").style.display = "none" } catch(e) {}
+    try { document.getElementById("divVideo2").style.display = "none" } catch(e) {}
+    try { document.getElementById("pageDefault").style.display = "none" } catch(e) {}
+    try { document.getElementById("pagePsaume").style.display = "none" } catch(e) {}
+    try { document.getElementById("mediaContainer").classList.remove("active") } catch(e) {}
+    
+    // Get or create sleep screen container
+    let sleepScreen = document.getElementById("sleepScreen")
+    if (!sleepScreen) {
+        sleepScreen = document.createElement("div")
+        sleepScreen.id = "sleepScreen"
+        sleepScreen.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9000;
+        `
+        document.body.appendChild(sleepScreen)
+    }
+    
+    const typeHorsPlage = window.typeHorsPlage || 'noir'
+    const imageHorsPlage = window.imageHorsPlage || null
+    const prochainDemarrage = window.prochainDemarrage || null
+    
+    __log('info','sleep','typeHorsPlage=' + typeHorsPlage + ', prochainDemarrage=' + prochainDemarrage)
+    
+    if (typeHorsPlage === 'image' && imageHorsPlage) {
+        // Show image
+        const baseUrl = getMediaBaseUrl()
+        sleepScreen.style.backgroundImage = 'url(' + baseUrl + encodeURIComponent(imageHorsPlage) + ')'
+        sleepScreen.style.backgroundSize = 'cover'
+        sleepScreen.style.backgroundPosition = 'center'
+        sleepScreen.innerHTML = ''
+    } else {
+        // Show black screen with optional wakeup info
+        sleepScreen.style.backgroundImage = 'none'
+        sleepScreen.style.background = '#000'
+        
+        if (prochainDemarrage) {
+            sleepScreen.innerHTML = `
+                <div style="color: #333; font-size: 1.5em; font-family: Arial, sans-serif;">
+                    Prochain démarrage : ${prochainDemarrage}
+                </div>
+            `
+        } else {
+            sleepScreen.innerHTML = ''
+        }
+    }
+    
+    sleepScreen.style.display = "flex"
+    __log('info','sleep','sleep screen displayed')
+    
+    // Schedule next API check to detect wakeup
+    // Use shorter interval during sleep for responsive wakeup
+    if (typeof window !== 'undefined') {
+        window.sleepCheckTimer = setTimeout(function() {
+            __log('debug','sleep','checking for wakeup...')
+            requestJsonDiapo()
+        }, 60000) // Check every minute
+    }
+}
+
+/**
+ * Hide sleep screen (called when exiting sleep mode)
+ */
+function hideSleepScreen() {
+    __log('info','sleep','hideSleepScreen called')
+    
+    const sleepScreen = document.getElementById("sleepScreen")
+    if (sleepScreen) {
+        sleepScreen.style.display = "none"
+    }
+    
+    // Clear sleep check timer
+    if (window.sleepCheckTimer) {
+        clearTimeout(window.sleepCheckTimer)
+        window.sleepCheckTimer = null
+    }
+}
+
 function defaultScreen() {
 
     const dateGif = new Date();
@@ -92,9 +205,9 @@ if (monthGif == 11)
                     if (!exists) {
                         // use preload saveBinary when available
                         if (window && window.api && typeof window.api.saveBinary === 'function') {
-                            const urlMedia = 'https://soek.fr/uploads/see/media/' + mediaName
+                            const urlMedia = getMediaBaseUrl() + mediaName
                             window.api.saveBinary('media/' + mediaName, urlMedia)
-                            __log('info','default','launching download via api.saveBinary for ' + mediaName)
+                            __log('info','default','launching download via api.saveBinary for ' + mediaName + ' from ' + getMediaBaseUrl())
                         } else {
                             // fallback to renderer download (may not work without nodeIntegration)
                             download(mediaName)

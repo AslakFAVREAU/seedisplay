@@ -9,14 +9,27 @@ try {
   fs = require('fs')
   path = require('path')
   axios = require('axios')
+  // Verify fs works by checking if the module has expected methods
+  if (!fs || typeof fs.readFileSync !== 'function') {
+    hasNode = false
+  }
 } catch (e) {
+  console.log('[preload] Node modules not available, using IPC fallback:', e.message)
   hasNode = false
 }
+
+console.log('[preload] hasNode =', hasNode)
 
 // Limit paths to C:\\SEE by default
 const BASE_PATH = 'C:/SEE/'
 
 function safeJoin(base, p) {
+  if (!path) {
+    // Fallback: simple string join if path module not available
+    const result = base.replace(/\/$/, '') + '/' + p.replace(/^\//, '')
+    console.log('[preload] safeJoin (fallback):', base, '+', p, '->', result)
+    return result
+  }
   const resolved = path.resolve(base, p)
   if (!resolved.startsWith(path.resolve(base))) throw new Error('Path outside allowed base')
   return resolved
@@ -24,20 +37,29 @@ function safeJoin(base, p) {
 
 contextBridge.exposeInMainWorld('api', {
   getConfig: async () => {
+    console.log('[preload] getConfig called, hasNode =', hasNode)
     // If we have node, read directly, else ask main process
     if (hasNode) {
       const configPath = safeJoin(BASE_PATH, 'configSEE.json')
+      console.log('[preload] Reading config from:', configPath)
       try {
         const raw = fs.readFileSync(configPath, 'utf8')
-        return JSON.parse(raw)
+        const parsed = JSON.parse(raw)
+        console.log('[preload] Config loaded successfully:', JSON.stringify(parsed))
+        return parsed
       } catch (e) {
+        console.error('[preload] Failed to read config file:', e.message)
+        console.log('[preload] Returning defaults')
         return { meteo: true, meteoApiKey: null, meteoLat: 48.75, meteoLon: 2.3, meteoUnits: 'metric', env: 'prod' }
       }
     }
+    console.log('[preload] Using IPC fallback for config')
     try {
       const res = await ipcRenderer.invoke('preload-getConfig')
+      console.log('[preload] IPC getConfig result:', JSON.stringify(res))
       return res || { meteo: true, meteoApiKey: null, meteoLat: 48.75, meteoLon: 2.3, meteoUnits: 'metric', env: 'prod' }
     } catch (e) {
+      console.error('[preload] IPC getConfig failed:', e.message)
       return { meteo: true, meteoApiKey: null, meteoLat: 48.75, meteoLon: 2.3, meteoUnits: 'metric', env: 'prod' }
     }
   },
