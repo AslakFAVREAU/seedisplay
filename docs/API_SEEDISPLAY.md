@@ -50,7 +50,26 @@ Récupère la configuration complète d'un écran et ses diaporamas actifs.
     "heureExtinction": "22:00",
     "joursFonctionnement": [1, 2, 3, 4, 5]
   },
+  "config": {
+    "meteo": {
+      "actif": true,
+      "latitude": 48.8566,
+      "longitude": 2.3522,
+      "units": "metric"
+    },
+    "affichage": {
+      "logoSOE": true,
+      "weekNo": true,
+      "weekType": false,
+      "weekDisplay": true
+    }
+  },
   "refreshInterval": 300,
+  "modePrioritaire": false,
+  "serverTime": "2025-12-26T14:30:00+01:00",
+  "totalDiapos": 3,
+  "totalMedias": 12,
+  "timeline": [...],
   "diapos": [...]
 }
 ```
@@ -71,6 +90,8 @@ Récupère la configuration complète d'un écran et ses diaporamas actifs.
 | `dimensions` | string | Résolution (ex: `"1920x1080"`) |
 | `luminosite` | integer | Luminosité actuelle (0-100), ajustée automatiquement si mode nuit actif |
 | `refreshInterval` | integer | Intervalle de refresh en secondes |
+| `modePrioritaire` | boolean | `true` si un diapo prioritaire est actif (timeline exclusive) |
+| `serverTime` | string | Date/heure serveur ISO 8601 pour synchronisation |
 
 ### Mode Nuit (luminosité adaptative)
 
@@ -543,9 +564,12 @@ if (diapo.TypeDiapo === 'programme') {
 ```
 
 ### `prioritaire`
-- **Comportement**: Passe devant les autres diaporamas
+- **Comportement**: **EXCLUSIF** - Quand un diapo prioritaire est actif, la timeline ne contient QUE les médias des diapos prioritaires
 - **Programmation**: Peut respecter les horaires si définis
 - **Priorité**: Élevée (valeur `Priorite` > 0)
+- **Indicateur API**: Le champ `modePrioritaire: true` indique qu'un ou plusieurs diapos prioritaires sont actifs
+
+> ⚠️ **Important**: Quand `modePrioritaire === true`, la `timeline` retournée par l'API ne contient que les médias des diapos prioritaires. Les diapos standards et programmés sont ignorés jusqu'à la fin du/des prioritaire(s).
 
 ```javascript
 // Exemple de logique - Tri par priorité
@@ -556,6 +580,10 @@ const sortedDiapos = diapos.sort((a, b) => {
   // Ensuite par niveau de priorité
   return (b.Priorite || 0) - (a.Priorite || 0);
 });
+
+// Logique d'exclusivité (côté serveur, déjà appliquée dans timeline)
+const prioritaires = sortedDiapos.filter(d => d.type === 'prioritaire');
+const diaposForTimeline = prioritaires.length > 0 ? prioritaires : sortedDiapos;
 ```
 
 ---
