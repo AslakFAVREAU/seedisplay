@@ -3,7 +3,7 @@
 Documentation de l'API pour le projet **seedisplay** (affichage dynamique sur écrans).
 
 > **URL de base**: `https://soek.fr/see/API/`
-> **Version**: 2.2 (Janvier 2026)
+> **Version**: 2.3 (Janvier 2026)
 
 ---
 
@@ -62,6 +62,13 @@ Récupère la configuration complète d'un écran et ses diaporamas actifs.
       "weekNo": true,
       "weekType": false,
       "weekDisplay": true
+    },
+    "planning": {
+      "actif": true,
+      "position": "footer",
+      "hauteur": "200px",
+      "refreshInterval": 300,
+      "apiUrl": "/see/API/planning/13"
     }
   },
   "refreshInterval": 300,
@@ -215,6 +222,37 @@ Quand l'écran est configuré pour s'éteindre pendant certaines heures :
 | `affichage.weekNo` | boolean | `true` | Afficher le numéro de semaine |
 | `affichage.weekType` | boolean | `false` | Afficher "Paire/Impaire" au lieu de "Semaine" |
 | `affichage.weekDisplay` | boolean | `true` | Afficher la zone semaine |
+
+### Configuration Planning Salles *(Nouveau v2.3)*
+
+Affiche le planning du jour des salles associées à l'écran.
+
+```json
+"planning": {
+  "actif": true,
+  "position": "footer",
+  "hauteur": "200px",
+  "refreshInterval": 300,
+  "apiUrl": "/see/API/planning/13"
+}
+```
+
+| Champ | Type | Défaut | Description |
+|-------|------|--------|-------------|
+| `planning.actif` | boolean | `false` | Activer l'affichage du planning |
+| `planning.position` | string | `"footer"` | Position: `"footer"`, `"sidebar"`, `"fullscreen"`, `"overlay"` |
+| `planning.hauteur` | string | `"200px"` | Hauteur du planning (CSS: `"200px"`, `"30%"`) |
+| `planning.refreshInterval` | integer | `300` | Intervalle de rafraîchissement en secondes |
+| `planning.apiUrl` | string | - | URL de l'API planning pour cet écran |
+
+#### Positions disponibles
+
+| Position | Description |
+|----------|-------------|
+| `footer` | Barre en bas de l'écran (par-dessus les diapos) |
+| `sidebar` | Panneau latéral (à droite) |
+| `fullscreen` | Plein écran (remplace les diapos) |
+| `overlay` | Superposé semi-transparent |
 
 ### Implémentation Symfony suggérée
 
@@ -1157,43 +1195,100 @@ Quand un utilisateur crée un événement avec l'option "Afficher sur l'écran d
 
 ### Template Auto - Structure JSON
 
-Pour les diapos en mode `auto`, l'API peut renvoyer des données de template au lieu d'un média :
+Pour les diapos en mode `auto`, l'API renvoie des données d'événement au lieu d'un média :
 
 ```json
 {
-  "id": 456,
-  "NomDiapo": "[Event] Réunion Projet Alpha",
-  "TypeDiapo": "prioritaire",
-  "Priorite": 8,
-  "templateData": {
-    "type": "evenement",
-    "nom": "Réunion Projet Alpha",
-    "salle": "Salle Einstein",
-    "batiment": "Bâtiment A, 2ème étage",
-    "heureDebut": "14:00",
-    "heureFin": "16:00",
-    "date": "15/01/2026",
-    "responsable": "Jean Dupont",
-    "typeEvent": "Réunion",
-    "couleurSalle": "#0866C6"
+  "id": 8,
+  "nom": "[Event] TEST3 afficage",
+  "actif": true,
+  "dateDebut": "2026-01-01T20:00:00+01:00",
+  "dateFin": "2026-01-01T21:00:00+01:00",
+  "type": "prioritaire",
+  "priorite": 8,
+  "programmation": {
+    "mode": "simple",
+    "heureDebut": "20:00",
+    "heureFin": "21:00",
+    "joursSemaine": [4],
+    "plagesHoraires": []
   },
-  "ligneMedia": []
+  "isEventTemplate": true,
+  "evenement": {
+    "id": 60009,
+    "nom": "TEST3 afficage",
+    "description": "<p>Description de l'événement</p>",
+    "salle": "Studio Evenement-SOE",
+    "heureDebut": "20:00",
+    "heureFin": "21:00",
+    "date": "2026-01-01",
+    "mode": "auto"
+  },
+  "medias": [],
+  "totalMedias": 0,
+  "dureeTotale": 0
 }
 ```
 
+| Champ | Type | Description |
+|-------|------|-------------|
+| `isEventTemplate` | boolean | `true` si c'est une diapo d'événement |
+| `evenement.id` | integer | ID de l'événement SOEG |
+| `evenement.nom` | string | Nom de l'événement |
+| `evenement.description` | string | Description (HTML) |
+| `evenement.salle` | string | Nom de la salle |
+| `evenement.heureDebut` | string | Heure début (HH:mm) |
+| `evenement.heureFin` | string | Heure fin (HH:mm) |
+| `evenement.date` | string | Date (YYYY-MM-DD) |
+| `evenement.mode` | string | `auto` (template) ou `custom` (média) |
+
 ### Rendu côté seedisplay
 
-Quand `templateData` est présent et `ligneMedia` est vide, seedisplay doit générer dynamiquement l'affichage :
+Quand `isEventTemplate === true` et `evenement.mode === 'auto'`, seedisplay doit générer dynamiquement l'affichage :
 
 ```html
 <!-- Exemple de rendu HTML pour template événement -->
 <div class="event-template" style="background: linear-gradient(135deg, #0866C6, #1976D2);">
-  <h1 class="event-title">Réunion Projet Alpha</h1>
+  <h1 class="event-title">TEST3 afficage</h1>
   <div class="event-info">
-    <p><i class="icon-location"></i> Salle Einstein</p>
-    <p><i class="icon-clock"></i> 14:00 - 16:00</p>
+    <p><i class="icon-location"></i> Studio Evenement-SOE</p>
+    <p><i class="icon-clock"></i> 20:00 - 21:00</p>
+    <p class="event-date">01 janvier 2026</p>
   </div>
 </div>
+```
+
+### Logique de détection
+
+```javascript
+/**
+ * Vérifie si une diapo est un template d'événement
+ * @param {Object} diapo - Diapo de l'API
+ * @returns {boolean}
+ */
+function isEventTemplateDiapo(diapo) {
+  return diapo.isEventTemplate === true && diapo.evenement && diapo.evenement.mode === 'auto';
+}
+
+/**
+ * Gère l'affichage d'un template événement
+ * @param {Object} diapo - Diapo avec isEventTemplate=true
+ */
+function renderEventTemplate(diapo) {
+  const evt = diapo.evenement;
+  const container = document.getElementById('mediaContainer');
+  
+  container.innerHTML = `
+    <div class="event-template">
+      <h1>${evt.nom}</h1>
+      <div class="event-info">
+        <p class="salle">${evt.salle}</p>
+        <p class="horaire">${evt.heureDebut} - ${evt.heureFin}</p>
+        <p class="date">${formatDate(evt.date)}</p>
+      </div>
+    </div>
+  `;
+}
 ```
 
 ### CSS suggéré
@@ -1479,16 +1574,26 @@ L'API fournit les données brutes. seedisplay peut les afficher de différentes 
 
 ## 🔄 Changelog API
 
+### v2.3 (Janvier 2026)
+- ✅ **Configuration Planning** : Nouveaux champs `config.planning` dans API diapo
+- ✅ **Positions planning** : footer, sidebar, fullscreen, overlay configurables depuis back-office
+- ✅ **Entité Ecran** : Champs `planningActif`, `planningPosition`, `planningHauteur`, `planningRefreshInterval`
+- ✅ **Formulaire Écran** : Section "Planning des salles associées" avec configuration complète
+- ✅ **isEventTemplate** : Nouveau champ booléen pour identifier les diapos d'événements
+- ✅ **Objet evenement** : Données complètes de l'événement (nom, salle, horaires, date, mode)
+- ✅ **LEFT JOIN ligneMedia** : Les diapos sans médias (templates auto) sont maintenant incluses
+
 ### v2.2 (Janvier 2026)
 - ✅ **API Planning du Jour** : Nouvel endpoint `/see/API/planning/{idEcran}`
 - ✅ **Événements par salle** : Planning groupé par salle avec statut temps réel
 - ✅ **Compteurs temps** : `minutesRestantes` et `minutesAvantDebut` pour affichage dynamique
 
 ### v2.1 (Janvier 2026)
-- ✅ **Liaison Salle ↔ Écran** : Relation ManyToMany entre salles SOEG et écrans SEE
-- ✅ **Diapos Événements** : Génération automatique de diapos prioritaires pour les événements
-- ✅ **Template Data** : Nouveau champ `templateData` pour affichage dynamique sans média
-- ✅ **Mode affichage** : `auto` (template) ou `custom` (média personnalisé)
+- ✅ **Liaison Salle ↔ Écran** : Relation ManyToMany bidirectionnelle entre salles SOEG et écrans SEE
+- ✅ **Diapos Événements** : Génération automatique de diapos prioritaires (priorité 8) pour les événements
+- ✅ **EvenementDisplayService** : Service dédié pour gérer les diapos d'événements
+- ✅ **Mode affichage** : `auto` (template généré par seedisplay) ou `custom` (média personnalisé)
+- ✅ **UI Événement** : Toggle "Afficher sur écran" avec sélection de mode et média
 
 ### v2.0 (Janvier 2026)
 - ✅ Ajout `TypeDiapo` (standard, programme, prioritaire)
