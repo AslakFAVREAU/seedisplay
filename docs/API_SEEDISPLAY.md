@@ -2,8 +2,8 @@
 
 Documentation de l'API pour le projet **seedisplay** (affichage dynamique sur écrans).
 
-> **URL de base**: `https://soek.fr/see/API/diapo/{idEcran}`
-> **Version**: 2.0 (Janvier 2026)
+> **URL de base**: `https://soek.fr/see/API/`
+> **Version**: 2.2 (Janvier 2026)
 
 ---
 
@@ -1230,7 +1230,259 @@ Quand `templateData` est présent et `ligneMedia` est vide, seedisplay doit gén
 
 ---
 
+## � API Planning du Jour
+
+### GET `/see/API/planning/{idEcran}`
+
+Récupère le planning du jour pour toutes les salles associées à un écran.
+
+> **Usage**: Affichage du programme de la journée sur un écran d'accueil ou de couloir.
+
+#### Paramètres
+
+| Paramètre | Type | Description |
+|-----------|------|-------------|
+| `idEcran` | integer | ID unique de l'écran |
+
+#### Réponse (JSON)
+
+```json
+{
+  "status": "success",
+  "ecranId": 13,
+  "ecranNom": "Écran Hall Accueil",
+  "date": "2026-01-15",
+  "dateFormatee": "15/01/2026",
+  "jourSemaine": "Mercredi",
+  "serverTime": "2026-01-15T09:30:00+01:00",
+  "refreshInterval": 60,
+  "salles": [
+    {
+      "id": 5,
+      "nom": "Salle Einstein",
+      "batiment": "Bâtiment A",
+      "couleur": "#0866C6",
+      "capacite": 20
+    },
+    {
+      "id": 8,
+      "nom": "Salle Curie",
+      "batiment": "Bâtiment A",
+      "couleur": "#28A745",
+      "capacite": 12
+    }
+  ],
+  "totalSalles": 2,
+  "evenements": [
+    {
+      "id": 456,
+      "nom": "Réunion Direction",
+      "salleId": 5,
+      "salleNom": "Salle Einstein",
+      "salleCouleur": "#0866C6",
+      "heureDebut": "09:00",
+      "heureFin": "10:30",
+      "dateDebut": "2026-01-15",
+      "responsable": "Marie Martin",
+      "typeEvent": "Réunion",
+      "statut": "en_cours",
+      "minutesRestantes": 45,
+      "minutesAvantDebut": null
+    },
+    {
+      "id": 457,
+      "nom": "Formation RH",
+      "salleId": 8,
+      "salleNom": "Salle Curie",
+      "salleCouleur": "#28A745",
+      "heureDebut": "14:00",
+      "heureFin": "17:00",
+      "dateDebut": "2026-01-15",
+      "responsable": "Paul Dupont",
+      "typeEvent": "Formation",
+      "statut": "a_venir",
+      "minutesRestantes": null,
+      "minutesAvantDebut": 270
+    }
+  ],
+  "totalEvenements": 2,
+  "planningParSalle": [
+    {
+      "salle": { "id": 5, "nom": "Salle Einstein", ... },
+      "evenements": [ ... ],
+      "eventEnCours": { ... },
+      "prochainEvent": { ... }
+    }
+  ]
+}
+```
+
+#### Statuts des événements
+
+| Statut | Description |
+|--------|-------------|
+| `a_venir` | L'événement n'a pas encore commencé |
+| `en_cours` | L'événement est actuellement en cours |
+| `termine` | L'événement est terminé |
+
+#### Cas "Aucune salle associée"
+
+Si l'écran n'a pas de salles associées :
+
+```json
+{
+  "status": "no_salles",
+  "ecranId": 13,
+  "ecranNom": "Écran Test",
+  "message": "Aucune salle associée à cet écran",
+  "salles": [],
+  "evenements": [],
+  "serverTime": "2026-01-15T09:30:00+01:00"
+}
+```
+
+### Utilisation côté seedisplay
+
+#### Affichage suggéré
+
+L'API fournit les données brutes. seedisplay peut les afficher de différentes façons :
+
+1. **Vue Planning** : Grille horaire avec créneaux (style agenda)
+2. **Vue Liste** : Liste des événements du jour triés par heure
+3. **Vue Multi-Salles** : Colonnes par salle avec événements
+
+#### Exemple de rendu HTML
+
+```html
+<div class="planning-du-jour">
+  <header class="planning-header">
+    <h1>Planning du Mercredi 15/01/2026</h1>
+    <time>09:30</time>
+  </header>
+  
+  <div class="planning-grid">
+    <!-- Colonne par salle -->
+    <div class="salle-column" style="--salle-color: #0866C6;">
+      <h2>Salle Einstein</h2>
+      
+      <div class="event en-cours">
+        <span class="heure">09:00 - 10:30</span>
+        <span class="nom">Réunion Direction</span>
+        <span class="responsable">Marie Martin</span>
+        <span class="countdown">45 min restantes</span>
+      </div>
+      
+      <div class="event a-venir">
+        <span class="heure">11:00 - 12:00</span>
+        <span class="nom">Entretien RH</span>
+      </div>
+    </div>
+    
+    <div class="salle-column" style="--salle-color: #28A745;">
+      <h2>Salle Curie</h2>
+      <!-- ... -->
+    </div>
+  </div>
+</div>
+```
+
+#### CSS suggéré
+
+```css
+.planning-du-jour {
+  font-family: 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  color: white;
+  height: 100vh;
+  padding: 2vw;
+}
+
+.planning-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3vh;
+}
+
+.planning-header h1 {
+  font-size: 4vw;
+  font-weight: 600;
+}
+
+.planning-header time {
+  font-size: 5vw;
+  font-weight: 700;
+}
+
+.planning-grid {
+  display: flex;
+  gap: 2vw;
+  height: calc(100vh - 15vh);
+}
+
+.salle-column {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 1vw;
+  padding: 1.5vw;
+  border-top: 0.5vw solid var(--salle-color);
+}
+
+.salle-column h2 {
+  font-size: 2vw;
+  margin-bottom: 2vh;
+  color: var(--salle-color);
+}
+
+.event {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 0.5vw;
+  padding: 1.5vw;
+  margin-bottom: 1.5vh;
+  border-left: 0.3vw solid var(--salle-color);
+}
+
+.event.en-cours {
+  background: rgba(255, 255, 255, 0.15);
+  animation: pulse 2s infinite;
+}
+
+.event .heure {
+  font-size: 1.8vw;
+  font-weight: 600;
+}
+
+.event .nom {
+  font-size: 2vw;
+  display: block;
+  margin: 0.5vh 0;
+}
+
+.event .responsable {
+  font-size: 1.2vw;
+  opacity: 0.7;
+}
+
+.event .countdown {
+  font-size: 1.5vw;
+  color: #ffc107;
+  font-weight: 600;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+```
+
+---
+
 ## 🔄 Changelog API
+
+### v2.2 (Janvier 2026)
+- ✅ **API Planning du Jour** : Nouvel endpoint `/see/API/planning/{idEcran}`
+- ✅ **Événements par salle** : Planning groupé par salle avec statut temps réel
+- ✅ **Compteurs temps** : `minutesRestantes` et `minutesAvantDebut` pour affichage dynamique
 
 ### v2.1 (Janvier 2026)
 - ✅ **Liaison Salle ↔ Écran** : Relation ManyToMany entre salles SOEG et écrans SEE
