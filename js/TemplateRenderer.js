@@ -124,37 +124,33 @@ class TemplateRenderer {
     renderEvenement(data) {
         const couleur = data.couleurSalle || '#0866C6';
         const gradientEnd = this._lightenColor(couleur, 20);
+        
+        // Formater la date pour affichage plus lisible
+        let dateAffichage = data.date || '';
+        if (dateAffichage) {
+            try {
+                const d = new Date(dateAffichage);
+                const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+                dateAffichage = d.toLocaleDateString('fr-FR', options);
+                // Première lettre en majuscule
+                dateAffichage = dateAffichage.charAt(0).toUpperCase() + dateAffichage.slice(1);
+            } catch(e) {}
+        }
 
         return `
             <div class="event-template" style="background: linear-gradient(135deg, ${couleur}, ${gradientEnd});">
                 <div class="event-content">
-                    <div class="event-type-badge">${this._escapeHtml(data.typeEvent || 'Événement')}</div>
-                    <h1 class="event-title">${this._escapeHtml(data.nom || 'Événement')}</h1>
+                    <h1 class="event-title">${this._escapeHtml(data.nom || data.titre || 'Événement')}</h1>
                     
                     <div class="event-details">
-                        <div class="event-info-row">
-                            <span class="event-icon">📍</span>
-                            <span class="event-text">${this._escapeHtml(data.salle || '')}</span>
-                        </div>
-                        ${data.batiment ? `
-                        <div class="event-info-row">
-                            <span class="event-icon">🏢</span>
-                            <span class="event-text">${this._escapeHtml(data.batiment)}</span>
-                        </div>
+                        ${data.salle || data.lieu ? `
+                        <div class="event-salle">${this._escapeHtml(data.salle || data.lieu)}</div>
                         ` : ''}
-                        <div class="event-info-row">
-                            <span class="event-icon">🕐</span>
-                            <span class="event-text">${this._escapeHtml(data.heureDebut || '')} - ${this._escapeHtml(data.heureFin || '')}</span>
-                        </div>
-                        ${data.responsable ? `
-                        <div class="event-info-row">
-                            <span class="event-icon">👤</span>
-                            <span class="event-text">${this._escapeHtml(data.responsable)}</span>
-                        </div>
-                        ` : ''}
+                        
+                        <div class="event-horaires">${this._escapeHtml(data.heureDebut || '')} - ${this._escapeHtml(data.heureFin || '')}</div>
                     </div>
                     
-                    ${data.date ? `<div class="event-date">${this._escapeHtml(data.date)}</div>` : ''}
+                    ${dateAffichage ? `<div class="event-date-large">${this._escapeHtml(dateAffichage)}</div>` : ''}
                 </div>
             </div>
         `;

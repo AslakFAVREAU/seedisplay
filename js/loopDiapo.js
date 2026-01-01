@@ -300,6 +300,60 @@ function showMedia(mediaIndex) {
             }
             showMedia(currentMediaIndex + 1);
         }, delay);
+        
+    } else if (mediaType === 'planning') {
+        // Afficher le planning du jour (mode fullscreen intégré à la boucle)
+        __log('info', 'diapo', 'rendering planning in loop mode');
+        
+        try {
+            // Cacher tous les autres médias
+            hideAllMedia();
+            
+            // Utiliser le PlanningManager global
+            if (window.planningManager) {
+                // Initialiser si pas encore fait
+                if (!window.planningManager.container) {
+                    window.planningManager.init();
+                }
+                
+                // Configurer le style fullscreen
+                const container = window.planningManager.container;
+                if (container) {
+                    container.style.cssText = `
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        z-index: 500;
+                        background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
+                    `;
+                }
+                
+                // Afficher le planning (avec la durée)
+                window.planningManager.show(delay / 1000);
+            } else {
+                __log('error', 'diapo', 'planningManager not available');
+                // Fallback: passer au suivant
+                setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
+                return;
+            }
+            
+        } catch(e) {
+            __log('error', 'diapo', 'planning render error: ' + e.message);
+            setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
+            return;
+        }
+        
+        // Programmer le prochain après la durée du planning
+        __log('debug', 'diapo', 'scheduling next after planning in ' + (delay/1000) + 's');
+        loopTimeout = setTimeout(() => {
+            // Cacher le planning avant de passer au suivant
+            if (window.planningManager) {
+                window.planningManager.hide();
+            }
+            showMedia(currentMediaIndex + 1);
+        }, delay);
     }
 }
 

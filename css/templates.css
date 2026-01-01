@@ -43,20 +43,8 @@
     max-width: 80%;
 }
 
-.event-type-badge {
-    display: inline-block;
-    background: rgba(255, 255, 255, 0.2);
-    padding: 0.5em 1.5em;
-    border-radius: 2em;
-    font-size: 2vw;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin-bottom: 2vh;
-}
-
 .event-title {
-    font-size: 6vw;
+    font-size: 7vw;
     font-weight: 700;
     margin: 0 0 4vh 0;
     text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
@@ -66,28 +54,28 @@
 .event-details {
     font-size: 2.5vw;
     opacity: 0.95;
+    margin-bottom: 4vh;
 }
 
-.event-info-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 1.5vh 0;
-    gap: 1vw;
+.event-salle {
+    font-size: 3.5vw;
+    font-weight: 500;
+    margin-bottom: 2vh;
+    opacity: 0.95;
 }
 
-.event-icon {
+.event-horaires {
     font-size: 3vw;
+    font-weight: 400;
+    opacity: 0.9;
 }
 
-.event-text {
-    font-size: 2.5vw;
-}
-
-.event-date {
+.event-date-large {
     margin-top: 4vh;
-    font-size: 2vw;
-    opacity: 0.7;
+    font-size: 3.5vw;
+    font-weight: 600;
+    opacity: 0.95;
+    text-transform: capitalize;
 }
 
 /* ========================================
@@ -125,8 +113,8 @@
 
 .planning-du-jour {
     font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
-    background: linear-gradient(135deg, #1a1a2e, #16213e);
-    color: white;
+    background: linear-gradient(135deg, #f5f7fa, #e4e8ed);
+    color: #1a1a2e;
     height: 100vh;
     width: 100vw;
     padding: 2vw;
@@ -141,7 +129,7 @@
     align-items: center;
     margin-bottom: 2vh;
     padding-bottom: 1.5vh;
-    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 2px solid rgba(0, 0, 0, 0.1);
 }
 
 .planning-header-left h1 {
@@ -175,13 +163,14 @@
 
 .salle-column {
     flex: 1;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.8);
     border-radius: 1vw;
     padding: 1.5vw;
     border-top: 0.4vw solid var(--salle-color, #0866C6);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .salle-title {
@@ -212,7 +201,7 @@
    ======================================== */
 
 .planning-grid .event {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.03);
     border-radius: 0.6vw;
     padding: 1.2vw;
     margin-bottom: 1vh;
@@ -221,7 +210,7 @@
 }
 
 .planning-grid .event.en-cours {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(52, 152, 219, 0.15);
     animation: pulse 2s infinite;
     border-left-width: 0.4vw;
 }

@@ -9,7 +9,12 @@ var _log = (function(){
 
 /**
  * Initialise et affiche le planning selon la configuration
- * @param {Object} planningConfig - { actif, position, refreshInterval, ... }
+ * @param {Object} planningConfig - { actif, position, refreshInterval, duree, ... }
+ * 
+ * Modes de position:
+ * - fullscreen: Le planning est intégré dans la boucle comme un média (avec duree)
+ * - overlay-bottom/right: Le planning reste affiché par-dessus les diapos
+ * - split-left/right: Le planning est affiché à côté des diapos
  */
 function initPlanningDisplay(planningConfig) {
   if (!window.planningManager) {
@@ -19,6 +24,12 @@ function initPlanningDisplay(planningConfig) {
   
   _log('info','planning','initPlanningDisplay: position=' + planningConfig.position)
   
+  // En mode fullscreen, ne pas afficher en permanence - sera géré par la boucle
+  if (planningConfig.position === 'fullscreen') {
+    _log('info','planning','initPlanningDisplay: fullscreen mode - planning will be in diapo loop, not permanent overlay')
+    return
+  }
+  
   // Initialiser le manager si pas encore fait
   if (!window.planningManager.container) {
     window.planningManager.init()
@@ -27,20 +38,7 @@ function initPlanningDisplay(planningConfig) {
   // Configurer la position
   var container = window.planningManager.container
   if (container) {
-    switch (planningConfig.position) {
-      case 'fullscreen':
-        // Plein écran - remplace les diapos
-        container.style.cssText = `
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          z-index: 500;
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        `
-        break
-        
+    switch (planningConfig.position) {        
       case 'overlay-bottom':
         // Barre en bas sur les diapos
         container.style.cssText = `
@@ -107,16 +105,8 @@ function initPlanningDisplay(planningConfig) {
         break
         
       default:
-        // Par défaut : fullscreen
-        container.style.cssText = `
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          z-index: 500;
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        `
+        _log('warn','planning','initPlanningDisplay: unknown position, not showing overlay')
+        return
     }
   }
   
@@ -125,7 +115,7 @@ function initPlanningDisplay(planningConfig) {
     window.planningManager.refreshInterval = planningConfig.refreshInterval * 1000
   }
   
-  // Afficher le planning (0 = pas de timeout automatique, reste affiché)
+  // Afficher le planning en overlay permanent (0 = pas de timeout)
   window.planningManager.show(0)
 }
 
@@ -207,34 +197,71 @@ function listeDiapoV2(data) {
         var diapo = data.diapos[i]
         if (diapo && diapo.actif && diapo.isEventTemplate && diapo.evenement) {
           _log('info','diapo','listeDiapoV2: found event template diapo: ' + diapo.nom)
+          // Check if event is still valid (not finished)
+          var now = new Date()
+          var eventDate = diapo.evenement.date || ''
+          var eventHeureFin = diapo.evenement.heureFin || ''
           
-          // Build templateData from evenement
-          var templateData = {
-            type: 'evenement',
-            titre: diapo.evenement.nom || diapo.nom,
-            lieu: diapo.evenement.salle || '',
-            heureDebut: diapo.evenement.heureDebut || '',
-            heureFin: diapo.evenement.heureFin || '',
-            date: diapo.evenement.date || '',
-            description: diapo.evenement.description || '',
-            couleur: diapo.evenement.couleur || '#3498db'
+          // Build end datetime to check if event is over
+          var isEventOver = false
+          if (eventDate && eventHeureFin) {
+            try {
+              var endDateTime = new Date(eventDate + 'T' + eventHeureFin + ':00')
+              isEventOver = now > endDateTime
+              if (isEventOver) {
+                _log('info','diapo','listeDiapoV2: skipping finished event "' + diapo.nom + '" (ended at ' + eventHeureFin + ')')
+              }
+            } catch(e) {
+              _log('warn','diapo','listeDiapoV2: could not parse event end time')
+            }
           }
           
-          // Add to ArrayImg as template type (15 seconds default for events)
-          ArrayImg.push(['template', templateData, 15, diapo.id])
-          _log('info','diapo','listeDiapoV2: generated template for event "' + templateData.titre + '"')
+          if (!isEventOver) {
+            // Build templateData from evenement
+            var templateData = {
+              type: 'evenement',
+              titre: diapo.evenement.nom || diapo.nom,
+              lieu: diapo.evenement.salle || '',
+              heureDebut: diapo.evenement.heureDebut || '',
+              heureFin: diapo.evenement.heureFin || '',
+              date: diapo.evenement.date || '',
+              description: diapo.evenement.description || '',
+              couleur: diapo.evenement.couleur || '#3498db'
+            }
+            
+            // Add to ArrayImg as template type (15 seconds default for events)
+            ArrayImg.push(['template', templateData, 15, diapo.id])
+            _log('info','diapo','listeDiapoV2: generated template for event "' + templateData.titre + '"')
+          }
         }
       }
     }
     
-    // If we found event templates, return them
+    // If we found event templates, add planning to the loop if fullscreen mode
     if (ArrayImg.length > 0) {
       _log('info','diapo','listeDiapoV2: generated ' + ArrayImg.length + ' event templates from diapos')
+      
+      // In fullscreen mode, add planning as a media item in the loop
+      var planningConfig = window.planningConfig
+      if (planningConfig && planningConfig.actif && planningConfig.position === 'fullscreen') {
+        var planningDuree = planningConfig.duree || 20 // 20 seconds default for planning
+        ArrayImg.push(['planning', { type: 'planning' }, planningDuree, 'planning-item'])
+        _log('info','diapo','listeDiapoV2: added planning to loop with duree=' + planningDuree + 's')
+      }
+      
       return ArrayImg
     }
     
     _log('warn','diapo','listeDiapoV2: no timeline and no event templates found')
     return ArrayImg
+  }
+  
+  // In fullscreen mode with timeline, also add planning to the loop
+  var planningConfig = window.planningConfig
+  if (planningConfig && planningConfig.actif && planningConfig.position === 'fullscreen') {
+    // We'll add planning after processing the timeline
+    window._addPlanningToLoop = true
+    window._planningDuree = planningConfig.duree || 20
   }
 
   // Check if priority mode is active (from API field or by scanning timeline)
