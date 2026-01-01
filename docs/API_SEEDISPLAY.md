@@ -1123,7 +1123,120 @@ async function fetchDiapoData(ecranId) {
 
 ---
 
+## � Diapos Événements (SOEG → SEE)
+
+### Concept
+
+Les salles SOEG peuvent être liées à des écrans SEE. Lors de la création d'un événement, une diapo prioritaire peut être générée automatiquement pour s'afficher pendant la durée de l'événement.
+
+### Relation Salle ↔ Écran
+
+Une salle peut être associée à un ou plusieurs écrans. Cette association se fait dans l'administration des salles.
+
+### Diapo générée automatiquement
+
+Quand un utilisateur crée un événement avec l'option "Afficher sur l'écran de la salle", une diapo est créée avec :
+
+| Propriété | Valeur |
+|-----------|--------|
+| `TypeDiapo` | `prioritaire` |
+| `Priorite` | `8` (haute) |
+| `DateDebutDiapo` | Début de l'événement |
+| `DateFinDiapo` | Fin de l'événement |
+| `HeureDebut` | Heure début événement |
+| `HeureFin` | Heure fin événement |
+| `JoursSemaine` | Jour de l'événement |
+| `NomDiapo` | `[Event] Nom de l'événement` |
+
+### Modes d'affichage
+
+| Mode | Description |
+|------|-------------|
+| `auto` | Template généré dynamiquement (voir ci-dessous) |
+| `custom` | Média personnalisé uploadé par l'utilisateur |
+
+### Template Auto - Structure JSON
+
+Pour les diapos en mode `auto`, l'API peut renvoyer des données de template au lieu d'un média :
+
+```json
+{
+  "id": 456,
+  "NomDiapo": "[Event] Réunion Projet Alpha",
+  "TypeDiapo": "prioritaire",
+  "Priorite": 8,
+  "templateData": {
+    "type": "evenement",
+    "nom": "Réunion Projet Alpha",
+    "salle": "Salle Einstein",
+    "batiment": "Bâtiment A, 2ème étage",
+    "heureDebut": "14:00",
+    "heureFin": "16:00",
+    "date": "15/01/2026",
+    "responsable": "Jean Dupont",
+    "typeEvent": "Réunion",
+    "couleurSalle": "#0866C6"
+  },
+  "ligneMedia": []
+}
+```
+
+### Rendu côté seedisplay
+
+Quand `templateData` est présent et `ligneMedia` est vide, seedisplay doit générer dynamiquement l'affichage :
+
+```html
+<!-- Exemple de rendu HTML pour template événement -->
+<div class="event-template" style="background: linear-gradient(135deg, #0866C6, #1976D2);">
+  <h1 class="event-title">Réunion Projet Alpha</h1>
+  <div class="event-info">
+    <p><i class="icon-location"></i> Salle Einstein</p>
+    <p><i class="icon-clock"></i> 14:00 - 16:00</p>
+  </div>
+</div>
+```
+
+### CSS suggéré
+
+```css
+.event-template {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  color: white;
+  text-align: center;
+  padding: 5%;
+}
+
+.event-title {
+  font-size: 5vw;
+  font-weight: 700;
+  margin-bottom: 2vh;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+.event-info {
+  font-size: 2.5vw;
+  opacity: 0.95;
+}
+
+.event-info p {
+  margin: 1vh 0;
+}
+```
+
+---
+
 ## 🔄 Changelog API
+
+### v2.1 (Janvier 2026)
+- ✅ **Liaison Salle ↔ Écran** : Relation ManyToMany entre salles SOEG et écrans SEE
+- ✅ **Diapos Événements** : Génération automatique de diapos prioritaires pour les événements
+- ✅ **Template Data** : Nouveau champ `templateData` pour affichage dynamique sans média
+- ✅ **Mode affichage** : `auto` (template) ou `custom` (média personnalisé)
 
 ### v2.0 (Janvier 2026)
 - ✅ Ajout `TypeDiapo` (standard, programme, prioritaire)
@@ -1149,4 +1262,4 @@ En cas de problème avec l'API :
 
 ---
 
-*Documentation générée le 25 décembre 2025*
+*Documentation générée le 01 janvier 2026*
