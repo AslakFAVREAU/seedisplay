@@ -11,6 +11,8 @@
   <script src="./node_modules/popper.js/dist/umd/popper.min.js"></script>
   <script src="./node_modules/bootstrap/dist/js/bootstrap.min.js"></script>
   <link rel="stylesheet" href="app.scss" />
+  <!-- Templates & Planning CSS -->
+  <link rel="stylesheet" href="css/templates.css" />
   <!-- renderer no longer uses require(); scripts are loaded above via script tags -->
   <style>
     body {
@@ -246,6 +248,29 @@
       background-size: contain;
     }
 
+    /* Conteneur pour les templates dynamiques */
+    #templateContainer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      z-index: 5;
+    }
+
+    /* Conteneur pour le planning du jour */
+    #planningContainer {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      z-index: 500;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    }
+
     body {
       font-family: 'arial', sans-serif !important;
     }
@@ -475,7 +500,7 @@
         <label for="setupEnv">Environnement</label>
         <select id="setupEnv">
           <option value="prod">Production (soek.fr)</option>
-          <option value="local">Local (127.0.0.1:8000)</option>
+          <option value="local">Local (localhost:8000)</option>
         </select>
       </div>
       
@@ -592,7 +617,12 @@
     </div>
     <div id="divImg1"></div>
     <div id="divImg2"></div>
+    <!-- Conteneur pour les templates dynamiques (événements, planning) -->
+    <div id="templateContainer"></div>
   </div>
+
+  <!-- Conteneur pour le planning du jour (affiché selon config API) -->
+  <div id="planningContainer"></div>
 
   <div id="pagePsaume">
 
@@ -668,6 +698,10 @@
   <script src="js/DiapoManager.js"></script>
   <script src="js/MediaPlayer.js"></script>
   <script src="js/SleepManager.js"></script>
+  
+  <!-- API v2.2: Templates & Planning -->
+  <script src="js/TemplateRenderer.js"></script>
+  <script src="js/PlanningManager.js"></script>
 
   <script>
     // Gestion de l'écran de chargement
@@ -872,7 +906,7 @@
     try {
       // Construire l'URL de test selon l'environnement
       const baseUrl = env === 'local' 
-        ? 'http://127.0.0.1:8000' 
+        ? 'http://localhost:8000' 
         : 'https://soek.fr'
       const testUrl = `${baseUrl}/see/API/diapo/${idEcran}`
       
@@ -963,6 +997,11 @@
         getConfigSEE()
         configLoaded = true;
         checkLoadingComplete();
+        // Démarrer le timer de l'heure pour mise à jour permanente
+        if (typeof startClockTimer === 'function') {
+          startClockTimer();
+          __log('info','bootstrap','clock timer started')
+        }
       } else {
         __log('warn','bootstrap','legacy getConfigSEE not present')
         configLoaded = true;
@@ -999,7 +1038,7 @@
         if (typeof getMediaBaseUrl === 'function') {
           mediaBaseUrl = getMediaBaseUrl()
         } else if (window.configSEE && window.configSEE.env === 'local') {
-          mediaBaseUrl = 'http://127.0.0.1:8000/uploads/see/media/'
+          mediaBaseUrl = 'http://localhost:8000/uploads/see/media/'
         }
       } catch(e) {}
       urlMedia = mediaBaseUrl + nomMedia

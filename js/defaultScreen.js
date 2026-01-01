@@ -14,7 +14,7 @@ if (typeof window !== 'undefined') {
 function getMediaBaseUrl() {
     try {
         if (typeof window !== 'undefined' && window.configSEE && window.configSEE.env === 'local') {
-            return 'http://127.0.0.1:8000/uploads/see/media/'
+            return 'http://localhost:8000/uploads/see/media/'
         }
     } catch(e) {}
     return 'https://soek.fr/uploads/see/media/'

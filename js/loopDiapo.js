@@ -52,6 +52,10 @@ function hideAllMediaExcept(exceptId) {
                 if (el) el.style.display = 'none';
             }
         });
+        // Cacher aussi le template sauf si c'est lui qu'on veut afficher
+        if (exceptId !== 'templateContainer' && window.templateRenderer) {
+            window.templateRenderer.hide();
+        }
     } catch(e) {
         __log('error', 'diapo', 'hideAllMediaExcept error: ' + e.message);
     }
@@ -258,6 +262,42 @@ function showMedia(mediaIndex) {
         // Programmer le prochain (seulement pour les images)
         __log('debug', 'diapo', 'scheduling next in ' + (delay/1000) + 's');
         loopTimeout = setTimeout(() => {
+            showMedia(currentMediaIndex + 1);
+        }, delay);
+        
+    } else if (mediaType === 'template') {
+        // Afficher un template dynamique (événement, planning, etc.)
+        const templateData = media[1]; // templateData object from API
+        
+        __log('info', 'diapo', 'rendering template type=' + (templateData.type || 'unknown'));
+        
+        try {
+            // Cacher tous les autres médias
+            hideAllMedia();
+            
+            // Utiliser le TemplateRenderer global
+            if (window.templateRenderer) {
+                window.templateRenderer.show(templateData, delay / 1000);
+            } else {
+                __log('error', 'diapo', 'templateRenderer not available');
+                // Fallback: passer au suivant
+                setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
+                return;
+            }
+            
+        } catch(e) {
+            __log('error', 'diapo', 'template render error: ' + e.message);
+            setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
+            return;
+        }
+        
+        // Programmer le prochain après la durée du template
+        __log('debug', 'diapo', 'scheduling next template in ' + (delay/1000) + 's');
+        loopTimeout = setTimeout(() => {
+            // Cacher le template avant de passer au suivant
+            if (window.templateRenderer) {
+                window.templateRenderer.hide();
+            }
             showMedia(currentMediaIndex + 1);
         }, delay);
     }

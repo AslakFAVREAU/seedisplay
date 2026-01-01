@@ -83,7 +83,7 @@ function processConfig(configSEE) {
             urlAPI = 'https://soek.fr/see/API/diapo/' + idEcran
         }
         else if (env == 'local') {
-            urlAPI = 'http://127.0.0.1:8000/see/API/diapo/' + idEcran
+            urlAPI = 'http://localhost:8000/see/API/diapo/' + idEcran
         }
 
         if (weekDisplay == false) {

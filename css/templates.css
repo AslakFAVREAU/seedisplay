@@ -1,0 +1,414 @@
+/**
+ * templates.css - Styles pour les templates dynamiques et le planning
+ * 
+ * Inclut:
+ * - Templates événements (diapos SOEG)
+ * - Planning du jour (multi-salles)
+ */
+
+/* ========================================
+   CONTENEURS GLOBAUX
+   ======================================== */
+
+.template-container,
+.planning-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+    z-index: 500;
+    font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+}
+
+/* ========================================
+   TEMPLATE ÉVÉNEMENT
+   ======================================== */
+
+.event-template {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    color: white;
+    text-align: center;
+    padding: 5%;
+    box-sizing: border-box;
+}
+
+.event-content {
+    max-width: 80%;
+}
+
+.event-type-badge {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.5em 1.5em;
+    border-radius: 2em;
+    font-size: 2vw;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 2vh;
+}
+
+.event-title {
+    font-size: 6vw;
+    font-weight: 700;
+    margin: 0 0 4vh 0;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+    line-height: 1.2;
+}
+
+.event-details {
+    font-size: 2.5vw;
+    opacity: 0.95;
+}
+
+.event-info-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 1.5vh 0;
+    gap: 1vw;
+}
+
+.event-icon {
+    font-size: 3vw;
+}
+
+.event-text {
+    font-size: 2.5vw;
+}
+
+.event-date {
+    margin-top: 4vh;
+    font-size: 2vw;
+    opacity: 0.7;
+}
+
+/* ========================================
+   TEMPLATE DEFAULT
+   ======================================== */
+
+.default-template {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    color: white;
+    text-align: center;
+    padding: 5%;
+}
+
+.default-template h1 {
+    font-size: 5vw;
+    font-weight: 600;
+    margin-bottom: 2vh;
+}
+
+.default-template p {
+    font-size: 2.5vw;
+    opacity: 0.8;
+    max-width: 70%;
+}
+
+/* ========================================
+   PLANNING DU JOUR
+   ======================================== */
+
+.planning-du-jour {
+    font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    color: white;
+    height: 100vh;
+    width: 100vw;
+    padding: 2vw;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+
+.planning-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2vh;
+    padding-bottom: 1.5vh;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.planning-header-left h1 {
+    font-size: 3.5vw;
+    font-weight: 600;
+    margin: 0;
+}
+
+.planning-header-right {
+    display: flex;
+    align-items: center;
+    gap: 2vw;
+}
+
+.planning-clock {
+    font-size: 5vw;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.planning-grid {
+    display: flex;
+    gap: 1.5vw;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ========================================
+   COLONNE PAR SALLE
+   ======================================== */
+
+.salle-column {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 1vw;
+    padding: 1.5vw;
+    border-top: 0.4vw solid var(--salle-color, #0866C6);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.salle-title {
+    font-size: 2.2vw;
+    font-weight: 600;
+    margin: 0 0 0.5vh 0;
+    color: var(--salle-color, #0866C6);
+}
+
+.salle-batiment {
+    font-size: 1.2vw;
+    opacity: 0.6;
+    margin-bottom: 1.5vh;
+}
+
+.salle-events {
+    flex: 1;
+    overflow-y: auto;
+    scrollbar-width: none;
+}
+
+.salle-events::-webkit-scrollbar {
+    display: none;
+}
+
+/* ========================================
+   ÉVÉNEMENTS DANS LE PLANNING
+   ======================================== */
+
+.planning-grid .event {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 0.6vw;
+    padding: 1.2vw;
+    margin-bottom: 1vh;
+    border-left: 0.25vw solid var(--salle-color, #0866C6);
+    transition: all 0.3s ease;
+}
+
+.planning-grid .event.en-cours {
+    background: rgba(255, 255, 255, 0.15);
+    animation: pulse 2s infinite;
+    border-left-width: 0.4vw;
+}
+
+.planning-grid .event.a_venir {
+    opacity: 0.85;
+}
+
+.planning-grid .event.termine {
+    opacity: 0.4;
+}
+
+.event-time {
+    font-size: 1.6vw;
+    font-weight: 600;
+    margin-bottom: 0.3vh;
+}
+
+.event-name {
+    font-size: 1.8vw;
+    font-weight: 500;
+    margin-bottom: 0.3vh;
+    line-height: 1.3;
+}
+
+.event-responsable {
+    font-size: 1.2vw;
+    opacity: 0.7;
+}
+
+.event-type {
+    font-size: 1vw;
+    opacity: 0.6;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.5vh;
+}
+
+.event-countdown {
+    font-size: 1.3vw;
+    font-weight: 600;
+    color: #ffc107;
+    margin-top: 0.5vh;
+}
+
+.event-countdown.soon {
+    color: #ff9800;
+}
+
+.no-events,
+.no-events-global {
+    font-size: 1.5vw;
+    opacity: 0.5;
+    text-align: center;
+    padding: 2vh;
+}
+
+.no-events-global {
+    font-size: 3vw;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+/* ========================================
+   PLANNING SIMPLIFIÉ (dans boucle diapo)
+   ======================================== */
+
+.planning-template {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    color: white;
+    padding: 3%;
+    box-sizing: border-box;
+}
+
+.planning-template .planning-header {
+    text-align: center;
+    margin-bottom: 3vh;
+}
+
+.planning-template .planning-header h1 {
+    font-size: 4vw;
+    margin: 0;
+}
+
+.planning-template .planning-date {
+    font-size: 2vw;
+    opacity: 0.7;
+}
+
+.planning-template .planning-content {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5vw;
+    flex: 1;
+}
+
+.planning-template .planning-event {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 0.8vw;
+    padding: 1.5vw;
+    border-left: 0.3vw solid var(--salle-color, #0866C6);
+}
+
+.planning-event-time {
+    font-size: 2vw;
+    font-weight: 600;
+}
+
+.planning-event-name {
+    font-size: 2.2vw;
+    margin: 0.5vh 0;
+}
+
+.planning-event-salle {
+    font-size: 1.5vw;
+    opacity: 0.7;
+}
+
+/* ========================================
+   ANIMATIONS
+   ======================================== */
+
+@keyframes pulse {
+    0%, 100% { 
+        opacity: 1; 
+        transform: scale(1);
+    }
+    50% { 
+        opacity: 0.85; 
+        transform: scale(1.01);
+    }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.template-container,
+.planning-container {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* ========================================
+   RESPONSIVE - Écrans plus petits
+   ======================================== */
+
+@media (max-width: 1280px) {
+    .event-title {
+        font-size: 8vw;
+    }
+    
+    .planning-header-left h1 {
+        font-size: 4vw;
+    }
+    
+    .salle-title {
+        font-size: 2.5vw;
+    }
+}
+
+/* Mode portrait */
+@media (orientation: portrait) {
+    .planning-grid {
+        flex-direction: column;
+    }
+    
+    .salle-column {
+        max-height: 30vh;
+    }
+    
+    .event-title {
+        font-size: 10vw;
+    }
+    
+    .event-type-badge {
+        font-size: 3vw;
+    }
+    
+    .event-info-row {
+        flex-direction: column;
+        gap: 0.5vh;
+    }
+}

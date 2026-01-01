@@ -61,7 +61,7 @@ class ConfigManager {
   static get API_URLS() {
     return {
       prod: 'https://soek.fr',
-      local: 'http://127.0.0.1:8000'
+      local: 'http://localhost:8000'
     }
   }
 

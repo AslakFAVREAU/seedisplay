@@ -8,6 +8,128 @@ var _log = (function(){
 })()
 
 /**
+ * Initialise et affiche le planning selon la configuration
+ * @param {Object} planningConfig - { actif, position, refreshInterval, ... }
+ */
+function initPlanningDisplay(planningConfig) {
+  if (!window.planningManager) {
+    _log('warn','planning','initPlanningDisplay: planningManager not available')
+    return
+  }
+  
+  _log('info','planning','initPlanningDisplay: position=' + planningConfig.position)
+  
+  // Initialiser le manager si pas encore fait
+  if (!window.planningManager.container) {
+    window.planningManager.init()
+  }
+  
+  // Configurer la position
+  var container = window.planningManager.container
+  if (container) {
+    switch (planningConfig.position) {
+      case 'fullscreen':
+        // Plein écran - remplace les diapos
+        container.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          z-index: 500;
+          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        `
+        break
+        
+      case 'overlay-bottom':
+        // Barre en bas sur les diapos
+        container.style.cssText = `
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          width: 100%;
+          height: 200px;
+          z-index: 600;
+          background: rgba(0, 0, 0, 0.85);
+        `
+        break
+        
+      case 'overlay-right':
+        // Panneau à droite sur les diapos
+        container.style.cssText = `
+          position: fixed;
+          top: 0;
+          right: 0;
+          width: 400px;
+          height: 100%;
+          z-index: 600;
+          background: rgba(0, 0, 0, 0.85);
+        `
+        break
+        
+      case 'split-left':
+        // Planning à gauche, diapos à droite
+        container.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 35%;
+          height: 100%;
+          z-index: 500;
+          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        `
+        // Ajuster le container des médias
+        var mediaContainer = document.getElementById('mediaContainer')
+        if (mediaContainer) {
+          mediaContainer.style.width = '65%'
+          mediaContainer.style.left = '35%'
+        }
+        break
+        
+      case 'split-right':
+        // Diapos à gauche, planning à droite
+        container.style.cssText = `
+          position: fixed;
+          top: 0;
+          right: 0;
+          width: 35%;
+          height: 100%;
+          z-index: 500;
+          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        `
+        // Ajuster le container des médias
+        var mediaContainer = document.getElementById('mediaContainer')
+        if (mediaContainer) {
+          mediaContainer.style.width = '65%'
+          mediaContainer.style.right = '35%'
+          mediaContainer.style.left = '0'
+        }
+        break
+        
+      default:
+        // Par défaut : fullscreen
+        container.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          z-index: 500;
+          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        `
+    }
+  }
+  
+  // Configurer l'intervalle de refresh
+  if (planningConfig.refreshInterval) {
+    window.planningManager.refreshInterval = planningConfig.refreshInterval * 1000
+  }
+  
+  // Afficher le planning (0 = pas de timeout automatique, reste affiché)
+  window.planningManager.show(0)
+}
+
+/**
  * Parse API v2 format (new unified timeline format)
  * API v2 returns: { status, timeline: [...], diapos: [...], serverTime, ... }
  * status can be: "active" (show media), "sleep" (show sleep screen), "offline"
@@ -32,16 +154,46 @@ function listeDiapoV2(data) {
     if (data.imageHorsPlage) window.imageHorsPlage = data.imageHorsPlage
     if (data.prochainDemarrage) window.prochainDemarrage = data.prochainDemarrage
     
+    // Store programmation for client-side fallback
+    if (data.programmation) window.lastProgrammation = data.programmation
+    
     // Store screen config
     if (data.luminosite !== undefined) window.luminosite = data.luminosite
     if (data.refreshInterval) window.refreshInterval = parseInt(data.refreshInterval) || 300
     _log('debug','diapo','listeDiapoV2: stored apiV2Response, refreshInterval=' + window.refreshInterval)
+    
+    // Store and handle planning config
+    if (data.planning) {
+      window.planningConfig = data.planning
+      _log('info','diapo','listeDiapoV2: planning config received, actif=' + data.planning.actif)
+      
+      // Trigger planning display if actif
+      if (data.planning.actif && window.planningManager) {
+        _log('info','diapo','listeDiapoV2: planning is active, triggering PlanningManager')
+        // Defer to allow DOM to be ready
+        setTimeout(function() {
+          initPlanningDisplay(data.planning)
+        }, 100)
+      } else if (!data.planning.actif && window.planningManager) {
+        // Hide planning if it was previously visible
+        window.planningManager.hide()
+      }
+    }
   }
   
   // If status is sleep, return empty array (caller will handle sleep mode)
   if (data.status === 'sleep') {
     _log('info','diapo','listeDiapoV2: screen is in sleep mode, no media to display')
     return ArrayImg
+  }
+  
+  // CLIENT-SIDE FALLBACK: Si le serveur dit "active" mais on est hors plage, forcer le sleep
+  if (data.status === 'active' && data.programmation) {
+    if (typeof isWithinSchedule === 'function' && !isWithinSchedule(data.programmation)) {
+      _log('warn','diapo','listeDiapoV2: server says active but client detects we are outside schedule - forcing sleep')
+      window.screenStatus = 'sleep'
+      return ArrayImg
+    }
   }
 
   if (!data || !data.timeline || !Array.isArray(data.timeline)) {
@@ -65,6 +217,19 @@ function listeDiapoV2(data) {
     _log('info','diapo','listeDiapoV2: priority mode active - filtering to show only priority media')
   }
 
+  // Store diapos with templateData for template rendering
+  if (typeof window !== 'undefined') {
+    window.diaposWithTemplates = []
+    if (data.diapos && Array.isArray(data.diapos)) {
+      window.diaposWithTemplates = data.diapos.filter(function(d) {
+        return d && d.templateData && typeof d.templateData === 'object'
+      })
+      if (window.diaposWithTemplates.length > 0) {
+        _log('info','diapo','listeDiapoV2: found ' + window.diaposWithTemplates.length + ' diapos with templateData')
+      }
+    }
+  }
+
   // Parse timeline items - server already computed which medias are active
   for (var i = 0; i < data.timeline.length; i++) {
     try {
@@ -73,6 +238,15 @@ function listeDiapoV2(data) {
       
       // If priority diapo exists, skip non-priority items
       if (hasPrioritaire && item.diapoType !== 'prioritaire') {
+        continue
+      }
+      
+      // Check if this timeline item has templateData (dynamic template instead of media file)
+      if (item.templateData && typeof item.templateData === 'object') {
+        // Template type: store as special entry [type='template', templateData, duree]
+        var templateDuree = item.duree || 15  // default 15 seconds for templates
+        ArrayImg.push(['template', item.templateData, templateDuree, item.diapoId])
+        _log('info','diapo','listeDiapoV2: added template item type=' + item.templateData.type)
         continue
       }
       
@@ -196,6 +370,39 @@ const getDiapoJson = async () => {
     }
   }
 
+  // Timer de refresh automatique
+  var refreshTimer = null
+  
+  function startRefreshTimer() {
+    if (refreshTimer) {
+      clearInterval(refreshTimer)
+    }
+    
+    // Utiliser l'intervalle fourni par l'API (défaut: 300 secondes = 5 minutes)
+    var intervalMs = (window.refreshInterval || 300) * 1000
+    _log('info','diapo','startRefreshTimer: scheduling API refresh every ' + (intervalMs/1000) + 's')
+    
+    refreshTimer = setInterval(async function() {
+      _log('info','diapo','refreshTimer: refreshing diapo data from API...')
+      await requestJsonDiapo()
+      _log('info','diapo','refreshTimer: refresh complete, ArrayDiapo has ' + (ArrayDiapo ? ArrayDiapo.length : 0) + ' items')
+    }, intervalMs)
+  }
+  
+  function stopRefreshTimer() {
+    if (refreshTimer) {
+      clearInterval(refreshTimer)
+      refreshTimer = null
+      _log('info','diapo','stopRefreshTimer: timer stopped')
+    }
+  }
+  
+  // Exposer les fonctions globalement pour pouvoir les contrôler
+  if (typeof window !== 'undefined') {
+    window.startDiapoRefreshTimer = startRefreshTimer
+    window.stopDiapoRefreshTimer = stopRefreshTimer
+  }
+
   const requestJsonDiapo = async () => {
     const JsonDiapo = await getDiapoJson()
     if (JsonDiapo) {
@@ -224,6 +431,8 @@ const getDiapoJson = async () => {
       if (init == true){   
         _log('info','diapo','boucle init appelle defaultScreen')
         defaultScreen()
+        // Démarrer le timer de refresh automatique après l'init
+        startRefreshTimer()
       }
     }
   }

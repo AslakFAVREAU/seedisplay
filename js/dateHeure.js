@@ -88,3 +88,56 @@ function dateDayMonth(){
     return dateString
 }
 
+/**
+ * Démarre le timer de mise à jour de l'heure (toutes les secondes)
+ * Met à jour l'heure affichée en permanence, même pendant les diapos
+ */
+var clockInterval = null;
+function startClockTimer() {
+    if (clockInterval) clearInterval(clockInterval);
+    clockInterval = setInterval(function() {
+        try {
+            var heureEl = document.getElementById("heure");
+            if (heureEl) heureEl.innerHTML = heure();
+            // Mise à jour de la date toutes les minutes (on vérifie si minute = 0)
+            var now = new Date();
+            if (now.getSeconds() === 0) {
+                var dateEl = document.getElementById("date");
+                if (dateEl) dateEl.innerHTML = dateFr();
+            }
+        } catch(e) {}
+    }, 1000); // Toutes les secondes
+}
+
+/**
+ * Vérifie côté client si on est dans la plage horaire de fonctionnement
+ * Utilisé comme fallback si le serveur ne répond pas ou renvoie un mauvais status
+ * @param {Object} programmation - Objet programmation de l'API
+ * @returns {boolean} true si on devrait être actif, false si on devrait dormir
+ */
+function isWithinSchedule(programmation) {
+    if (!programmation || !programmation.active) return true; // Pas de programmation = toujours actif
+    
+    var now = new Date();
+    var currentDay = now.getDay(); // 0=dimanche, 1=lundi...7
+    if (currentDay === 0) currentDay = 7; // Convertir dimanche de 0 à 7
+    
+    var jours = programmation.joursFonctionnement || [];
+    if (jours.length > 0 && jours.indexOf(currentDay) === -1) {
+        return false; // Pas un jour de fonctionnement
+    }
+    
+    var heureDebut = programmation.heureDemarrage;
+    var heureFin = programmation.heureExtinction;
+    
+    if (!heureDebut || !heureFin) return true; // Pas d'horaires = toujours actif
+    
+    var currentHHMM = addZero(now.getHours()) + ":" + addZero(now.getMinutes());
+    
+    // Comparaison simple de strings HH:MM
+    if (currentHHMM >= heureDebut && currentHHMM < heureFin) {
+        return true; // Dans la plage
+    }
+    return false; // Hors plage
+}
+
