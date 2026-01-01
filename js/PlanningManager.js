@@ -74,15 +74,21 @@ class PlanningManager {
         this._log('info', 'planning', 'Fetching planning from ' + url);
 
         try {
-            // Utiliser ApiManager si disponible
-            if (window.apiManager) {
-                const response = await window.apiManager.fetchWithRetry(url, {
-                    timeout: 10000,
-                    retries: 2
-                });
-                if (response && response.data) {
-                    this.planningData = response.data;
-                    return response.data;
+            // Utiliser ApiManager si disponible (avec la bonne méthode)
+            if (window.apiManager && window.apiManager.fetchJson) {
+                const response = await window.apiManager.fetchJson(url);
+                if (response) {
+                    this.planningData = response;
+                    return response;
+                }
+            }
+            
+            // Fallback: utiliser window.api.fetchJson (preload)
+            if (window.api && window.api.fetchJson) {
+                const response = await window.api.fetchJson(url);
+                if (response) {
+                    this.planningData = response;
+                    return response;
                 }
             }
             

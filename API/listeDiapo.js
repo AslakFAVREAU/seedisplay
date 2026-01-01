@@ -162,19 +162,20 @@ function listeDiapoV2(data) {
     if (data.refreshInterval) window.refreshInterval = parseInt(data.refreshInterval) || 300
     _log('debug','diapo','listeDiapoV2: stored apiV2Response, refreshInterval=' + window.refreshInterval)
     
-    // Store and handle planning config
-    if (data.planning) {
-      window.planningConfig = data.planning
-      _log('info','diapo','listeDiapoV2: planning config received, actif=' + data.planning.actif)
+    // Store and handle planning config (can be in data.planning or data.config.planning)
+    var planningConfig = data.planning || (data.config && data.config.planning) || null
+    if (planningConfig) {
+      window.planningConfig = planningConfig
+      _log('info','diapo','listeDiapoV2: planning config received, actif=' + planningConfig.actif)
       
       // Trigger planning display if actif
-      if (data.planning.actif && window.planningManager) {
+      if (planningConfig.actif && window.planningManager) {
         _log('info','diapo','listeDiapoV2: planning is active, triggering PlanningManager')
         // Defer to allow DOM to be ready
         setTimeout(function() {
-          initPlanningDisplay(data.planning)
+          initPlanningDisplay(planningConfig)
         }, 100)
-      } else if (!data.planning.actif && window.planningManager) {
+      } else if (!planningConfig.actif && window.planningManager) {
         // Hide planning if it was previously visible
         window.planningManager.hide()
       }
@@ -196,8 +197,43 @@ function listeDiapoV2(data) {
     }
   }
 
-  if (!data || !data.timeline || !Array.isArray(data.timeline)) {
-    _log('warn','diapo','listeDiapoV2: no timeline in response')
+  // If timeline is empty or missing, try to build it from diapos with isEventTemplate
+  if (!data.timeline || !Array.isArray(data.timeline) || data.timeline.length === 0) {
+    _log('info','diapo','listeDiapoV2: timeline empty, checking for event templates in diapos')
+    
+    // Look for active diapos with isEventTemplate and evenement data
+    if (data.diapos && Array.isArray(data.diapos)) {
+      for (var i = 0; i < data.diapos.length; i++) {
+        var diapo = data.diapos[i]
+        if (diapo && diapo.actif && diapo.isEventTemplate && diapo.evenement) {
+          _log('info','diapo','listeDiapoV2: found event template diapo: ' + diapo.nom)
+          
+          // Build templateData from evenement
+          var templateData = {
+            type: 'evenement',
+            titre: diapo.evenement.nom || diapo.nom,
+            lieu: diapo.evenement.salle || '',
+            heureDebut: diapo.evenement.heureDebut || '',
+            heureFin: diapo.evenement.heureFin || '',
+            date: diapo.evenement.date || '',
+            description: diapo.evenement.description || '',
+            couleur: diapo.evenement.couleur || '#3498db'
+          }
+          
+          // Add to ArrayImg as template type (15 seconds default for events)
+          ArrayImg.push(['template', templateData, 15, diapo.id])
+          _log('info','diapo','listeDiapoV2: generated template for event "' + templateData.titre + '"')
+        }
+      }
+    }
+    
+    // If we found event templates, return them
+    if (ArrayImg.length > 0) {
+      _log('info','diapo','listeDiapoV2: generated ' + ArrayImg.length + ' event templates from diapos')
+      return ArrayImg
+    }
+    
+    _log('warn','diapo','listeDiapoV2: no timeline and no event templates found')
     return ArrayImg
   }
 
