@@ -244,13 +244,50 @@ function showSleepScreen() {
     sleepScreen.style.display = "flex"
     __log('info','sleep','sleep screen displayed')
     
-    // Schedule next API check to detect wakeup
-    // Use shorter interval during sleep for responsive wakeup
+    // Schedule wakeup based on prochainDemarrage time
     if (typeof window !== 'undefined') {
-        window.sleepCheckTimer = setTimeout(function() {
-            __log('debug','sleep','checking for wakeup...')
+        // Clear any existing timers
+        if (window.sleepCheckTimer) {
+            clearTimeout(window.sleepCheckTimer)
+        }
+        if (window.sleepRefreshTimer) {
+            clearInterval(window.sleepRefreshTimer)
+        }
+        
+        // 1. Schedule exact wakeup call if prochainDemarrage is provided
+        if (prochainDemarrage) {
+            var parts = prochainDemarrage.split(':')
+            if (parts.length >= 2) {
+                var wakeHour = parseInt(parts[0], 10)
+                var wakeMin = parseInt(parts[1], 10)
+                
+                var now = new Date()
+                var wakeTime = new Date()
+                wakeTime.setHours(wakeHour, wakeMin, 0, 0)
+                
+                // If wake time is earlier today, it's tomorrow
+                if (wakeTime <= now) {
+                    wakeTime.setDate(wakeTime.getDate() + 1)
+                }
+                
+                var msUntilWake = wakeTime.getTime() - now.getTime()
+                var minUntilWake = Math.round(msUntilWake / 60000)
+                
+                __log('info','sleep','wakeup scheduled at ' + prochainDemarrage + ' (in ' + minUntilWake + ' min)')
+                
+                // Schedule API call at wakeup time (+ small buffer)
+                window.sleepCheckTimer = setTimeout(function() {
+                    __log('info','sleep','wakeup time reached, calling API...')
+                    requestJsonDiapo()
+                }, msUntilWake + 5000) // +5s buffer
+            }
+        }
+        
+        // 2. Also refresh every 5 minutes to detect any config changes
+        window.sleepRefreshTimer = setInterval(function() {
+            __log('debug','sleep','periodic refresh during sleep...')
             requestJsonDiapo()
-        }, 60000) // Check every minute
+        }, 300000) // 5 minutes
     }
 }
 
@@ -265,10 +302,14 @@ function hideSleepScreen() {
         sleepScreen.style.display = "none"
     }
     
-    // Clear sleep check timer
+    // Clear sleep timers
     if (window.sleepCheckTimer) {
         clearTimeout(window.sleepCheckTimer)
         window.sleepCheckTimer = null
+    }
+    if (window.sleepRefreshTimer) {
+        clearInterval(window.sleepRefreshTimer)
+        window.sleepRefreshTimer = null
     }
 }
 
