@@ -77,14 +77,22 @@ class ApiManager {
    */
   async getDiapoWithErrorHandling(urlAPI) {
     _log('info', 'api-manager', `getDiapoWithErrorHandling: ${urlAPI}`);
+    const startTime = Date.now();
 
     if (!this.errorHandler) {
       _log('warn', 'api-manager', 'ErrorHandler not initialized, falling back to direct call');
       try {
         const res = await this._axiosGetWithTimeout(urlAPI, this.apis.diapo.timeout);
+        // Stats tracking
+        if (window.statsManager) {
+          window.statsManager.logApiRequest(urlAPI, true, Date.now() - startTime);
+        }
         return res;
       } catch (error) {
         _log('error', 'api-manager', 'Direct diapo call failed', error.message);
+        if (window.statsManager) {
+          window.statsManager.logApiRequest(urlAPI, false, Date.now() - startTime);
+        }
         throw error;
       }
     }
@@ -104,10 +112,18 @@ class ApiManager {
       );
 
       _log('info', 'api-manager', 'getDiapoWithErrorHandling: success', result.status);
+      // Stats tracking
+      if (window.statsManager) {
+        window.statsManager.logApiRequest(urlAPI, true, Date.now() - startTime);
+      }
       return result;
 
     } catch (error) {
       _log('error', 'api-manager', 'getDiapoWithErrorHandling: all retries failed', error.message);
+      // Stats tracking
+      if (window.statsManager) {
+        window.statsManager.logApiRequest(urlAPI, false, Date.now() - startTime);
+      }
       
       // Tenter fallback basique
       try {

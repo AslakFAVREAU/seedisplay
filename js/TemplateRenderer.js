@@ -137,8 +137,43 @@ class TemplateRenderer {
             } catch(e) {}
         }
 
+        // Support vidéo/image de fond
+        const backgroundType = data.backgroundType || 'gradient';
+        const backgroundVideo = data.backgroundVideo || null;
+        const backgroundImage = data.backgroundImage || null;
+        
+        let backgroundStyle = `background: linear-gradient(135deg, ${couleur}, ${gradientEnd});`;
+        let videoHtml = '';
+        
+        if (backgroundType === 'video' && backgroundVideo) {
+            // Vidéo de fond
+            const videoUrl = backgroundVideo.startsWith('http') 
+                ? backgroundVideo 
+                : (window.apiV2Response?.mediaBaseUrl || 'https://soek.fr/uploads/see/media/') + backgroundVideo;
+            
+            backgroundStyle = 'background: transparent;';
+            videoHtml = `
+                <video class="event-background-video" autoplay muted loop playsinline>
+                    <source src="${this._escapeHtml(videoUrl)}" type="video/mp4">
+                </video>
+                <div class="event-video-overlay" style="background: linear-gradient(135deg, ${couleur}80, ${gradientEnd}80);"></div>
+            `;
+        } else if (backgroundType === 'image' && backgroundImage) {
+            // Image de fond
+            const imageUrl = backgroundImage.startsWith('http') 
+                ? backgroundImage 
+                : (window.apiV2Response?.mediaBaseUrl || 'https://soek.fr/uploads/see/media/') + backgroundImage;
+            
+            backgroundStyle = `
+                background-image: url('${this._escapeHtml(imageUrl)}');
+                background-size: cover;
+                background-position: center;
+            `;
+        }
+
         return `
-            <div class="event-template" style="background: linear-gradient(135deg, ${couleur}, ${gradientEnd});">
+            <div class="event-template" style="${backgroundStyle}">
+                ${videoHtml}
                 <div class="event-content">
                     <h1 class="event-title">${this._escapeHtml(data.nom || data.titre || 'Événement')}</h1>
                     

@@ -118,6 +118,12 @@ function showMedia(mediaIndex) {
     
     __log('info', 'diapo', 'showing #' + mediaIndex + '/' + mediaLoop.length + ' type=' + mediaType + ' file=' + mediaFile + ' delay=' + (delay/1000) + 's');
     
+    // Stats: Track media display
+    if (window.statsManager) {
+        const mediaId = media[3] || mediaFile; // Use diapoId if available, else filename
+        window.statsManager.startMedia(mediaId, mediaFile, mediaType);
+    }
+    
     if (mediaType === 'video') {
         // Utiliser player (1 ou 2)
         const videoId = 'video' + player;
