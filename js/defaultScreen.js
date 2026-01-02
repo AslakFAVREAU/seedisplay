@@ -21,6 +21,35 @@ function getMediaBaseUrl() {
 }
 
 /**
+ * Apply background image to pageDefault from API
+ * Called when fondEcran is received from API
+ * @param {string} fondEcran - filename or path of background image
+ */
+function applyPageDefaultBackground(fondEcran) {
+    __log('info','defaultScreen','applyPageDefaultBackground: ' + fondEcran)
+    try {
+        var pageDefault = document.getElementById('pageDefault')
+        if (!pageDefault) {
+            __log('warn','defaultScreen','pageDefault element not found')
+            return
+        }
+        
+        var baseUrl = getMediaBaseUrl()
+        var imageUrl = baseUrl + encodeURIComponent(fondEcran)
+        
+        pageDefault.style.backgroundImage = 'url("' + imageUrl + '")'
+        __log('info','defaultScreen','Background applied: ' + imageUrl)
+    } catch(e) {
+        __log('error','defaultScreen','Error applying background: ' + e.message)
+    }
+}
+
+// Expose globally for listeDiapo.js
+if (typeof window !== 'undefined') {
+    window.applyPageDefaultBackground = applyPageDefaultBackground
+}
+
+/**
  * Show sleep screen when API returns status "sleep"
  * Uses typeHorsPlage to determine display type:
  * - "noir" (default): black screen

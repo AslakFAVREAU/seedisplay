@@ -294,15 +294,20 @@ contextBridge.exposeInMainWorld('logger', {
 // Expose a minimal axios-like API for renderer code that expects axios
 contextBridge.exposeInMainWorld('axios', {
   get: async (url, opts) => {
+    console.log('[preload-axios] get called, hasNode=', hasNode, 'axios=', !!axios, 'url=', url)
     if (hasNode && axios) {
       const res = await axios.get(url, opts)
+      console.log('[preload-axios] native axios response, res.data?=', !!res.data)
       return res
     }
     // Fallback to ipc fetch: normalize to axios-like response { data }
     try {
+      console.log('[preload-axios] using IPC fallback')
       const result = await ipcRenderer.invoke('preload-fetchJson', url, opts || {})
+      console.log('[preload-axios] IPC result?=', !!result)
       return { data: result }
     } catch (e) {
+      console.log('[preload-axios] IPC error:', e.message)
       return { data: null }
     }
   },

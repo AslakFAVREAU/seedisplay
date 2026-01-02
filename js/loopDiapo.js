@@ -88,8 +88,15 @@ function showMedia(mediaIndex) {
         return;
     }
     
-    // Wrap-around - afficher pageDefault entre chaque cycle
+    // Wrap-around - afficher pageDefault entre chaque cycle (sauf si masquerPageDefault)
     if (mediaIndex >= mediaLoop.length) {
+        // Si masquerPageDefault est activé, boucler directement sans pause
+        if (window.masquerPageDefault) {
+            __log('info', 'diapo', 'end of loop, masquerPageDefault=true, looping immediately');
+            showMedia(0);
+            return;
+        }
+        
         __log('info', 'diapo', 'end of loop, showing pageDefault then restarting');
         
         // Cacher tous les médias

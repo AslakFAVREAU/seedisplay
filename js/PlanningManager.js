@@ -353,19 +353,17 @@ class PlanningManager {
         // Déterminer le mode d'affichage
         const displayMode = totalSalles > 6 ? 'carousel' : (totalSalles > 4 ? 'compact' : 'normal');
         
-        // Pagination info
-        const paginationHtml = this.totalPages > 1 ? `
-            <div class="planning-pagination">
-                <span class="page-indicator">${this.currentPage + 1} / ${this.totalPages}</span>
-            </div>
-        ` : '';
-
+        // Vérifier le mode de position (footer, sidebar, fullscreen)
+        const planningConfig = window.planningConfig || {};
+        const isFooterMode = planningConfig.position === 'footer' || planningConfig.position === 'overlay-bottom';
+        const isSidebarMode = planningConfig.position === 'sidebar' || planningConfig.position === 'split-right' || planningConfig.position === 'split-left';
+        const positionClass = isFooterMode ? 'footer-mode' : (isSidebarMode ? 'sidebar-mode' : '');
+        
         return `
-            <div class="planning-du-jour ${displayMode}-mode" data-total-salles="${totalSalles}">
+            <div class="planning-du-jour ${displayMode}-mode ${positionClass}" data-total-salles="${totalSalles}">
                 <header class="planning-header">
                     <div class="planning-header-left">
                         <h1>Planning du ${this._escapeHtml(data.jourSemaine || '')} ${this._escapeHtml(data.dateFormatee || '')}</h1>
-                        ${paginationHtml}
                     </div>
                     <div class="planning-header-right">
                         <time id="planningClock" class="planning-clock">${currentTime}</time>
@@ -421,6 +419,13 @@ class PlanningManager {
         const maxEvents = sallesOnPage > 3 ? 3 : 5;
         const isCompact = sallesOnPage > 3;
         
+        // Filtrer les événements non terminés (hors eventEnCours)
+        const eventsNonTermines = (salleData.evenements || [])
+            .filter(e => e.statut !== 'termine' && e.id !== salleData.eventEnCours?.id);
+        
+        // Aucun événement à afficher si pas d'eventEnCours ET pas d'événements non terminés
+        const hasNoEvents = !salleData.eventEnCours && eventsNonTermines.length === 0;
+        
         return `
             <div class="salle-column ${isCompact ? 'compact' : ''}" style="--salle-color: ${salleData.salle?.couleur || '#0866C6'}">
                 <h2 class="salle-title">${this._escapeHtml(salleData.salle?.nom || 'Salle')}</h2>
@@ -428,14 +433,11 @@ class PlanningManager {
                 
                 <div class="salle-events">
                     ${salleData.eventEnCours ? this.renderEvent(salleData.eventEnCours, true, isCompact) : ''}
-                    ${(salleData.evenements || [])
-                        .filter(e => e.statut !== 'termine' && e.id !== salleData.eventEnCours?.id)
+                    ${eventsNonTermines
                         .slice(0, maxEvents)
                         .map(evt => this.renderEvent(evt, false, isCompact))
                         .join('')}
-                    ${(!salleData.evenements || salleData.evenements.length === 0) && !salleData.eventEnCours 
-                        ? '<div class="no-events">Aucun événement</div>' 
-                        : ''}
+                    ${hasNoEvents ? '<div class="no-events">Aucun événement à venir</div>' : ''}
                 </div>
             </div>
         `;
@@ -517,7 +519,6 @@ class PlanningManager {
             <div class="event ${enCours ? 'en-cours' : ''} ${evt.statut || ''}">
                 <div class="event-time">${this._escapeHtml(evt.heureDebut || '')} - ${this._escapeHtml(evt.heureFin || '')}</div>
                 <div class="event-name">${this._escapeHtml(evt.nom || '')}</div>
-                ${evt.typeEvent ? `<div class="event-type">${this._escapeHtml(evt.typeEvent)}</div>` : ''}
                 ${countdownHtml}
             </div>
         `;

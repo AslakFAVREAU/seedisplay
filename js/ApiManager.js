@@ -60,10 +60,20 @@ class ApiManager {
       setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs)
     );
 
+    // Construire les headers avec token API si disponible
+    const headers = {};
+    try {
+      if (typeof window !== 'undefined' && window.configSEE && window.configSEE.apiToken) {
+        headers['X-API-Token'] = window.configSEE.apiToken;
+      }
+    } catch (e) {
+      // Ignore si window ou configSEE non disponible
+    }
+
     try {
       // Race axios contre timeout
       const response = await Promise.race([
-        axios.get(url),
+        axios.get(url, { headers }),
         timeoutPromise
       ]);
       return response;

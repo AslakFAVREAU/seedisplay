@@ -361,17 +361,23 @@ ipcMain.handle('preload-readBundledFile', async (evt, relative) => {
 })
 
 ipcMain.handle('preload-fetchJson', async (evt, url, opts) => {
+  console.log('[main] preload-fetchJson: url=', url, 'opts=', JSON.stringify(opts))
   try {
     // Support simple GET as well as a generic request via opts.method/data
     if (!opts || !opts.method) {
       const res = await axios.get(url, opts || {})
+      console.log('[main] preload-fetchJson: success, data?=', !!res.data)
       return res.data
     }
     // axios.request supports method, url, data, headers, etc.
     const req = Object.assign({}, opts, { url })
     const res = await axios.request(req)
+    console.log('[main] preload-fetchJson: success (request), data?=', !!res.data)
     return res.data
-  } catch(e) { return null }
+  } catch(e) {
+    console.log('[main] preload-fetchJson: error:', e.message)
+    return null
+  }
 })
 
 ipcMain.on('preload-getEnv', (evt, name) => {

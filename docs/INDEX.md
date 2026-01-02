@@ -1,6 +1,6 @@
 # 📚 Documentation Index - SEE Display
 
-Last Updated: October 18, 2025
+Last Updated: January 2, 2026
 
 ## 🚀 Quick Start
 - **[QUICKSTART.md](./QUICKSTART.md)** - Démarrage rapide (dev & debug)
@@ -31,17 +31,13 @@ Last Updated: October 18, 2025
 - **[setup/RASPBERRY_PI_5_SETUP.md](./setup/RASPBERRY_PI_5_SETUP.md)** - Complete Raspberry Pi 5 installation guide
 - **[setup/HARDWARE_COMPATIBILITY.md](./setup/HARDWARE_COMPATIBILITY.md)** - Hardware compatibility matrix & benchmarks
 
-### 📚 Project Phases ([phases/](./phases/))
-- **[phases/PHASE1_COMPLETE.md](./phases/PHASE1_COMPLETE.md)** - Phase 1: Architecture modernization
-- **[phases/PHASE2_COMPLETE.md](./phases/PHASE2_COMPLETE.md)** - Phase 2: Integration & resilience
-- **[phases/PHASE3_UI_RESPONSIVE.md](./phases/PHASE3_UI_RESPONSIVE.md)** - Phase 3: UI/UX & responsive design
-
 ### 📦 Archive ([archived/](./archived/))
 Historical development documentation and session notes. See [archived/](./archived/) for:
 - `AUTO_UPDATE*.md` - Auto-update feature docs
-- `PHASE*.md` - Session notes from development phases
+- `PHASE*.md` - Phase completion reports & session notes
 - `REFACTOR_*.md` - Refactoring notes
-- `*_WEEK*.md` - Weekly progress reports
+- `COMPLETION_REPORT_*.md` - TODO completion reports
+- `DEBUG_MODE_SLEEP.md` - Sleep mode debugging
 
 ## 🎯 Current Status
 
@@ -49,11 +45,12 @@ Historical development documentation and session notes. See [archived/](./archiv
 ✅ v1.9.3 with custom branding (NSIS sidebar + taskbar icon)  
 ✅ 132/132 tests passing  
 ✅ 0 security vulnerabilities  
-✅ GitHub Issues created for next features (#1, #2)  
-✅ Repository cleanup & organization (Oct 18, 2025)  
+✅ API Token security (client + server)  
+✅ Planning display with carousel  
+✅ Repository cleanup & organization (Jan 2, 2026)  
 
 ### In Progress
-� TODO #5: Multi-ratio display support (Issue #1)  
+🔄 TODO #5: Multi-ratio display support (Issue #1)  
 🔄 TODO #6: CEC energy management (Issue #2)  
 
 ## 📊 Key Modules

@@ -39,17 +39,44 @@ function initPlanningDisplay(planningConfig) {
   var container = window.planningManager.container
   if (container) {
     switch (planningConfig.position) {        
+      case 'footer':
       case 'overlay-bottom':
-        // Barre en bas sur les diapos
-        container.style.cssText = `
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          width: 100%;
-          height: 200px;
-          z-index: 600;
-          background: rgba(0, 0, 0, 0.85);
-        `
+        // Barre en bas sur les diapos - forcer avec setAttribute pour écraser le CSS
+        container.setAttribute('style', `
+          position: fixed !important;
+          bottom: 0 !important;
+          top: auto !important;
+          left: 0 !important;
+          width: 100% !important;
+          height: 200px !important;
+          z-index: 600 !important;
+          background: linear-gradient(135deg, #f5f7fa, #e4e8ed) !important;
+          display: block !important;
+        `)
+        // Ajuster le container des médias pour ne pas être caché par le planning
+        var mediaContainer = document.getElementById('mediaContainer')
+        if (mediaContainer) {
+          mediaContainer.style.setProperty('height', 'calc(100vh - 200px)', 'important')
+          mediaContainer.style.setProperty('max-height', 'calc(100vh - 200px)', 'important')
+          mediaContainer.style.setProperty('overflow', 'hidden', 'important')
+        }
+        // Ajuster aussi les divImg pour le resize
+        var divImg1 = document.getElementById('divImg1')
+        var divImg2 = document.getElementById('divImg2')
+        if (divImg1) {
+          divImg1.style.setProperty('height', 'calc(100vh - 200px)', 'important')
+          divImg1.style.setProperty('max-height', 'calc(100vh - 200px)', 'important')
+        }
+        if (divImg2) {
+          divImg2.style.setProperty('height', 'calc(100vh - 200px)', 'important')
+          divImg2.style.setProperty('max-height', 'calc(100vh - 200px)', 'important')
+        }
+        // Ajuster pageDefault aussi
+        var pageDefault = document.getElementById('pageDefault')
+        if (pageDefault) {
+          pageDefault.style.setProperty('height', 'calc(100vh - 200px)', 'important')
+          pageDefault.style.setProperty('max-height', 'calc(100vh - 200px)', 'important')
+        }
         break
         
       case 'overlay-right':
@@ -64,7 +91,7 @@ function initPlanningDisplay(planningConfig) {
           background: rgba(0, 0, 0, 0.85);
         `
         break
-        
+      
       case 'split-left':
         // Planning à gauche, diapos à droite
         container.style.cssText = `
@@ -83,24 +110,49 @@ function initPlanningDisplay(planningConfig) {
           mediaContainer.style.left = '35%'
         }
         break
-        
+      
+      case 'sidebar':
       case 'split-right':
         // Diapos à gauche, planning à droite
-        container.style.cssText = `
-          position: fixed;
-          top: 0;
-          right: 0;
-          width: 35%;
-          height: 100%;
-          z-index: 500;
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        `
-        // Ajuster le container des médias
+        container.setAttribute('style', `
+          position: fixed !important;
+          top: 0 !important;
+          right: 0 !important;
+          left: auto !important;
+          width: 35% !important;
+          height: 100% !important;
+          z-index: 500 !important;
+          background: linear-gradient(135deg, #f5f7fa, #e4e8ed) !important;
+          display: block !important;
+        `)
+        // Ajuster le container des médias pour occuper 65% à gauche
         var mediaContainer = document.getElementById('mediaContainer')
         if (mediaContainer) {
-          mediaContainer.style.width = '65%'
-          mediaContainer.style.right = '35%'
-          mediaContainer.style.left = '0'
+          mediaContainer.style.setProperty('width', '65%', 'important')
+          mediaContainer.style.setProperty('left', '0', 'important')
+          mediaContainer.style.setProperty('right', 'auto', 'important')
+          mediaContainer.style.setProperty('overflow', 'hidden', 'important')
+        }
+        // Ajuster les divImg pour couvrir tout l'espace disponible
+        var divImg1 = document.getElementById('divImg1')
+        var divImg2 = document.getElementById('divImg2')
+        if (divImg1) {
+          divImg1.style.setProperty('width', '100%', 'important')
+          divImg1.style.setProperty('height', '100%', 'important')
+          divImg1.style.setProperty('background-size', 'contain', 'important')
+          divImg1.style.setProperty('background-position', 'center', 'important')
+        }
+        if (divImg2) {
+          divImg2.style.setProperty('width', '100%', 'important')
+          divImg2.style.setProperty('height', '100%', 'important')
+          divImg2.style.setProperty('background-size', 'contain', 'important')
+          divImg2.style.setProperty('background-position', 'center', 'important')
+        }
+        // Ajuster pageDefault aussi
+        var pageDefault = document.getElementById('pageDefault')
+        if (pageDefault) {
+          pageDefault.style.setProperty('width', '65%', 'important')
+          pageDefault.style.setProperty('overflow', 'hidden', 'important')
         }
         break
         
@@ -143,6 +195,18 @@ function listeDiapoV2(data) {
     if (data.typeHorsPlage) window.typeHorsPlage = data.typeHorsPlage
     if (data.imageHorsPlage) window.imageHorsPlage = data.imageHorsPlage
     if (data.prochainDemarrage) window.prochainDemarrage = data.prochainDemarrage
+    
+    // Store background image for pageDefault (fond d'écran via API)
+    if (data.fondEcran) {
+      window.fondEcran = data.fondEcran
+      applyPageDefaultBackground(data.fondEcran)
+    }
+    
+    // Store hide default page setting (boucle continue sans pageDefault)
+    if (data.masquerPageDefault !== undefined) {
+      window.masquerPageDefault = data.masquerPageDefault
+      _log('info','diapo','listeDiapoV2: masquerPageDefault=' + data.masquerPageDefault)
+    }
     
     // Store programmation for client-side fallback
     if (data.programmation) window.lastProgrammation = data.programmation
@@ -478,6 +542,7 @@ const getDiapoJson = async () => {
 
   const requestJsonDiapo = async () => {
     const JsonDiapo = await getDiapoJson()
+    _log('debug','diapo','requestJsonDiapo: JsonDiapo=', JsonDiapo ? 'object' : 'null', 'JsonDiapo.data=', JsonDiapo && JsonDiapo.data ? 'present' : 'missing')
     if (JsonDiapo) {
       // Sauvegarder dans le cache pour le mode offline
       if (typeof window !== 'undefined' && window.apiCache && JsonDiapo.data) {
