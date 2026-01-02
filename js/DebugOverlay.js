@@ -161,6 +161,14 @@ class DebugOverlay {
                     <div class="debug-value" id="debug-api-status">-</div>
                 </div>
                 <div class="debug-section">
+                    <div class="debug-label">Mode Écran</div>
+                    <div class="debug-value" id="debug-screen-mode">-</div>
+                </div>
+                <div class="debug-section">
+                    <div class="debug-label">Prochain Réveil</div>
+                    <div class="debug-value" id="debug-next-wakeup">-</div>
+                </div>
+                <div class="debug-section">
                     <div class="debug-label">Prochain Refresh</div>
                     <div class="debug-value" id="debug-next-refresh">-</div>
                 </div>
@@ -171,6 +179,10 @@ class DebugOverlay {
                 <div class="debug-section">
                     <div class="debug-label">Médias</div>
                     <div class="debug-value" id="debug-media-count">-</div>
+                </div>
+                <div class="debug-section">
+                    <div class="debug-label">Planning</div>
+                    <div class="debug-value" id="debug-planning">-</div>
                 </div>
                 <div class="debug-section">
                     <div class="debug-label">Mode Nuit</div>
@@ -568,12 +580,30 @@ class DebugOverlay {
             this._setValue('debug-api-status', '-');
         }
         
-        // Prochain refresh
-        if (window._refreshTimer) {
-            const remaining = Math.max(0, window._nextRefreshTime - Date.now());
-            this._setValue('debug-next-refresh', this._formatDuration(Math.floor(remaining / 1000)));
+        // Mode Écran (sleep ou active)
+        const screenStatus = window.screenStatus || apiResponse.status || 'active';
+        if (screenStatus === 'sleep') {
+            this._setValue('debug-screen-mode', '😴 Sleep', 'warning');
         } else {
-            this._setValue('debug-next-refresh', '-');
+            this._setValue('debug-screen-mode', '✅ Actif', 'ok');
+        }
+        
+        // Prochain réveil (si en mode sleep)
+        if (screenStatus === 'sleep' && window.prochainDemarrage) {
+            this._setValue('debug-next-wakeup', window.prochainDemarrage, 'warning');
+        } else if (apiResponse.prochainDemarrage) {
+            this._setValue('debug-next-wakeup', apiResponse.prochainDemarrage);
+        } else {
+            this._setValue('debug-next-wakeup', '-');
+        }
+        
+        // Prochain refresh
+        const refreshInterval = window.refreshInterval || 300;
+        if (screenStatus === 'sleep') {
+            // En mode sleep: refresh toutes les 5 min
+            this._setValue('debug-next-refresh', '5 min (sleep)');
+        } else {
+            this._setValue('debug-next-refresh', this._formatDuration(refreshInterval));
         }
         
         // Cache offline
@@ -585,10 +615,21 @@ class DebugOverlay {
         }
         
         // Médias
-        if (window.ArrayImg) {
+        if (window.ArrayDiapo && window.ArrayDiapo.length > 0) {
+            this._setValue('debug-media-count', window.ArrayDiapo.length + ' médias');
+        } else if (window.ArrayImg && window.ArrayImg.length > 0) {
             this._setValue('debug-media-count', window.ArrayImg.length + ' médias');
         } else {
-            this._setValue('debug-media-count', '-');
+            this._setValue('debug-media-count', '0 médias', 'warning');
+        }
+        
+        // Planning
+        const planningConfig = window.planningConfig || (apiResponse.config && apiResponse.config.planning) || apiResponse.planning;
+        if (planningConfig && planningConfig.actif) {
+            const position = planningConfig.position || 'footer';
+            this._setValue('debug-planning', '✅ ' + position, 'ok');
+        } else {
+            this._setValue('debug-planning', 'Désactivé');
         }
         
         // Mode nuit
