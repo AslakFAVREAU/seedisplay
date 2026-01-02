@@ -11,8 +11,10 @@
 class SleepManager {
   constructor() {
     this._isSleeping = false
+    this._isNightMode = false
     this._currentLuminosity = 100
     this._sleepConfig = null
+    this._nightModeConfig = null
     this._checkInterval = null
     this._log = this._createLogger()
   }
@@ -49,9 +51,11 @@ class SleepManager {
       this._log.info('sleep-manager', 'Sleep mode config:', JSON.stringify(this._sleepConfig))
     }
 
+    // Night mode config from API response
+    this._updateNightModeConfig()
+
     if (ecranConfig?.luminosite !== undefined) {
       this._currentLuminosity = ecranConfig.luminosite
-      this.applyLuminosity(ecranConfig.luminosite)
     }
 
     // Start periodic check
@@ -59,8 +63,20 @@ class SleepManager {
     
     // Initial check
     this._checkSleepStatus()
+    this._checkNightModeStatus()
 
     return this
+  }
+
+  /**
+   * Update night mode config from API response
+   */
+  _updateNightModeConfig() {
+    const apiResponse = window.apiV2Response
+    if (apiResponse?.modeNuit) {
+      this._nightModeConfig = apiResponse.modeNuit
+      this._log.info('sleep-manager', 'Night mode config:', JSON.stringify(this._nightModeConfig))
+    }
   }
 
   /**
@@ -70,10 +86,12 @@ class SleepManager {
     if (ecranConfig?.sleepMode) {
       this._sleepConfig = ecranConfig.sleepMode
     }
-    if (ecranConfig?.luminosite !== undefined && !this._isSleeping) {
-      this.applyLuminosity(ecranConfig.luminosite)
-    }
+    
+    // Refresh night mode config
+    this._updateNightModeConfig()
+    
     this._checkSleepStatus()
+    this._checkNightModeStatus()
   }
 
   /**
@@ -86,6 +104,7 @@ class SleepManager {
     
     this._checkInterval = setInterval(() => {
       this._checkSleepStatus()
+      this._checkNightModeStatus()
     }, 60000)  // Check every minute
   }
 
@@ -100,6 +119,69 @@ class SleepManager {
     } else if (!shouldSleep && this._isSleeping) {
       this.exitSleepMode()
     }
+  }
+
+  /**
+   * Check and apply night mode luminosity
+   */
+  _checkNightModeStatus() {
+    if (this._isSleeping) return // Don't apply night mode if sleeping
+    
+    const shouldBeNight = this._shouldBeInNightMode()
+    
+    if (shouldBeNight && !this._isNightMode) {
+      this._enterNightMode()
+    } else if (!shouldBeNight && this._isNightMode) {
+      this._exitNightMode()
+    }
+  }
+
+  /**
+   * Check if current time is within night mode schedule
+   */
+  _shouldBeInNightMode() {
+    if (!this._nightModeConfig || !this._nightModeConfig.actif) {
+      return false
+    }
+
+    const { heureDebut, heureFin } = this._nightModeConfig
+    if (!heureDebut || !heureFin) return false
+
+    const now = new Date()
+    const currentMinutes = now.getHours() * 60 + now.getMinutes()
+    
+    const [startH, startM] = heureDebut.split(':').map(Number)
+    const startMinutes = startH * 60 + startM
+    
+    const [endH, endM] = heureFin.split(':').map(Number)
+    const endMinutes = endH * 60 + endM
+
+    // Handle overnight (e.g., 16:45 to 02:00)
+    if (startMinutes > endMinutes) {
+      return currentMinutes >= startMinutes || currentMinutes < endMinutes
+    } else {
+      return currentMinutes >= startMinutes && currentMinutes < endMinutes
+    }
+  }
+
+  /**
+   * Enter night mode - apply reduced luminosity
+   */
+  _enterNightMode() {
+    const nightLuminosity = this._nightModeConfig?.luminositeNuit ?? 25
+    this._log.info('sleep-manager', `Entering night mode, luminosity: ${nightLuminosity}%`)
+    this._isNightMode = true
+    this.applyLuminosity(nightLuminosity, true)
+  }
+
+  /**
+   * Exit night mode - restore normal luminosity
+   */
+  _exitNightMode() {
+    const normalLuminosity = window.diapoManager?.ecranConfig?.luminosite || 100
+    this._log.info('sleep-manager', `Exiting night mode, luminosity: ${normalLuminosity}%`)
+    this._isNightMode = false
+    this.applyLuminosity(normalLuminosity, true)
   }
 
   /**
@@ -233,6 +315,13 @@ class SleepManager {
   }
 
   /**
+   * Get current night mode state
+   */
+  get isNightMode() {
+    return this._isNightMode
+  }
+
+  /**
    * Get current luminosity
    */
   get luminosity() {
@@ -247,6 +336,14 @@ class SleepManager {
       this._log.info('sleep-manager', 'Forced wakeup')
       this.exitSleepMode()
     }
+  }
+
+  /**
+   * Force night mode check (useful after config update)
+   */
+  checkNightMode() {
+    this._updateNightModeConfig()
+    this._checkNightModeStatus()
   }
 
   /**

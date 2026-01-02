@@ -234,6 +234,11 @@ function listeDiapoV2(data) {
         window.planningManager.hide()
       }
     }
+    
+    // Initialize/update night mode in SleepManager
+    if (window.sleepManager) {
+      window.sleepManager.checkNightMode()
+    }
   }
   
   // If status is sleep, return empty array (caller will handle sleep mode)
