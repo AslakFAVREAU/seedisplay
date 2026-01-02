@@ -517,7 +517,6 @@ class PlanningManager {
             <div class="event ${enCours ? 'en-cours' : ''} ${evt.statut || ''}">
                 <div class="event-time">${this._escapeHtml(evt.heureDebut || '')} - ${this._escapeHtml(evt.heureFin || '')}</div>
                 <div class="event-name">${this._escapeHtml(evt.nom || '')}</div>
-                ${evt.responsable ? `<div class="event-responsable">${this._escapeHtml(evt.responsable)}</div>` : ''}
                 ${evt.typeEvent ? `<div class="event-type">${this._escapeHtml(evt.typeEvent)}</div>` : ''}
                 ${countdownHtml}
             </div>
