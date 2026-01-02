@@ -202,7 +202,6 @@
 
 .planning-grid .event {
     background: rgba(0, 0, 0, 0.03);
-    border-radius: 0.6vw;
     padding: 1.2vw;
     margin-bottom: 1vh;
     border-left: 0.25vw solid var(--salle-color, #0866C6);
@@ -211,7 +210,6 @@
 
 .planning-grid .event.en-cours {
     background: rgba(52, 152, 219, 0.15);
-    animation: pulse 2s infinite;
     border-left-width: 0.4vw;
 }
 
