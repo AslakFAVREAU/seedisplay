@@ -116,7 +116,35 @@ class ApiManager {
         }
       } catch (e) {}
 
+      // OFFLINE MODE: Try to use ApiCache as fallback
+      try {
+        if (window.apiCache) {
+          const cachedData = window.apiCache.get('diapo', true); // Allow expired
+          if (cachedData) {
+            _log('warn', 'api-manager', 'OFFLINE MODE: Using cached diapo data');
+            return { data: cachedData, status: 200, offline: true };
+          }
+        }
+      } catch (e) {
+        _log('error', 'api-manager', 'Failed to access cache: ' + e.message);
+      }
+
       throw error;
+    }
+  }
+
+  /**
+   * Generic fetchJson method for any API URL
+   */
+  async fetchJson(url) {
+    _log('info', 'api-manager', `fetchJson: ${url}`);
+    
+    try {
+      const res = await this._axiosGetWithTimeout(url, 10000);
+      return res.data;
+    } catch (error) {
+      _log('error', 'api-manager', 'fetchJson failed: ' + error.message);
+      return null;
     }
   }
 

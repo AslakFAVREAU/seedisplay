@@ -469,6 +469,17 @@ const getDiapoJson = async () => {
   const requestJsonDiapo = async () => {
     const JsonDiapo = await getDiapoJson()
     if (JsonDiapo) {
+      // Sauvegarder dans le cache pour le mode offline
+      if (typeof window !== 'undefined' && window.apiCache && JsonDiapo.data) {
+        window.apiCache.set('diapo', JsonDiapo.data)
+        _log('info','diapo','API response cached for offline mode')
+        
+        // Indiquer si on est en mode offline
+        if (JsonDiapo.offline) {
+          _log('warn','diapo','Using CACHED data (offline mode)')
+        }
+      }
+      
       ArrayDiapo = listeDiapo(JsonDiapo.data)
 
       // Check for sleep mode (API v2)

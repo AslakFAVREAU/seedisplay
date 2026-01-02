@@ -23,8 +23,15 @@ class PlanningManager {
         this.refreshInterval = 60000; // 60 secondes par défaut
         this.refreshTimer = null;
         this.clockTimer = null;
+        this.carouselTimer = null;
         this.isVisible = false;
         this._log = window.__log || console.log;
+        
+        // Configuration multi-salles
+        this.maxSallesPerPage = 4;  // Max salles affichées en même temps
+        this.currentPage = 0;
+        this.totalPages = 1;
+        this.carouselInterval = 8000; // 8 secondes par page
     }
 
     /**
@@ -136,6 +143,11 @@ class PlanningManager {
 
         // Démarrer le refresh automatique
         this._startRefresh(data.refreshInterval || 60);
+        
+        // Démarrer le carousel si plusieurs pages
+        if (this.totalPages > 1) {
+            this._startCarousel();
+        }
 
         // Si durée définie, cacher après
         if (duree > 0) {
@@ -158,6 +170,7 @@ class PlanningManager {
         this.isVisible = false;
         this._stopClock();
         this._stopRefresh();
+        this._stopCarousel();
         
         // Restaurer le mediaContainer si on était en mode split
         var mediaContainer = document.getElementById('mediaContainer');
@@ -238,6 +251,35 @@ class PlanningManager {
     }
 
     /**
+     * Démarre le carousel pour pagination multi-salles
+     */
+    _startCarousel() {
+        if (this.totalPages <= 1) return;
+        
+        this._stopCarousel();
+        this._log('info', 'planning', `Starting carousel with ${this.totalPages} pages`);
+        
+        this.carouselTimer = setInterval(() => {
+            if (this.isVisible && this.planningData) {
+                this.currentPage = (this.currentPage + 1) % this.totalPages;
+                this._log('info', 'planning', `Carousel: showing page ${this.currentPage + 1}/${this.totalPages}`);
+                this.container.innerHTML = this.renderPlanning(this.planningData);
+            }
+        }, this.carouselInterval);
+    }
+    
+    /**
+     * Arrête le carousel
+     */
+    _stopCarousel() {
+        if (this.carouselTimer) {
+            clearInterval(this.carouselTimer);
+            this.carouselTimer = null;
+        }
+        this.currentPage = 0;
+    }
+
+    /**
      * Met à jour les compteurs de temps
      */
     _updateCountdowns() {
@@ -258,19 +300,34 @@ class PlanningManager {
     renderPlanning(data) {
         const now = new Date();
         const currentTime = now.toTimeString().slice(0, 5);
+        
+        // Calculer le nombre de salles pour adapter l'affichage
+        const totalSalles = (data.planningParSalle || []).length;
+        this.totalPages = Math.ceil(totalSalles / this.maxSallesPerPage);
+        
+        // Déterminer le mode d'affichage
+        const displayMode = totalSalles > 6 ? 'carousel' : (totalSalles > 4 ? 'compact' : 'normal');
+        
+        // Pagination info
+        const paginationHtml = this.totalPages > 1 ? `
+            <div class="planning-pagination">
+                <span class="page-indicator">${this.currentPage + 1} / ${this.totalPages}</span>
+            </div>
+        ` : '';
 
         return `
-            <div class="planning-du-jour">
+            <div class="planning-du-jour ${displayMode}-mode" data-total-salles="${totalSalles}">
                 <header class="planning-header">
                     <div class="planning-header-left">
                         <h1>Planning du ${this._escapeHtml(data.jourSemaine || '')} ${this._escapeHtml(data.dateFormatee || '')}</h1>
+                        ${paginationHtml}
                     </div>
                     <div class="planning-header-right">
                         <time id="planningClock" class="planning-clock">${currentTime}</time>
                     </div>
                 </header>
                 
-                <div class="planning-grid">
+                <div class="planning-grid salles-${Math.min(totalSalles, this.maxSallesPerPage)}">
                     ${this.renderSallesGrid(data)}
                 </div>
             </div>
@@ -288,24 +345,49 @@ class PlanningManager {
             return this.renderEventsList(data);
         }
 
-        return data.planningParSalle.map(salleData => `
-            <div class="salle-column" style="--salle-color: ${salleData.salle?.couleur || '#0866C6'}">
+        const totalSalles = data.planningParSalle.length;
+        
+        // Si plus de 4 salles, paginer
+        if (totalSalles > this.maxSallesPerPage) {
+            const startIdx = this.currentPage * this.maxSallesPerPage;
+            const endIdx = Math.min(startIdx + this.maxSallesPerPage, totalSalles);
+            const sallesPage = data.planningParSalle.slice(startIdx, endIdx);
+            
+            return sallesPage.map(salleData => this.renderSalleColumn(salleData, totalSalles)).join('');
+        }
+
+        return data.planningParSalle.map(salleData => this.renderSalleColumn(salleData, totalSalles)).join('');
+    }
+    
+    /**
+     * Rendu d'une colonne de salle
+     * @param {Object} salleData 
+     * @param {number} totalSalles - Nombre total de salles (pour adapter le style)
+     * @returns {string} HTML
+     */
+    renderSalleColumn(salleData, totalSalles = 1) {
+        // Mode compact pour beaucoup de salles (moins d'événements affichés)
+        const maxEvents = totalSalles > 4 ? 3 : 5;
+        const isCompact = totalSalles > 4;
+        
+        return `
+            <div class="salle-column ${isCompact ? 'compact' : ''}" style="--salle-color: ${salleData.salle?.couleur || '#0866C6'}">
                 <h2 class="salle-title">${this._escapeHtml(salleData.salle?.nom || 'Salle')}</h2>
                 ${salleData.salle?.batiment ? `<div class="salle-batiment">${this._escapeHtml(salleData.salle.batiment)}</div>` : ''}
                 
                 <div class="salle-events">
-                    ${salleData.eventEnCours ? this.renderEvent(salleData.eventEnCours, true) : ''}
+                    ${salleData.eventEnCours ? this.renderEvent(salleData.eventEnCours, true, isCompact) : ''}
                     ${(salleData.evenements || [])
                         .filter(e => e.statut !== 'termine' && e.id !== salleData.eventEnCours?.id)
-                        .slice(0, 5)
-                        .map(evt => this.renderEvent(evt, false))
+                        .slice(0, maxEvents)
+                        .map(evt => this.renderEvent(evt, false, isCompact))
                         .join('')}
                     ${(!salleData.evenements || salleData.evenements.length === 0) && !salleData.eventEnCours 
                         ? '<div class="no-events">Aucun événement</div>' 
                         : ''}
                 </div>
             </div>
-        `).join('');
+        `;
     }
 
     /**
@@ -351,9 +433,10 @@ class PlanningManager {
      * Rendu d'un événement
      * @param {Object} evt - Données de l'événement
      * @param {boolean} enCours - Est-ce l'événement en cours ?
+     * @param {boolean} isCompact - Mode compact (moins de détails)
      * @returns {string} HTML
      */
-    renderEvent(evt, enCours = false) {
+    renderEvent(evt, enCours = false, isCompact = false) {
         let countdownHtml = '';
         
         if (enCours && evt.minutesRestantes) {
@@ -366,6 +449,17 @@ class PlanningManager {
                     Dans ${evt.minutesAvantDebut} min
                 </div>`;
             }
+        }
+
+        // En mode compact, on affiche moins de détails
+        if (isCompact) {
+            return `
+                <div class="event compact ${enCours ? 'en-cours' : ''} ${evt.statut || ''}">
+                    <div class="event-time">${this._escapeHtml(evt.heureDebut || '')} - ${this._escapeHtml(evt.heureFin || '')}</div>
+                    <div class="event-name">${this._escapeHtml(evt.nom || '')}</div>
+                    ${countdownHtml}
+                </div>
+            `;
         }
 
         return `

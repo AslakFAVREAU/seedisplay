@@ -635,6 +635,7 @@
 
   <!-- Phase 2 Week 2: ErrorHandler + ApiManager (resilience layer) -->
   <script src="js/ErrorHandler.js"></script>
+  <script src="js/ApiCache.js"></script>
   <script src="js/ApiManager.js"></script>
 
   <!-- Phase 2 Week 3: MediaCache + MediaCacheManager (persistence layer) -->
@@ -657,6 +658,13 @@
     if (window.apiManager) {
       window.apiManager.init(window.errorHandler);
     }
+    
+    // Initialize ApiCache for offline mode
+    window.apiCache = new ApiCache({
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      logger: window.logger || console
+    });
+    window.apiCache.cleanup(); // Clean old entries on startup
     
     // Backward compatibility: Map old global variables to DisplayState
     // This allows gradual migration of loopDiapo.js

@@ -401,3 +401,114 @@
         gap: 0.5vh;
     }
 }
+
+/* ========================================
+   MULTI-SALLES - Mode compact et pagination
+   ======================================== */
+
+/* Pagination indicator */
+.planning-pagination {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 2vw;
+    padding: 0.3vw 0.8vw;
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 0.5vw;
+    font-size: 1.5vw;
+    font-weight: 500;
+}
+
+.page-indicator {
+    color: #0866C6;
+}
+
+/* Grille adaptative selon le nombre de salles */
+.planning-grid.salles-1 {
+    justify-content: center;
+}
+
+.planning-grid.salles-1 .salle-column {
+    max-width: 60%;
+}
+
+.planning-grid.salles-2 .salle-column {
+    flex: 1 1 48%;
+}
+
+.planning-grid.salles-3 .salle-column {
+    flex: 1 1 32%;
+}
+
+.planning-grid.salles-4 .salle-column {
+    flex: 1 1 24%;
+}
+
+/* Mode compact pour beaucoup de salles */
+.compact-mode .salle-column,
+.carousel-mode .salle-column {
+    padding: 1vw;
+}
+
+.compact-mode .salle-title,
+.carousel-mode .salle-title {
+    font-size: 1.8vw;
+}
+
+.compact-mode .salle-batiment,
+.carousel-mode .salle-batiment {
+    font-size: 1vw;
+    margin-bottom: 1vh;
+}
+
+/* Événements en mode compact */
+.salle-column.compact .event,
+.planning-grid .event.compact {
+    padding: 0.8vw;
+    margin-bottom: 0.6vh;
+}
+
+.salle-column.compact .event-time,
+.event.compact .event-time {
+    font-size: 1.3vw;
+}
+
+.salle-column.compact .event-name,
+.event.compact .event-name {
+    font-size: 1.5vw;
+    line-height: 1.2;
+}
+
+.salle-column.compact .event-countdown,
+.event.compact .event-countdown {
+    font-size: 1.1vw;
+}
+
+/* Mode carousel - transition fluide */
+.carousel-mode .planning-grid {
+    animation: slideIn 0.4s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Indicateur de mode offline (si données du cache) */
+.planning-du-jour.offline-mode::before {
+    content: "Mode hors ligne";
+    position: absolute;
+    top: 0.5vw;
+    right: 1vw;
+    font-size: 1vw;
+    padding: 0.3vw 0.6vw;
+    background: rgba(255, 152, 0, 0.9);
+    color: white;
+    border-radius: 0.3vw;
+    z-index: 10;
+}
