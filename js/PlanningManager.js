@@ -31,7 +31,40 @@ class PlanningManager {
         this.maxSallesPerPage = 4;  // Max salles affichées en même temps
         this.currentPage = 0;
         this.totalPages = 1;
-        this.carouselInterval = 8000; // 8 secondes par page
+        this.sallesPerPage = []; // Répartition équilibrée des salles par page
+        // TODO SERVER: Ajouter paramètre "planning_slide_duree" dans formulaire gestion écran
+        // pour permettre de configurer cette durée via l'API (planning.slideDuree)
+        this.carouselInterval = 10000; // 10 secondes par page (défaut)
+    }
+    
+    /**
+     * Calcule la répartition équilibrée des salles entre les pages
+     * Ex: 5 salles → [3, 2] au lieu de [4, 1]
+     * Ex: 7 salles → [4, 3] au lieu de [4, 3]
+     * Ex: 9 salles → [3, 3, 3] au lieu de [4, 4, 1]
+     * @param {number} totalSalles - Nombre total de salles
+     * @returns {Array<number>} - Nombre de salles par page
+     */
+    _calculateBalancedPages(totalSalles) {
+        if (totalSalles <= this.maxSallesPerPage) {
+            return [totalSalles];
+        }
+        
+        // Calcul du nombre de pages nécessaires
+        const numPages = Math.ceil(totalSalles / this.maxSallesPerPage);
+        
+        // Répartition équilibrée: diviser équitablement
+        const basePerPage = Math.floor(totalSalles / numPages);
+        const remainder = totalSalles % numPages;
+        
+        const distribution = [];
+        for (let i = 0; i < numPages; i++) {
+            // Les premières pages ont +1 si il y a un reste
+            distribution.push(basePerPage + (i < remainder ? 1 : 0));
+        }
+        
+        this._log('info', 'planning', `Balanced distribution for ${totalSalles} salles: [${distribution.join(', ')}]`);
+        return distribution;
     }
 
     /**
@@ -119,6 +152,12 @@ class PlanningManager {
      */
     async show(duree = 0) {
         if (!this.container) this.init();
+
+        // Appliquer slideDuree depuis config si disponible
+        // TODO SERVER: planning.slideDuree dans formulaire gestion écran
+        if (window._planningSlideDuree) {
+            this.carouselInterval = window._planningSlideDuree * 1000;
+        }
 
         // Récupérer les données
         const data = await this.fetchPlanning();
@@ -303,7 +342,13 @@ class PlanningManager {
         
         // Calculer le nombre de salles pour adapter l'affichage
         const totalSalles = (data.planningParSalle || []).length;
-        this.totalPages = Math.ceil(totalSalles / this.maxSallesPerPage);
+        
+        // Calculer la répartition équilibrée des salles
+        this.sallesPerPage = this._calculateBalancedPages(totalSalles);
+        this.totalPages = this.sallesPerPage.length;
+        
+        // Nombre de salles sur la page courante
+        const sallesOnCurrentPage = this.sallesPerPage[this.currentPage] || totalSalles;
         
         // Déterminer le mode d'affichage
         const displayMode = totalSalles > 6 ? 'carousel' : (totalSalles > 4 ? 'compact' : 'normal');
@@ -327,7 +372,7 @@ class PlanningManager {
                     </div>
                 </header>
                 
-                <div class="planning-grid salles-${Math.min(totalSalles, this.maxSallesPerPage)}">
+                <div class="planning-grid salles-${sallesOnCurrentPage}">
                     ${this.renderSallesGrid(data)}
                 </div>
             </div>
@@ -347,13 +392,19 @@ class PlanningManager {
 
         const totalSalles = data.planningParSalle.length;
         
-        // Si plus de 4 salles, paginer
-        if (totalSalles > this.maxSallesPerPage) {
-            const startIdx = this.currentPage * this.maxSallesPerPage;
-            const endIdx = Math.min(startIdx + this.maxSallesPerPage, totalSalles);
+        // Si pagination nécessaire, utiliser la répartition équilibrée
+        if (this.sallesPerPage.length > 1) {
+            // Calculer l'index de départ basé sur la répartition équilibrée
+            let startIdx = 0;
+            for (let i = 0; i < this.currentPage; i++) {
+                startIdx += this.sallesPerPage[i];
+            }
+            const endIdx = startIdx + this.sallesPerPage[this.currentPage];
             const sallesPage = data.planningParSalle.slice(startIdx, endIdx);
             
-            return sallesPage.map(salleData => this.renderSalleColumn(salleData, totalSalles)).join('');
+            // Passer le nombre de salles sur cette page pour le style
+            const sallesOnThisPage = sallesPage.length;
+            return sallesPage.map(salleData => this.renderSalleColumn(salleData, sallesOnThisPage)).join('');
         }
 
         return data.planningParSalle.map(salleData => this.renderSalleColumn(salleData, totalSalles)).join('');
@@ -362,13 +413,13 @@ class PlanningManager {
     /**
      * Rendu d'une colonne de salle
      * @param {Object} salleData 
-     * @param {number} totalSalles - Nombre total de salles (pour adapter le style)
+     * @param {number} sallesOnPage - Nombre de salles sur cette page (pour adapter le style)
      * @returns {string} HTML
      */
-    renderSalleColumn(salleData, totalSalles = 1) {
+    renderSalleColumn(salleData, sallesOnPage = 1) {
         // Mode compact pour beaucoup de salles (moins d'événements affichés)
-        const maxEvents = totalSalles > 4 ? 3 : 5;
-        const isCompact = totalSalles > 4;
+        const maxEvents = sallesOnPage > 3 ? 3 : 5;
+        const isCompact = sallesOnPage > 3;
         
         return `
             <div class="salle-column ${isCompact ? 'compact' : ''}" style="--salle-color: ${salleData.salle?.couleur || '#0866C6'}">

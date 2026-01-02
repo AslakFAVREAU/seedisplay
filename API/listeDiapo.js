@@ -262,6 +262,9 @@ function listeDiapoV2(data) {
     // We'll add planning after processing the timeline
     window._addPlanningToLoop = true
     window._planningDuree = planningConfig.duree || 20
+    // TODO SERVER: Ajouter paramètre "slideDuree" dans planning config API
+    // Durée de chaque slide/page du carousel (en secondes)
+    window._planningSlideDuree = planningConfig.slideDuree || 10
   }
 
   // Check if priority mode is active (from API field or by scanning timeline)
@@ -327,6 +330,13 @@ function listeDiapoV2(data) {
   }
 
   _log('info','diapo','listeDiapoV2: parsed ' + ArrayImg.length + ' media entries from timeline' + (hasPrioritaire ? ' (priority only)' : ''))
+  
+  // Add planning to loop if fullscreen mode is active
+  if (window._addPlanningToLoop && ArrayImg.length > 0) {
+    ArrayImg.push(['planning', { type: 'planning' }, window._planningDuree, 'planning-item'])
+    _log('info','diapo','listeDiapoV2: added planning to loop with duree=' + window._planningDuree + 's')
+  }
+  
   return ArrayImg
 }
 
