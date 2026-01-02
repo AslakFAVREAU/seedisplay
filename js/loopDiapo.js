@@ -120,14 +120,28 @@ function showMedia(mediaIndex) {
     const mediaType = media[0];
     const mediaFile = media[1];
     const delay = (media[2] && Number(media[2]) > 0) ? Number(media[2]) * 1000 : 5000;
+    const metadata = media[3] || {}; // Métadonnées enrichies (mediaId, diapoId, etc.)
     
     currentMediaIndex = mediaIndex;
     
     __log('info', 'diapo', 'showing #' + mediaIndex + '/' + mediaLoop.length + ' type=' + mediaType + ' file=' + mediaFile + ' delay=' + (delay/1000) + 's');
     
-    // Stats: Track media display
+    // Playback Logger: Enregistrement précis pour régie pub
+    if (window.playbackLogger) {
+        window.playbackLogger.startMedia({
+            mediaId: metadata.mediaId,
+            mediaNom: metadata.mediaNom,
+            mediaFichier: decodeURIComponent(mediaFile),
+            mediaType: mediaType,
+            diapoId: metadata.diapoId,
+            diapoNom: metadata.diapoNom,
+            duree: delay / 1000
+        });
+    }
+    
+    // Stats: Track media display (legacy)
     if (window.statsManager) {
-        const mediaId = media[3] || mediaFile; // Use diapoId if available, else filename
+        const mediaId = metadata.mediaId || mediaFile;
         window.statsManager.startMedia(mediaId, mediaFile, mediaType);
     }
     

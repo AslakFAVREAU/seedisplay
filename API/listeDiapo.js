@@ -386,7 +386,16 @@ function listeDiapoV2(data) {
       var duree = item.duree || 5  // default 5 seconds
       
       if (mediaType && fichier) {
-        ArrayImg.push([mediaType, encodeURIComponent(fichier), duree])
+        // Structure enrichie: [type, fichier, duree, metadata]
+        // metadata pour le playback logging (régie pub)
+        var metadata = {
+          mediaId: item.mediaId || null,
+          mediaNom: item.mediaNom || null,
+          diapoId: item.diapoId || null,
+          diapoNom: item.diapoNom || null,
+          transition: item.transition || 'cut'
+        }
+        ArrayImg.push([mediaType, encodeURIComponent(fichier), duree, metadata])
       }
     } catch (e) {
       _log('warn','diapo','listeDiapoV2: skipping malformed timeline item', e.message)

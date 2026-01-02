@@ -660,6 +660,7 @@
   <!-- Debug & Stats -->
   <script src="js/DebugOverlay.js"></script>
   <script src="js/StatsManager.js"></script>
+  <script src="js/PlaybackLogger.js"></script>
 
   <script>
     // Phase 2 Week 1: Initialize DisplayState (replaces imgShow, imgLoad, player)
@@ -1025,6 +1026,12 @@
     try {
       // Expose la config au code legacy qui s'attend à trouver window.configSEE
       window.configSEE = config
+      
+      // Configure PlaybackLogger avec l'ID écran pour les logs régie pub
+      if (window.playbackLogger && config.idEcran) {
+        window.playbackLogger.setEcranId(config.idEcran);
+      }
+      
       // Appeler la fonction legacy pour appliquer la configuration et déclencher les flux (diapo / meteo)
       if (typeof getConfigSEE === 'function') {
         __log('info','bootstrap','calling legacy getConfigSEE()')
