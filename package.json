@@ -97,7 +97,8 @@
       "artifactName": "SEE-Display-Setup-${version}.exe",
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true,
-      "license": "LICENSE"
+      "license": "LICENSE",
+      "include": "build/installer.nsh"
     },
     "portable": {
       "artifactName": "SEE-Display-Portable-${version}.exe"
