@@ -151,8 +151,8 @@ Quand l'écran est configuré pour s'éteindre pendant certaines heures :
   "ratio": "16:9",
   "dimensions": "1920x1080",
   "luminosite": 0,
-  "typeHorsPlage": "noir",
-  "imageHorsPlage": null,
+  "typeHorsPlage": "logo",
+  "imageHorsPlage": "/uploads/see/common/logo_see.png",
   "prochainDemarrage": "07:00",
   "diapos": []
 }
@@ -160,9 +160,13 @@ Quand l'écran est configuré pour s'éteindre pendant certaines heures :
 
 | Champ | Type | Description |
 |-------|------|-------------|
-| `typeHorsPlage` | string | `"noir"` = écran noir, `"logo"` = logo SEE, `"image"` = image personnalisée |
-| `imageHorsPlage` | string\|null | Chemin de l'image à afficher (si `typeHorsPlage = "image"`) |
+| `typeHorsPlage` | string | `"noir"` = écran noir, `"logo"` = logo commun SEE, `"image"` = média personnalisé |
+| `imageHorsPlage` | string\|null | Chemin complet du média à afficher. Valeurs possibles :<br>• `null` si `typeHorsPlage = "noir"`<br>• `/uploads/see/common/logo_see.png` si `typeHorsPlage = "logo"`<br>• `/uploads/see/horsplage/{filename}` si `typeHorsPlage = "image"` |
 | `prochainDemarrage` | string\|null | Heure de prochain réveil (format `"HH:mm"`) |
+
+> **Formats supportés pour `imageHorsPlage`**:
+> - **Images**: JPG, PNG, GIF, WebP
+> - **Vidéos**: MP4, WebM (lecture en boucle recommandée)
 
 ---
 

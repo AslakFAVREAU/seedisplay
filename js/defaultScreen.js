@@ -21,11 +21,58 @@ function getMediaBaseUrl() {
 }
 
 /**
+ * Download and cache background image locally
+ * @param {string} fondEcran - path of background image from API
+ * @returns {Promise<string|null>} - local path if downloaded, null if failed
+ */
+async function downloadFondEcran(fondEcran) {
+    if (!fondEcran) return null
+    
+    try {
+        // Extract filename from path (e.g. /uploads/see/fonds/fond_ecran1_rose.jpg -> fond_ecran1_rose.jpg)
+        var filename = fondEcran.split('/').pop()
+        var relativePath = 'fonds/' + filename
+        
+        // Build full URL
+        var env = window.configSEE?.env || window.env || 'prod'
+        var domain = env === 'local' ? 'http://localhost:8000' : 'https://soek.fr'
+        var fullUrl = fondEcran.startsWith('/') ? domain + fondEcran : fondEcran
+        
+        __log('debug', 'defaultScreen', 'downloadFondEcran: downloading ' + filename + ' from ' + fullUrl)
+        
+        // Download using preload API with cache
+        if (window.api && typeof window.api.saveBinaryWithCache === 'function') {
+            var result = await window.api.saveBinaryWithCache(relativePath, fullUrl)
+            if (result && result.success) {
+                __log('info', 'defaultScreen', 'downloadFondEcran: cached ' + filename + ' (' + result.size + ' bytes, cached=' + result.cached + ')')
+                return relativePath
+            }
+        }
+        
+        // Fallback to saveBinary
+        if (window.api && typeof window.api.saveBinary === 'function') {
+            var success = await window.api.saveBinary(relativePath, fullUrl)
+            if (success) {
+                __log('info', 'defaultScreen', 'downloadFondEcran: saved ' + filename)
+                return relativePath
+            }
+        }
+        
+        __log('warn', 'defaultScreen', 'downloadFondEcran: could not download ' + filename)
+        return null
+    } catch(e) {
+        __log('error', 'defaultScreen', 'downloadFondEcran error: ' + e.message)
+        return null
+    }
+}
+
+/**
  * Apply background image to pageDefault from API
  * Called when fondEcran is received from API
+ * Downloads to local cache first, falls back to remote URL
  * @param {string} fondEcran - filename or path of background image
  */
-function applyPageDefaultBackground(fondEcran) {
+async function applyPageDefaultBackground(fondEcran) {
     __log('info','defaultScreen','applyPageDefaultBackground: ' + fondEcran)
     try {
         var pageDefault = document.getElementById('pageDefault')
@@ -34,8 +81,35 @@ function applyPageDefaultBackground(fondEcran) {
             return
         }
         
-        var baseUrl = getMediaBaseUrl()
-        var imageUrl = baseUrl + encodeURIComponent(fondEcran)
+        var imageUrl
+        
+        // Try to download and cache locally first
+        var localPath = await downloadFondEcran(fondEcran)
+        
+        if (localPath && window.api && typeof window.api.existsSync === 'function') {
+            // Check if local file exists
+            var exists = window.api.existsSync(localPath)
+            if (exists) {
+                // Use local file
+                imageUrl = 'file:///C:/SEE/' + localPath.replace(/\\/g, '/')
+                __log('info','defaultScreen','Using local background: ' + imageUrl)
+            }
+        }
+        
+        // Fallback to remote URL if local not available
+        if (!imageUrl) {
+            if (fondEcran.startsWith('/')) {
+                // Full path from API (e.g. /uploads/see/fonds/...)
+                var env = window.configSEE?.env || window.env || 'prod'
+                var domain = env === 'local' ? 'http://localhost:8000' : 'https://soek.fr'
+                imageUrl = domain + fondEcran
+            } else {
+                // Just filename - use media base URL
+                var baseUrl = getMediaBaseUrl()
+                imageUrl = baseUrl + encodeURIComponent(fondEcran)
+            }
+            __log('info','defaultScreen','Using remote background: ' + imageUrl)
+        }
         
         pageDefault.style.backgroundImage = 'url("' + imageUrl + '")'
         __log('info','defaultScreen','Background applied: ' + imageUrl)
@@ -53,8 +127,13 @@ if (typeof window !== 'undefined') {
  * Show sleep screen when API returns status "sleep"
  * Uses typeHorsPlage to determine display type:
  * - "noir" (default): black screen
- * - "image": show imageHorsPlage
+ * - "logo": SEE logo (/uploads/see/common/logo_see.png)
+ * - "image": custom image or video from imageHorsPlage
  * Shows next wakeup time if available (prochainDemarrage)
+ * 
+ * Supported formats for imageHorsPlage:
+ * - Images: JPG, PNG, GIF, WebP
+ * - Videos: MP4, WebM (loop playback)
  */
 function showSleepScreen() {
     __log('info','sleep','showSleepScreen called')
@@ -93,28 +172,72 @@ function showSleepScreen() {
     const imageHorsPlage = window.imageHorsPlage || null
     const prochainDemarrage = window.prochainDemarrage || null
     
-    __log('info','sleep','typeHorsPlage=' + typeHorsPlage + ', prochainDemarrage=' + prochainDemarrage)
+    __log('info','sleep','typeHorsPlage=' + typeHorsPlage + ', imageHorsPlage=' + imageHorsPlage + ', prochainDemarrage=' + prochainDemarrage)
     
-    if (typeHorsPlage === 'image' && imageHorsPlage) {
-        // Show image
-        const baseUrl = getMediaBaseUrl()
-        sleepScreen.style.backgroundImage = 'url(' + baseUrl + encodeURIComponent(imageHorsPlage) + ')'
-        sleepScreen.style.backgroundSize = 'cover'
-        sleepScreen.style.backgroundPosition = 'center'
-        sleepScreen.innerHTML = ''
-    } else {
-        // Show black screen with optional wakeup info
-        sleepScreen.style.backgroundImage = 'none'
-        sleepScreen.style.background = '#000'
+    // Helper to build full URL from API path
+    function buildMediaUrl(path) {
+        if (!path) return null
+        var env = window.configSEE?.env || window.env || 'prod'
+        var domain = env === 'local' ? 'http://localhost:8000' : 'https://soek.fr'
+        return path.startsWith('/') ? domain + path : path
+    }
+    
+    // Helper to check if file is a video
+    function isVideo(path) {
+        if (!path) return false
+        var ext = path.split('.').pop().toLowerCase()
+        return ['mp4', 'webm'].includes(ext)
+    }
+    
+    // Clear previous content
+    sleepScreen.innerHTML = ''
+    sleepScreen.style.backgroundImage = 'none'
+    sleepScreen.style.background = '#000'
+    
+    if (typeHorsPlage === 'logo') {
+        // Show SEE logo - use imageHorsPlage from API (e.g. /uploads/see/common/logo_see.png)
+        var logoUrl = imageHorsPlage ? buildMediaUrl(imageHorsPlage) : null
+        if (!logoUrl) {
+            // Fallback to local logo if API didn't provide path
+            logoUrl = 'assets/logo-see.png'
+        }
+        __log('info','sleep','showing logo: ' + logoUrl)
+        sleepScreen.innerHTML = `
+            <img src="${logoUrl}" alt="SEE" style="max-width: 300px; max-height: 300px; opacity: 0.5;">
+        `
+        if (prochainDemarrage) {
+            sleepScreen.innerHTML += `
+                <div style="color: #444; font-size: 1.2em; font-family: Arial, sans-serif; margin-top: 20px;">
+                    Prochain démarrage : ${prochainDemarrage}
+                </div>
+            `
+        }
+    } else if ((typeHorsPlage === 'image' || typeHorsPlage === 'logo') && imageHorsPlage) {
+        // Show custom image or video
+        var mediaUrl = buildMediaUrl(imageHorsPlage)
+        __log('info','sleep','showing media: ' + mediaUrl)
         
+        if (isVideo(imageHorsPlage)) {
+            // Video - loop playback
+            sleepScreen.innerHTML = `
+                <video autoplay muted loop playsinline style="width: 100%; height: 100%; object-fit: cover;">
+                    <source src="${mediaUrl}" type="video/${imageHorsPlage.split('.').pop().toLowerCase()}">
+                </video>
+            `
+        } else {
+            // Image - use background
+            sleepScreen.style.backgroundImage = 'url("' + mediaUrl + '")'
+            sleepScreen.style.backgroundSize = 'cover'
+            sleepScreen.style.backgroundPosition = 'center'
+        }
+    } else {
+        // "noir" or default - black screen with optional wakeup info
         if (prochainDemarrage) {
             sleepScreen.innerHTML = `
                 <div style="color: #333; font-size: 1.5em; font-family: Arial, sans-serif;">
                     Prochain démarrage : ${prochainDemarrage}
                 </div>
             `
-        } else {
-            sleepScreen.innerHTML = ''
         }
     }
     
