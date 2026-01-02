@@ -46,6 +46,14 @@ class DebugOverlay {
                 if (this.configMode) this.hideConfig();
                 if (this.visible) this.hide();
             }
+            
+            // X = quitter l'application
+            if (e.key.toLowerCase() === 'x' && !e.ctrlKey && !e.altKey) {
+                window.logger?.info('DebugOverlay', 'Quit shortcut pressed (X)');
+                if (window.api?.quitApp) {
+                    window.api.quitApp();
+                }
+            }
         });
     }
     
@@ -216,9 +224,10 @@ class DebugOverlay {
                     <span class="config-close" onclick="window.debugOverlay.hideConfig()">×</span>
                 </div>
                 <div class="config-content">
+                    <div class="config-section-title">🔗 Connexion API</div>
                     <div class="config-group">
                         <label for="config-id-ecran">ID Écran</label>
-                        <input type="number" id="config-id-ecran" min="1" />
+                        <input type="number" id="config-id-ecran" min="1" placeholder="1" />
                     </div>
                     <div class="config-group">
                         <label for="config-env">Environnement</label>
@@ -228,24 +237,87 @@ class DebugOverlay {
                         </select>
                     </div>
                     <div class="config-group">
-                        <label for="config-meteo">Météo</label>
-                        <input type="checkbox" id="config-meteo" />
+                        <label for="config-api-token">Token API</label>
+                        <input type="password" id="config-api-token" placeholder="Token d'authentification" />
                     </div>
-                    <div class="config-group">
-                        <label for="config-meteo-lat">Latitude</label>
-                        <input type="number" id="config-meteo-lat" step="0.0001" />
+                    
+                    <div class="config-section-title">📡 Paramètres Serveur <span class="config-readonly-badge">lecture seule</span></div>
+                    <div class="config-info-text">Ces paramètres sont configurés sur le serveur et synchronisés automatiquement.</div>
+                    
+                    <div class="config-subsection">📺 Écran</div>
+                    <div class="config-group config-readonly">
+                        <label>Nom</label>
+                        <span class="config-value" id="config-server-name">-</span>
                     </div>
-                    <div class="config-group">
-                        <label for="config-meteo-lon">Longitude</label>
-                        <input type="number" id="config-meteo-lon" step="0.0001" />
+                    <div class="config-group config-readonly">
+                        <label>Orientation</label>
+                        <span class="config-value" id="config-server-orientation">-</span>
                     </div>
-                    <div class="config-group">
-                        <label for="config-logo">Logo SOE</label>
-                        <input type="checkbox" id="config-logo" />
+                    <div class="config-group config-readonly">
+                        <label>Résolution</label>
+                        <span class="config-value" id="config-server-resolution">-</span>
                     </div>
-                    <div class="config-group">
-                        <label for="config-week-no">Numéro Semaine</label>
-                        <input type="checkbox" id="config-week-no" />
+                    <div class="config-group config-readonly">
+                        <label>Luminosité</label>
+                        <span class="config-value" id="config-server-brightness">-</span>
+                    </div>
+                    
+                    <div class="config-subsection">🌙 Mode Nuit</div>
+                    <div class="config-group config-readonly">
+                        <label>Actif</label>
+                        <span class="config-value" id="config-server-night-mode">-</span>
+                    </div>
+                    <div class="config-group config-readonly">
+                        <label>Horaires</label>
+                        <span class="config-value" id="config-server-night-hours">-</span>
+                    </div>
+                    <div class="config-group config-readonly">
+                        <label>Luminosité Nuit</label>
+                        <span class="config-value" id="config-server-night-brightness">-</span>
+                    </div>
+                    
+                    <div class="config-subsection">⏰ Programmation</div>
+                    <div class="config-group config-readonly">
+                        <label>Active</label>
+                        <span class="config-value" id="config-server-schedule-active">-</span>
+                    </div>
+                    <div class="config-group config-readonly">
+                        <label>Horaires</label>
+                        <span class="config-value" id="config-server-schedule-hours">-</span>
+                    </div>
+                    <div class="config-group config-readonly">
+                        <label>Jours</label>
+                        <span class="config-value" id="config-server-schedule-days">-</span>
+                    </div>
+                    
+                    <div class="config-subsection">🎨 Affichage</div>
+                    <div class="config-group config-readonly">
+                        <label>Météo</label>
+                        <span class="config-value" id="config-server-meteo">-</span>
+                    </div>
+                    <div class="config-group config-readonly">
+                        <label>Coordonnées</label>
+                        <span class="config-value" id="config-server-coords">-</span>
+                    </div>
+                    <div class="config-group config-readonly">
+                        <label>Logo SOE</label>
+                        <span class="config-value" id="config-server-logo">-</span>
+                    </div>
+                    <div class="config-group config-readonly">
+                        <label>Numéro Semaine</label>
+                        <span class="config-value" id="config-server-week">-</span>
+                    </div>
+                    <div class="config-group config-readonly">
+                        <label>Planning</label>
+                        <span class="config-value" id="config-server-planning">-</span>
+                    </div>
+                    <div class="config-group config-readonly">
+                        <label>Fond d'écran</label>
+                        <span class="config-value" id="config-server-background">-</span>
+                    </div>
+                    <div class="config-group config-readonly">
+                        <label>Refresh API</label>
+                        <span class="config-value" id="config-server-refresh">-</span>
                     </div>
                 </div>
                 <div class="config-footer">
@@ -263,31 +335,106 @@ class DebugOverlay {
      */
     _populateConfigForm() {
         const config = window.configSEE || {};
+        const apiResponse = window.apiV2Response || {};
+        const serverConfig = apiResponse.config || {};
         
-        document.getElementById('config-id-ecran').value = config.idEcran || 1;
+        // Champs locaux éditables
+        document.getElementById('config-id-ecran').value = config.idEcran || '';
         document.getElementById('config-env').value = config.env || 'prod';
-        document.getElementById('config-meteo').checked = config.meteo !== false;
-        document.getElementById('config-meteo-lat').value = config.meteoLat || 48.8566;
-        document.getElementById('config-meteo-lon').value = config.meteoLon || 2.3522;
-        document.getElementById('config-logo').checked = config.logoSOE !== false;
-        document.getElementById('config-week-no').checked = config.weekNo !== false;
+        document.getElementById('config-api-token').value = config.apiToken || '';
+        
+        // === Infos serveur (lecture seule) ===
+        
+        // Section Écran
+        document.getElementById('config-server-name').textContent = 
+            apiResponse.ecranNom || '-';
+        
+        const orientation = apiResponse.orientation || '-';
+        const ratio = apiResponse.ratio || '-';
+        document.getElementById('config-server-orientation').textContent = 
+            `${orientation} (${ratio})`;
+        
+        const dims = apiResponse.dimensions || {};
+        document.getElementById('config-server-resolution').textContent = 
+            dims.width && dims.height ? `${dims.width}x${dims.height}` : '-';
+        
+        document.getElementById('config-server-brightness').textContent = 
+            apiResponse.luminosite !== undefined ? `${apiResponse.luminosite}%` : '-';
+        
+        // Section Mode Nuit
+        const modeNuit = apiResponse.modeNuit || {};
+        document.getElementById('config-server-night-mode').textContent = 
+            modeNuit.actif ? '✅ Actif' : '❌ Inactif';
+        
+        document.getElementById('config-server-night-hours').textContent = 
+            modeNuit.heureDebut && modeNuit.heureFin 
+                ? `${modeNuit.heureDebut} - ${modeNuit.heureFin}` 
+                : '-';
+        
+        document.getElementById('config-server-night-brightness').textContent = 
+            modeNuit.luminositeNuit !== undefined ? `${modeNuit.luminositeNuit}%` : '-';
+        
+        // Section Programmation
+        const prog = apiResponse.programmation || {};
+        document.getElementById('config-server-schedule-active').textContent = 
+            prog.active ? '✅ Active' : '❌ Inactive';
+        
+        document.getElementById('config-server-schedule-hours').textContent = 
+            prog.heureDemarrage && prog.heureExtinction 
+                ? `${prog.heureDemarrage} - ${prog.heureExtinction}` 
+                : '-';
+        
+        const jours = prog.joursFonctionnement || [];
+        const jourNoms = ['', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+        const joursStr = jours.length === 7 
+            ? 'Tous les jours' 
+            : jours.map(j => jourNoms[j] || j).join(', ');
+        document.getElementById('config-server-schedule-days').textContent = joursStr || '-';
+        
+        // Section Affichage
+        const meteoConfig = serverConfig.meteo || {};
+        const affichageConfig = serverConfig.affichage || {};
+        const planningConfig = serverConfig.planning || {};
+        
+        document.getElementById('config-server-meteo').textContent = 
+            meteoConfig.actif ? '✅ Activée' : '❌ Désactivée';
+        
+        const lat = meteoConfig.latitude || config.meteoLat || null;
+        const lon = meteoConfig.longitude || config.meteoLon || null;
+        document.getElementById('config-server-coords').textContent = 
+            (lat && lon) ? `${lat}, ${lon}` : 'Non définies';
+        
+        document.getElementById('config-server-logo').textContent = 
+            affichageConfig.logoSOE ? '✅ Visible' : '❌ Masqué';
+        
+        document.getElementById('config-server-week').textContent = 
+            affichageConfig.weekNo ? '✅ Visible' : '❌ Masqué';
+        
+        document.getElementById('config-server-planning').textContent = 
+            planningConfig.actif ? `✅ ${planningConfig.position || 'footer'}` : '❌ Désactivé';
+        
+        // Fond d'écran
+        const fond = apiResponse.fondEcran || '-';
+        const fondName = fond !== '-' ? fond.split('/').pop() : '-';
+        document.getElementById('config-server-background').textContent = 
+            fondName.length > 25 ? fondName.substring(0, 22) + '...' : fondName;
+        
+        // Refresh interval
+        const refresh = apiResponse.refreshInterval || '-';
+        document.getElementById('config-server-refresh').textContent = 
+            refresh !== '-' ? `${refresh}s` : '-';
     }
     
     /**
      * Sauvegarde la configuration
      */
     async saveConfig() {
+        // Ne sauvegarder que les paramètres locaux essentiels
+        // Les autres paramètres (météo, logo, week...) viennent de l'API serveur
         const newConfig = {
             idEcran: parseInt(document.getElementById('config-id-ecran').value) || 1,
             env: document.getElementById('config-env').value,
-            meteo: document.getElementById('config-meteo').checked,
-            meteoLat: parseFloat(document.getElementById('config-meteo-lat').value) || 48.8566,
-            meteoLon: parseFloat(document.getElementById('config-meteo-lon').value) || 2.3522,
-            meteoUnits: 'metric',
-            logoSOE: document.getElementById('config-logo').checked,
-            weekNo: document.getElementById('config-week-no').checked,
-            weekType: window.configSEE?.weekType || false,
-            weekDisplay: window.configSEE?.weekDisplay !== false
+            apiToken: document.getElementById('config-api-token').value.trim() || ''
         };
         
         this._log('info', 'debug', 'Saving config: ' + JSON.stringify(newConfig));
@@ -405,14 +552,14 @@ class DebugOverlay {
                 border-radius: 3px;
             }
             
-            /* Config Panel */
+            /* Config Panel - Dark Mode */
             #config-panel {
                 position: fixed;
                 top: 0;
                 left: 0;
                 width: 100%;
                 height: 100%;
-                background: rgba(0, 0, 0, 0.8);
+                background: rgba(0, 0, 0, 0.9);
                 display: none;
                 justify-content: center;
                 align-items: center;
@@ -420,11 +567,12 @@ class DebugOverlay {
             }
             
             .config-dialog {
-                background: #fff;
+                background: #1a1a1a;
                 border-radius: 12px;
-                width: 400px;
+                width: 420px;
                 max-width: 90vw;
-                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+                border: 1px solid rgba(255, 255, 255, 0.1);
             }
             
             .config-header {
@@ -432,54 +580,163 @@ class DebugOverlay {
                 justify-content: space-between;
                 align-items: center;
                 padding: 15px 20px;
-                background: #f5f5f5;
+                background: rgba(255, 255, 255, 0.05);
                 border-radius: 12px 12px 0 0;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             }
             
             .config-title {
                 font-weight: bold;
                 font-size: 18px;
-                color: #333;
+                color: #fff;
             }
             
             .config-close {
                 cursor: pointer;
                 font-size: 24px;
-                color: #999;
+                color: #666;
             }
             
             .config-close:hover {
-                color: #333;
+                color: #fff;
             }
             
             .config-content {
                 padding: 20px;
+                max-height: 70vh;
+                overflow-y: auto;
+            }
+            
+            .config-content::-webkit-scrollbar {
+                width: 6px;
+            }
+            
+            .config-content::-webkit-scrollbar-track {
+                background: #1a1a1a;
+            }
+            
+            .config-content::-webkit-scrollbar-thumb {
+                background: #444;
+                border-radius: 3px;
+            }
+            
+            .config-content::-webkit-scrollbar-thumb:hover {
+                background: #555;
+            }
+            
+            .config-section-title {
+                font-size: 12px;
+                font-weight: 600;
+                color: #0866C6;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                margin-bottom: 12px;
+                margin-top: 8px;
+                padding-bottom: 6px;
+                border-bottom: 1px solid rgba(8, 102, 198, 0.3);
+            }
+            
+            .config-section-title:first-child {
+                margin-top: 0;
+            }
+            
+            .config-readonly-badge {
+                font-size: 10px;
+                font-weight: normal;
+                background: rgba(255, 255, 255, 0.1);
+                padding: 2px 6px;
+                border-radius: 4px;
+                margin-left: 8px;
+                text-transform: none;
+                letter-spacing: normal;
+                color: #888;
+            }
+            
+            .config-info-text {
+                font-size: 11px;
+                color: #666;
+                margin-bottom: 12px;
+                font-style: italic;
+            }
+            
+            .config-subsection {
+                font-size: 11px;
+                font-weight: 600;
+                color: #888;
+                margin-top: 14px;
+                margin-bottom: 8px;
+                padding-left: 4px;
+            }
+            
+            .config-group.config-readonly {
+                background: rgba(255, 255, 255, 0.03);
+                padding: 8px 10px;
+                border-radius: 6px;
+                margin-bottom: 6px;
+            }
+            
+            .config-group.config-readonly label {
+                color: #777;
+                font-size: 12px;
+            }
+            
+            .config-value {
+                font-weight: 500;
+                color: #bbb;
+                font-size: 12px;
+                text-align: right;
+                max-width: 180px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
             
             .config-group {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                margin-bottom: 15px;
+                margin-bottom: 12px;
             }
             
             .config-group label {
                 font-weight: 500;
-                color: #333;
+                color: #ccc;
+                font-size: 14px;
             }
             
             .config-group input[type="number"],
+            .config-group input[type="password"],
+            .config-group input[type="text"],
             .config-group select {
-                width: 150px;
-                padding: 8px 12px;
-                border: 1px solid #ddd;
+                width: 180px;
+                padding: 10px 12px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
                 border-radius: 6px;
                 font-size: 14px;
+                background: #2a2a2a;
+                color: #fff;
+            }
+            
+            .config-group input:focus,
+            .config-group select:focus {
+                outline: none;
+                border-color: #0866C6;
+                box-shadow: 0 0 0 2px rgba(8, 102, 198, 0.2);
+            }
+            
+            .config-group input::placeholder {
+                color: #666;
+            }
+            
+            .config-group select option {
+                background: #2a2a2a;
+                color: #fff;
             }
             
             .config-group input[type="checkbox"] {
                 width: 20px;
                 height: 20px;
+                accent-color: #0866C6;
             }
             
             .config-footer {
@@ -487,8 +744,9 @@ class DebugOverlay {
                 justify-content: flex-end;
                 gap: 10px;
                 padding: 15px 20px;
-                background: #f5f5f5;
+                background: rgba(255, 255, 255, 0.03);
                 border-radius: 0 0 12px 12px;
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
             }
             
             .config-btn {
@@ -498,11 +756,18 @@ class DebugOverlay {
                 font-size: 14px;
                 cursor: pointer;
                 font-weight: 500;
+                transition: all 0.2s ease;
             }
             
             .config-btn-cancel {
-                background: #e0e0e0;
-                color: #333;
+                background: #333;
+                color: #999;
+                border: 1px solid #444;
+            }
+            
+            .config-btn-cancel:hover {
+                background: #444;
+                color: #fff;
             }
             
             .config-btn-save {
@@ -510,8 +775,8 @@ class DebugOverlay {
                 color: #fff;
             }
             
-            .config-btn:hover {
-                opacity: 0.9;
+            .config-btn-save:hover {
+                background: #0a7ae6;
             }
         `;
         

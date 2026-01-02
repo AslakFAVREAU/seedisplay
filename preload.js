@@ -254,6 +254,9 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('message', (event, text) => {
       try { callback(text) } catch (e) { /* swallow */ }
     })
+  },
+  quitApp: () => {
+    ipcRenderer.send('quit-app')
   }
 })
 

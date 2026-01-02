@@ -323,6 +323,12 @@ ipcMain.on('renderer-log', (event, { level, msg }) => {
   log.log(level || 'info', `[renderer-ipc] ${msg}`)
 })
 
+// Quit app on 'X' shortcut
+ipcMain.on('quit-app', () => {
+  log.info('[main] Quit requested via X shortcut')
+  app.quit()
+})
+
 // Provide handlers for preload fallback when native modules are unavailable in preload
 const fs = require('fs')
 const axios = require('axios')
@@ -398,6 +404,61 @@ ipcMain.handle('preload-saveBinary', async (evt, relative, url) => {
     fs.writeFileSync(p, buf)
     return true
   } catch(e) { return false }
+})
+
+ipcMain.handle('preload-saveBinaryWithCache', async (evt, relative, url, cacheOptions = {}) => {
+  try {
+    const p = path.join(BASE_PATH, relative)
+    const dir = path.dirname(p)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    
+    // Check if file exists and get ETag for conditional request
+    let existingETag = null
+    const etagFile = p + '.etag'
+    if (fs.existsSync(p) && fs.existsSync(etagFile)) {
+      try { existingETag = fs.readFileSync(etagFile, 'utf8').trim() } catch(e) {}
+    }
+    
+    const headers = {}
+    if (existingETag) {
+      headers['If-None-Match'] = existingETag
+    }
+    
+    try {
+      const res = await axios.get(url, { 
+        responseType: 'arraybuffer',
+        headers,
+        validateStatus: s => s === 200 || s === 304
+      })
+      
+      if (res.status === 304) {
+        // Not modified - use cached file
+        const stats = fs.statSync(p)
+        return { success: true, cached: true, size: stats.size }
+      }
+      
+      // Save new file
+      const buf = Buffer.from(res.data)
+      fs.writeFileSync(p, buf)
+      
+      // Save ETag if present
+      const newETag = res.headers?.etag
+      if (newETag) {
+        fs.writeFileSync(etagFile, newETag)
+      }
+      
+      return { success: true, cached: false, size: buf.length }
+    } catch(fetchErr) {
+      // If fetch fails but we have cached file, use it
+      if (fs.existsSync(p)) {
+        const stats = fs.statSync(p)
+        return { success: true, cached: true, size: stats.size, fallback: true }
+      }
+      throw fetchErr
+    }
+  } catch(e) { 
+    return { success: false, error: e.message } 
+  }
 })
 
 ipcMain.handle('preload-getMediaCacheInfo', async () => {
