@@ -14,7 +14,7 @@ class PlaybackLogger {
     constructor() {
         this.currentPlayback = null;
         this.sessionId = this._generateSessionId();
-        this.ecranId = null;
+        this.ecranUuid = null;
         this.logBuffer = [];
         this.flushInterval = null;
         
@@ -43,11 +43,20 @@ class PlaybackLogger {
     }
     
     /**
-     * Configure l'ID écran
+     * Configure l'UUID écran
+     */
+    setEcranUuid(uuid) {
+        this.ecranUuid = uuid;
+        this._log('info', 'ecranUuid set to ' + uuid);
+    }
+    
+    /**
+     * Configure l'ID écran (deprecated - use setEcranUuid)
+     * @deprecated Use setEcranUuid instead
      */
     setEcranId(id) {
-        this.ecranId = id;
-        this._log('info', 'ecranId set to ' + id);
+        this.ecranUuid = id;
+        this._log('info', 'ecranUuid set to ' + id + ' (via deprecated setEcranId)');
     }
     
     /**
@@ -63,7 +72,7 @@ class PlaybackLogger {
         
         this.currentPlayback = {
             sessionId: this.sessionId,
-            ecranId: this.ecranId || window.configSEE?.idEcran || 'unknown',
+            ecranUuid: this.ecranUuid || window.configSEE?.ecranUuid || 'unknown',
             mediaId: mediaData.mediaId || null,
             mediaNom: mediaData.mediaNom || null,
             mediaFichier: mediaData.mediaFichier || mediaData.file || 'unknown',

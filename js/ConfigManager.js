@@ -43,7 +43,8 @@ class ConfigManager {
   static get DEFAULTS() {
     return {
       env: 'prod',
-      idEcran: 1,
+      ecranUuid: '',
+      idEcran: null, // Deprecated: use ecranUuid. Kept for backward compatibility
       meteo: true,
       meteoLat: 48.75,
       meteoLon: 2.3,
@@ -96,7 +97,7 @@ class ConfigManager {
 
       this._log.info('config-manager', 'Configuration loaded:', {
         env: this._config.env,
-        idEcran: this._config.idEcran,
+        ecranUuid: this._config.ecranUuid,
         meteo: this._config.meteo
       })
 
@@ -134,10 +135,18 @@ class ConfigManager {
   }
 
   /**
-   * Get the screen ID
+   * Get the screen UUID
+   */
+  get ecranUuid() {
+    return this.config.ecranUuid
+  }
+
+  /**
+   * Get the screen ID (deprecated - use ecranUuid)
+   * @deprecated Use ecranUuid instead
    */
   get idEcran() {
-    return this.config.idEcran
+    return this.config.ecranUuid
   }
 
   /**
@@ -164,9 +173,15 @@ class ConfigManager {
 
   /**
    * Build the diapo API URL
+   * Supports both UUID (new) and numeric ID (legacy)
    */
   get diapoApiUrl() {
-    return `${this.apiBaseUrl}/see/API/diapo/${this.idEcran}`
+    const identifier = this.ecranUuid || this.config.idEcran
+    if (!identifier) {
+      this._log.warn('config-manager', 'No ecranUuid or idEcran configured')
+      return null
+    }
+    return `${this.apiBaseUrl}/see/API/diapo/${identifier}`
   }
 
   /**

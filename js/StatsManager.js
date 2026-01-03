@@ -197,14 +197,19 @@ class StatsManager {
      * Envoie les statistiques au serveur
      */
     async sendToServer() {
-        const ecranId = this.stats.ecranId || window.configSEE?.idEcran || 1;
+        const ecranUuid = this.stats.ecranUuid || window.configSEE?.ecranUuid || '';
         const env = window.configSEE?.env || 'prod';
+        
+        if (!ecranUuid) {
+            this._log('warn', 'stats', 'No ecranUuid configured, skipping stats send');
+            return;
+        }
         
         const baseUrl = env === 'local' 
             ? 'http://localhost:8000' 
             : 'https://soek.fr';
         
-        const url = `${baseUrl}/see/API/stats/${ecranId}`;
+        const url = `${baseUrl}/see/API/stats/${ecranUuid}`;
         
         // Préparer les données
         const payload = {

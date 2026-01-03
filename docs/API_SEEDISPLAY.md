@@ -3,7 +3,7 @@
 Documentation de l'API pour le projet **seedisplay** (affichage dynamique sur écrans).
 
 > **URL de base**: `https://soek.fr/see/API/`
-> **Version**: 2.3 (Janvier 2026)
+> **Version**: 2.5 (Janvier 2026)
 
 ---
 
@@ -15,9 +15,32 @@ Documentation de l'API pour le projet **seedisplay** (affichage dynamique sur é
 
 ---
 
-## 📡 Endpoint Principal
+## � Sécurité
 
-### GET `/see/API/diapo/{idEcran}`
+### API et Routes - Utilisation des UUID
+
+| Type | Routes | Paramètre | Description |
+|------|--------|-----------|-------------|
+| **API Diapo** | `/see/API/diapo/{uuid}` | `uuid` (UUID v4) | Endpoint principal pour récupérer les diaporamas |
+| **API Planning** | `/see/API/planning/{uuid}` | `uuid` (UUID v4) | Endpoint pour le planning des salles |
+| **Administration** | `/see/ecran/edit/{uuid}`, `/see/ecran/vue/{uuid}`, `/see/ecran/simulation/{uuid}` | `uuid` (UUID v4) | Routes back-office |
+| **Lifecycle** | `/see/ecran/{uuid}/check-deactivate`, etc. | `uuid` (UUID v4) | Gestion activation/désactivation |
+
+### Protection IDOR (Insecure Direct Object Reference)
+
+Toutes les routes utilisent des **UUID v4** (ex: `550e8400-e29b-41d4-a716-446655440000`) au lieu des ID séquentiels pour :
+- Empêcher l'énumération des ressources via l'incrémentation des URLs
+- Protéger contre les attaques par force brute
+- Masquer le nombre total d'entités dans le système
+
+> **⚠️ BREAKING CHANGE v2.5** : Les endpoints API utilisent maintenant l'UUID au lieu de l'ID numérique.
+> Mettez à jour la configuration de vos écrans seedisplay avec l'UUID (visible dans l'interface d'administration).
+
+---
+
+## �📡 Endpoint Principal
+
+### GET `/see/API/diapo/{uuid}`
 
 Récupère la configuration complète d'un écran et ses diaporamas actifs.
 
@@ -25,7 +48,7 @@ Récupère la configuration complète d'un écran et ses diaporamas actifs.
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `idEcran` | integer | ID unique de l'écran |
+| `uuid` | UUID v4 | UUID unique de l'écran (visible dans l'interface d'administration) |
 
 #### Réponse (JSON)
 
@@ -68,7 +91,7 @@ Récupère la configuration complète d'un écran et ses diaporamas actifs.
       "position": "footer",
       "hauteur": "200px",
       "refreshInterval": 300,
-      "apiUrl": "/see/API/planning/13"
+      "apiUrl": "/see/API/planning/550e8400-e29b-41d4-a716-446655440000"
     }
   },
   "refreshInterval": 300,
@@ -237,7 +260,7 @@ Affiche le planning du jour des salles associées à l'écran.
   "position": "footer",
   "hauteur": "200px",
   "refreshInterval": 300,
-  "apiUrl": "/see/API/planning/13"
+  "apiUrl": "/see/API/planning/550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -1331,7 +1354,7 @@ function renderEventTemplate(diapo) {
 
 ## � API Planning du Jour
 
-### GET `/see/API/planning/{idEcran}`
+### GET `/see/API/planning/{uuid}`
 
 Récupère le planning du jour pour toutes les salles associées à un écran.
 
@@ -1341,7 +1364,7 @@ Récupère le planning du jour pour toutes les salles associées à un écran.
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `idEcran` | integer | ID unique de l'écran |
+| `uuid` | UUID v4 | UUID unique de l'écran |
 
 #### Réponse (JSON)
 
@@ -1578,6 +1601,18 @@ L'API fournit les données brutes. seedisplay peut les afficher de différentes 
 
 ## 🔄 Changelog API
 
+### v2.5 (Janvier 2026)
+- ⚠️ **BREAKING CHANGE** : Les endpoints API utilisent maintenant l'UUID au lieu de l'ID numérique
+- ✅ **UUID partout** : `/see/API/diapo/{uuid}` et `/see/API/planning/{uuid}` pour une sécurité unifiée
+- ✅ **Configuration seedisplay** : La page écran affiche l'UUID et le token à utiliser
+- ✅ **Protection IDOR complète** : Plus aucune route n'expose d'ID séquentiel
+
+### v2.4 (Janvier 2026)
+- ✅ **Sécurité UUID** : Les routes d'administration utilisent désormais des UUID au lieu des ID séquentiels
+- ✅ **Protection IDOR** : Prévention des attaques par énumération d'URLs sur les écrans et événements
+- ✅ **Routes admin UUID** : `/see/ecran/edit/{uuid}`, `/see/ecran/vue/{uuid}`, `/see/ecran/simulation/{uuid}`
+- ✅ **Lifecycle UUID** : `/see/ecran/{uuid}/check-deactivate`, `/see/ecran/{uuid}/deactivate`, `/see/ecran/{uuid}/reactivate`
+
 ### v2.3 (Janvier 2026)
 - ✅ **Configuration Planning** : Nouveaux champs `config.planning` dans API diapo
 - ✅ **Positions planning** : footer, sidebar, fullscreen, overlay configurables depuis back-office
@@ -1588,7 +1623,7 @@ L'API fournit les données brutes. seedisplay peut les afficher de différentes 
 - ✅ **LEFT JOIN ligneMedia** : Les diapos sans médias (templates auto) sont maintenant incluses
 
 ### v2.2 (Janvier 2026)
-- ✅ **API Planning du Jour** : Nouvel endpoint `/see/API/planning/{idEcran}`
+- ✅ **API Planning du Jour** : Nouvel endpoint `/see/API/planning/{uuid}`
 - ✅ **Événements par salle** : Planning groupé par salle avec statut temps réel
 - ✅ **Compteurs temps** : `minutesRestantes` et `minutesAvantDebut` pour affichage dynamique
 
@@ -1616,11 +1651,11 @@ L'API fournit les données brutes. seedisplay peut les afficher de différentes 
 ## 📞 Support
 
 En cas de problème avec l'API :
-1. Vérifier que l'`idEcran` est correct
+1. Vérifier que l'UUID de l'écran est correct (visible dans l'interface d'administration)
 2. Vérifier que l'écran est activé dans SOEK
 3. Consulter les logs de la console seedisplay
 4. Contacter l'administrateur SOEK
 
 ---
 
-*Documentation générée le 01 janvier 2026*
+*Documentation mise à jour le 03 janvier 2026*

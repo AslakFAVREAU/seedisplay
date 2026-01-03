@@ -255,6 +255,10 @@ contextBridge.exposeInMainWorld('api', {
       try { callback(text) } catch (e) { /* swallow */ }
     })
   },
+  // Récupérer les informations système (CPU, mémoire, IPs)
+  getSystemInfo: async () => {
+    return await ipcRenderer.invoke('preload-getSystemInfo')
+  },
   quitApp: () => {
     ipcRenderer.send('quit-app')
   }

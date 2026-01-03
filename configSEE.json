@@ -3,7 +3,7 @@
   "meteoLat": 48.75,
   "meteoLon": 2.3,
   "meteoUnits": "metric",
-  "idEcran": 1,
+  "ecranUuid": "86818da5-e8ac-11f0-b595-00155df58fb0",
   "weekDisplay": true,
   "weekNo": true,
   "weekType": true,

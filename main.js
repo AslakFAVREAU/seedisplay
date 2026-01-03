@@ -496,6 +496,60 @@ app.whenReady().then(createWindow)
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
+// Get system info (CPU, memory, IPs) for debug overlay
+const os = require('os')
+ipcMain.handle('preload-getSystemInfo', async () => {
+  try {
+    // Get process memory usage
+    const memUsage = process.memoryUsage()
+    const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024)
+    const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024)
+    const rssMB = Math.round(memUsage.rss / 1024 / 1024)
+    
+    // Get CPU usage (approximation via process.cpuUsage)
+    const cpuUsage = process.cpuUsage()
+    const cpuPercent = Math.round((cpuUsage.user + cpuUsage.system) / 1000000) // rough approximation
+    
+    // Get local IP
+    let localIP = '-'
+    const interfaces = os.networkInterfaces()
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name]) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          localIP = iface.address
+          break
+        }
+      }
+      if (localIP !== '-') break
+    }
+    
+    // Get public IP (async fetch)
+    let publicIP = '-'
+    try {
+      const res = await axios.get('https://api.ipify.org?format=json', { timeout: 3000 })
+      publicIP = res.data.ip || '-'
+    } catch (e) {
+      log.warn('[main] Could not fetch public IP:', e.message)
+    }
+    
+    return {
+      memory: {
+        heapUsedMB,
+        heapTotalMB,
+        rssMB
+      },
+      cpuPercent,
+      localIP,
+      publicIP,
+      platform: os.platform(),
+      hostname: os.hostname()
+    }
+  } catch (e) {
+    log.error('[main] getSystemInfo error:', e)
+    return { memory: {}, cpuPercent: 0, localIP: '-', publicIP: '-' }
+  }
+})
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()

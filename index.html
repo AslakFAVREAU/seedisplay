@@ -500,11 +500,11 @@
     
     <!-- Formulaire de configuration -->
     <div class="setup-container">
-      <p>Bienvenue! Entrez l'ID de cet écran pour commencer.</p>
+      <p>Bienvenue! Entrez l'UUID de cet écran pour commencer.</p>
       
       <div class="setup-input-group">
-        <label for="setupIdEcran">ID de l'écran</label>
-        <input type="number" id="setupIdEcran" placeholder="Ex: 1" min="1" autofocus>
+        <label for="setupEcranUuid">UUID de l'écran</label>
+        <input type="text" id="setupEcranUuid" placeholder="Ex: 550e8400-e29b-41d4-a716-446655440000" autofocus>
       </div>
       
       <div class="setup-input-group">
@@ -902,7 +902,7 @@
     __log('info','setup','Showing setup screen (first run)')
     document.getElementById('loadingScreen').style.display = 'none'
     document.getElementById('setupScreen').classList.add('active')
-    document.getElementById('setupIdEcran').focus()
+    document.getElementById('setupEcranUuid').focus()
   }
 
   /**
@@ -916,16 +916,17 @@
    * Soumet la configuration initiale
    */
   async function submitSetup() {
-    const idEcran = parseInt(document.getElementById('setupIdEcran').value)
+    const ecranUuid = document.getElementById('setupEcranUuid').value.trim()
     const env = document.getElementById('setupEnv').value
     const apiToken = document.getElementById('setupApiToken').value.trim()
     const errorDiv = document.getElementById('setupError')
     const statusDiv = document.getElementById('setupStatus')
     const submitBtn = document.getElementById('setupSubmit')
 
-    // Validation
-    if (!idEcran || idEcran < 1) {
-      errorDiv.textContent = '⚠️ Veuillez entrer un ID valide (nombre > 0)'
+    // Validation UUID (format basique)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!ecranUuid || !uuidRegex.test(ecranUuid)) {
+      errorDiv.textContent = '⚠️ Veuillez entrer un UUID valide (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)'
       return
     }
 
@@ -938,7 +939,7 @@
       const baseUrl = env === 'local' 
         ? 'http://localhost:8000' 
         : 'https://soek.fr'
-      const testUrl = `${baseUrl}/see/API/diapo/${idEcran}`
+      const testUrl = `${baseUrl}/see/API/diapo/${ecranUuid}`
       
       __log('info','setup','Testing API connection:', testUrl)
       statusDiv.textContent = '🔄 Connexion à ' + baseUrl + '...'
@@ -969,7 +970,7 @@
 
       // Sauvegarder la configuration
       const newConfig = {
-        idEcran: idEcran,
+        ecranUuid: ecranUuid,
         env: env,
         apiToken: apiToken || '', // Token API optionnel
         // Valeurs par défaut (seront écrasées par l'API)
@@ -1015,9 +1016,9 @@
   window.api.getConfig().then((config) => {
     __log('info','bootstrap','api.getConfig returned', config)
     
-    // Vérifier si c'est le premier démarrage (pas de config ou pas d'idEcran)
-    if (!config || !config.idEcran) {
-      __log('info','bootstrap','No idEcran found - first run, showing setup screen')
+    // Vérifier si c'est le premier démarrage (pas de config ou pas d'ecranUuid)
+    if (!config || !config.ecranUuid) {
+      __log('info','bootstrap','No ecranUuid found - first run, showing setup screen')
       showSetupScreen()
       return // Ne pas continuer le bootstrap normal
     }
@@ -1027,9 +1028,9 @@
       // Expose la config au code legacy qui s'attend à trouver window.configSEE
       window.configSEE = config
       
-      // Configure PlaybackLogger avec l'ID écran pour les logs régie pub
-      if (window.playbackLogger && config.idEcran) {
-        window.playbackLogger.setEcranId(config.idEcran);
+      // Configure PlaybackLogger avec l'UUID écran pour les logs régie pub
+      if (window.playbackLogger && config.ecranUuid) {
+        window.playbackLogger.setEcranUuid(config.ecranUuid);
       }
       
       // Appeler la fonction legacy pour appliquer la configuration et déclencher les flux (diapo / meteo)

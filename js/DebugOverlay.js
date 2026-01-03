@@ -200,6 +200,23 @@ class DebugOverlay {
                     <div class="debug-label">Programmation</div>
                     <div class="debug-value" id="debug-schedule">-</div>
                 </div>
+                <div class="debug-separator"></div>
+                <div class="debug-section">
+                    <div class="debug-label">IP Locale</div>
+                    <div class="debug-value" id="debug-local-ip">-</div>
+                </div>
+                <div class="debug-section">
+                    <div class="debug-label">IP Publique</div>
+                    <div class="debug-value" id="debug-public-ip">-</div>
+                </div>
+                <div class="debug-section">
+                    <div class="debug-label">Mémoire (RSS)</div>
+                    <div class="debug-value" id="debug-memory">-</div>
+                </div>
+                <div class="debug-section">
+                    <div class="debug-label">Hostname</div>
+                    <div class="debug-value" id="debug-hostname">-</div>
+                </div>
             </div>
             <div class="debug-footer">
                 <span>Appuyez sur <kbd>D</kbd> pour fermer</span>
@@ -339,7 +356,7 @@ class DebugOverlay {
         const serverConfig = apiResponse.config || {};
         
         // Champs locaux éditables
-        document.getElementById('config-id-ecran').value = config.idEcran || '';
+        document.getElementById('config-id-ecran').value = config.ecranUuid || '';
         document.getElementById('config-env').value = config.env || 'prod';
         document.getElementById('config-api-token').value = config.apiToken || '';
         
@@ -432,7 +449,7 @@ class DebugOverlay {
         // Ne sauvegarder que les paramètres locaux essentiels
         // Les autres paramètres (météo, logo, week...) viennent de l'API serveur
         const newConfig = {
-            idEcran: parseInt(document.getElementById('config-id-ecran').value) || 1,
+            ecranUuid: document.getElementById('config-id-ecran').value.trim() || '',
             env: document.getElementById('config-env').value,
             apiToken: document.getElementById('config-api-token').value.trim() || ''
         };
@@ -521,6 +538,12 @@ class DebugOverlay {
             
             .debug-section:last-child {
                 border-bottom: none;
+            }
+            
+            .debug-separator {
+                height: 1px;
+                background: rgba(255, 255, 255, 0.3);
+                margin: 8px 0;
             }
             
             .debug-label {
@@ -811,8 +834,10 @@ class DebugOverlay {
         // Version
         this._setValue('debug-version', 'v1.9.3');
         
-        // ID Écran
-        this._setValue('debug-ecran-id', '#' + (config.idEcran || window.idEcran || '?'));
+        // UUID Écran
+        const uuid = config.ecranUuid || window.ecranUuid || '?';
+        const displayUuid = uuid.length > 8 ? uuid.substring(0, 8) + '...' : uuid;
+        this._setValue('debug-ecran-id', displayUuid);
         
         // Environnement
         const env = config.env || 'prod';
@@ -914,6 +939,41 @@ class DebugOverlay {
             this._setValue('debug-schedule', prog.heureDemarrage + ' - ' + prog.heureExtinction);
         } else {
             this._setValue('debug-schedule', 'Désactivée');
+        }
+        
+        // Infos système (CPU, mémoire, IPs) - mise à jour moins fréquente
+        this._updateSystemInfo();
+    }
+    
+    /**
+     * Met à jour les infos système (appelé moins fréquemment)
+     */
+    async _updateSystemInfo() {
+        // Éviter les appels trop fréquents (toutes les 5 secondes max)
+        const now = Date.now();
+        if (this._lastSystemInfoUpdate && (now - this._lastSystemInfoUpdate) < 5000) {
+            return;
+        }
+        this._lastSystemInfoUpdate = now;
+        
+        if (window.api && window.api.getSystemInfo) {
+            try {
+                const info = await window.api.getSystemInfo();
+                if (info) {
+                    this._setValue('debug-local-ip', info.localIP || '-');
+                    this._setValue('debug-public-ip', info.publicIP || '-');
+                    
+                    if (info.memory && info.memory.rssMB) {
+                        this._setValue('debug-memory', info.memory.rssMB + ' MB');
+                    }
+                    
+                    if (info.hostname) {
+                        this._setValue('debug-hostname', info.hostname);
+                    }
+                }
+            } catch (e) {
+                this._log('warn', 'debug', 'Failed to get system info: ' + e.message);
+            }
         }
     }
     

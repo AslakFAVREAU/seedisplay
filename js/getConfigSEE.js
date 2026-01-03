@@ -71,13 +71,14 @@ function processConfig(configSEE) {
         meteoUnits = configSEE.meteoUnits || 'metric'
 
         // Paramètres généraux
-        idEcran = configSEE.idEcran
+        // Supporte UUID (nouveau) ou idEcran (legacy) pour compatibilité
+        idEcran = configSEE.ecranUuid || configSEE.idEcran
         weekDisplay = configSEE.weekDisplay
         weekNo = configSEE.weekNo
         weekType = configSEE.weekType
         logoSOE = configSEE.logoSOE
         env = configSEE.env
-    __log('info','config','processConfig: env=' + env)
+    __log('info','config','processConfig: env=' + env + ', ecranId=' + idEcran)
 
         if (env == 'prod') {
             urlAPI = 'https://soek.fr/see/API/diapo/' + idEcran

@@ -2,7 +2,7 @@
  * PlanningManager.js - Gestion de l'affichage du planning du jour
  * 
  * Récupère et affiche le planning des salles associées à l'écran
- * Endpoint: /see/API/planning/{idEcran}
+ * Endpoint: /see/API/planning/{uuid}
  */
 
 // Safe logger
@@ -95,14 +95,19 @@ class PlanningManager {
      * @returns {string}
      */
     getPlanningApiUrl() {
-        const idEcran = window.configSEE?.idEcran || window.idEcran || 1;
+        const ecranUuid = window.configSEE?.ecranUuid || window.ecranUuid || '';
         const env = window.configSEE?.env || window.env || 'prod';
+        
+        if (!ecranUuid) {
+            this._log('warn', 'planning', 'No ecranUuid configured');
+            return null;
+        }
         
         const baseUrl = env === 'local' 
             ? 'http://localhost:8000' 
             : 'https://soek.fr';
         
-        return `${baseUrl}/see/API/planning/${idEcran}`;
+        return `${baseUrl}/see/API/planning/${ecranUuid}`;
     }
 
     /**
