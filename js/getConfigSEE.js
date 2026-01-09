@@ -83,6 +83,9 @@ function processConfig(configSEE) {
         if (env == 'prod') {
             urlAPI = 'https://soek.fr/see/API/diapo/' + idEcran
         }
+        else if (env == 'beta') {
+            urlAPI = 'https://beta.soek.fr/see/API/diapo/' + idEcran
+        }
         else if (env == 'local') {
             urlAPI = 'http://localhost:8000/see/API/diapo/' + idEcran
         }

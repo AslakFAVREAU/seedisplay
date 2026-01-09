@@ -2,8 +2,17 @@
 
 Documentation de l'API pour le projet **seedisplay** (affichage dynamique sur écrans).
 
-> **URL de base**: `https://soek.fr/see/API/`
-> **Version**: 2.5 (Janvier 2026)
+> **Version**: 2.6 (Janvier 2026)
+
+### 🌐 Environnements disponibles
+
+| Environnement | URL de base | Description |
+|---------------|-------------|-------------|
+| **Production** | `https://soek.fr/see/API/` | Serveur de production principal |
+| **Beta** | `https://beta.soek.fr/see/API/` | Serveur de test/préproduction |
+| **Local** | `http://localhost:8000/see/API/` | Développement local |
+
+L'environnement se configure dans seedisplay via le menu de configuration (écran de setup ou overlay debug).
 
 ---
 
@@ -91,9 +100,13 @@ Récupère la configuration complète d'un écran et ses diaporamas actifs.
       "position": "footer",
       "hauteur": "200px",
       "refreshInterval": 300,
+      "slideDuree": 10,
+      "maxSallesPerPage": 4,
       "apiUrl": "/see/API/planning/550e8400-e29b-41d4-a716-446655440000"
     }
   },
+  "fondEcran": "/uploads/see/fonds/background.jpg",
+  "masquerPageDefault": false,
   "refreshInterval": 300,
   "modePrioritaire": false,
   "serverTime": "2025-12-26T14:30:00+01:00",
@@ -119,6 +132,8 @@ Récupère la configuration complète d'un écran et ses diaporamas actifs.
 | `ratio` | string | Ratio calculé (ex: `"16:9"`, `"16:10"`, `"9:16"`) |
 | `dimensions` | string | Résolution (ex: `"1920x1080"`) |
 | `luminosite` | integer | Luminosité actuelle (0-100), ajustée automatiquement si mode nuit actif |
+| `fondEcran` | string\|null | URL du fond d'écran personnalisé (ex: `/uploads/see/fonds/bg.jpg`). `null` = fond par défaut |
+| `masquerPageDefault` | boolean | Si `true`, masque la page par défaut (horloge/logo) quand il n'y a pas de médias |
 | `refreshInterval` | integer | Intervalle de refresh en secondes |
 | `modePrioritaire` | boolean | `true` si un diapo prioritaire est actif (timeline exclusive) |
 | `serverTime` | string | Date/heure serveur ISO 8601 pour synchronisation |
@@ -191,12 +206,34 @@ Quand l'écran est configuré pour s'éteindre pendant certaines heures :
 > - **Images**: JPG, PNG, GIF, WebP
 > - **Vidéos**: MP4, WebM (lecture en boucle recommandée)
 
+### Fond d'écran personnalisé
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `fondEcran` | string\|null | URL du fond d'écran personnalisé. `null` = fond par défaut seedisplay |
+
+```javascript
+// Appliquer le fond d'écran personnalisé
+if (ecranData.fondEcran) {
+  document.body.style.backgroundImage = `url(${ecranData.fondEcran})`;
+  document.body.style.backgroundSize = 'cover';
+  document.body.style.backgroundPosition = 'center';
+}
+```
+
+### Masquer la page par défaut
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `masquerPageDefault` | boolean | Si `true`, masque la page par défaut (horloge/logo) quand il n'y a pas de médias à afficher |
+
+> **Comportement**: 
+> - `false` (défaut) : Quand aucun média actif, affiche l'horloge/logo/météo
+> - `true` : Quand aucun média actif, affiche seulement le fond d'écran (ou noir si pas de fond)
+
 ---
 
 ## ⚙️ Configuration Client
-
-> ⚠️ **TODO Symfony**: Ajouter ces champs dans l'entité `Ecran` et les inclure dans la réponse API.
-> Ces paramètres permettent de configurer l'affichage côté client (seedisplay) depuis le back-office.
 
 ### Structure `config`
 
@@ -260,6 +297,8 @@ Affiche le planning du jour des salles associées à l'écran.
   "position": "footer",
   "hauteur": "200px",
   "refreshInterval": 300,
+  "slideDuree": 10,
+  "maxSallesPerPage": 4,
   "apiUrl": "/see/API/planning/550e8400-e29b-41d4-a716-446655440000"
 }
 ```
@@ -270,6 +309,8 @@ Affiche le planning du jour des salles associées à l'écran.
 | `planning.position` | string | `"footer"` | Position: `"footer"`, `"sidebar"`, `"fullscreen"`, `"overlay"` |
 | `planning.hauteur` | string | `"200px"` | Hauteur du planning (CSS: `"200px"`, `"30%"`) |
 | `planning.refreshInterval` | integer | `300` | Intervalle de rafraîchissement en secondes |
+| `planning.slideDuree` | integer | `10` | Durée d'affichage de chaque page de salles (en secondes) |
+| `planning.maxSallesPerPage` | integer | `4` | Nombre maximum de salles affichées par page |
 | `planning.apiUrl` | string | - | URL de l'API planning pour cet écran |
 
 #### Positions disponibles
@@ -1249,7 +1290,9 @@ Pour les diapos en mode `auto`, l'API renvoie des données d'événement au lieu
     "heureDebut": "20:00",
     "heureFin": "21:00",
     "date": "2026-01-01",
-    "mode": "auto"
+    "mode": "auto",
+    "anticipation": 15,
+    "heureDebutAffichage": "19:45"
   },
   "medias": [],
   "totalMedias": 0,
@@ -1268,6 +1311,8 @@ Pour les diapos en mode `auto`, l'API renvoie des données d'événement au lieu
 | `evenement.heureFin` | string | Heure fin (HH:mm) |
 | `evenement.date` | string | Date (YYYY-MM-DD) |
 | `evenement.mode` | string | `auto` (template) ou `custom` (média) |
+| `evenement.anticipation` | integer | Minutes avant le début pour commencer l'affichage |
+| `evenement.heureDebutAffichage` | string | Heure de début effective de l'affichage (HH:mm), calculée selon l'anticipation |
 
 ### Rendu côté seedisplay
 
@@ -1601,6 +1646,13 @@ L'API fournit les données brutes. seedisplay peut les afficher de différentes 
 
 ## 🔄 Changelog API
 
+### v2.6 (Janvier 2026)
+- ✅ **Fond d'écran personnalisé** : Nouveau champ `fondEcran` pour définir un arrière-plan custom
+- ✅ **Masquer page par défaut** : Nouveau champ `masquerPageDefault` pour cacher horloge/logo si pas de médias
+- ✅ **Planning avancé** : Nouveaux champs `slideDuree` et `maxSallesPerPage` pour pagination multi-salles
+- ✅ **Anticipation événements** : Champs `anticipation` et `heureDebutAffichage` pour affichage anticipé des diapos événements
+- ✅ **Documentation complète** : Mise à jour exhaustive de tous les champs API
+
 ### v2.5 (Janvier 2026)
 - ⚠️ **BREAKING CHANGE** : Les endpoints API utilisent maintenant l'UUID au lieu de l'ID numérique
 - ✅ **UUID partout** : `/see/API/diapo/{uuid}` et `/see/API/planning/{uuid}` pour une sécurité unifiée
@@ -1658,4 +1710,4 @@ En cas de problème avec l'API :
 
 ---
 
-*Documentation mise à jour le 03 janvier 2026*
+*Documentation mise à jour le 09 janvier 2026*

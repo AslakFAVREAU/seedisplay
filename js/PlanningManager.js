@@ -105,7 +105,7 @@ class PlanningManager {
         
         const baseUrl = env === 'local' 
             ? 'http://localhost:8000' 
-            : 'https://soek.fr';
+            : env === 'beta' ? 'https://beta.soek.fr' : 'https://soek.fr';
         
         return `${baseUrl}/see/API/planning/${ecranUuid}`;
     }

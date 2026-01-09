@@ -16,13 +16,90 @@ class DebugOverlay {
         this.configPanel = null;
         this.updateInterval = null;
         this.startTime = Date.now();
+        this.updateStatus = { checking: false, available: false, downloading: false, progress: 0, error: null, version: null };
         
         this._log = window.logger 
             ? (level, tag, msg) => window.logger[level](tag, msg)
             : (level, tag, msg) => console[level](`[${tag}] ${msg}`);
         
         this._initKeyboardShortcuts();
+        this._initUpdateListener();
         this._log('info', 'debug', 'DebugOverlay initialized - Press D to toggle, C for config');
+    }
+    
+    /**
+     * Initialise le listener pour les statuts de mise à jour
+     */
+    _initUpdateListener() {
+        if (window.api && window.api.onUpdateStatus) {
+            window.api.onUpdateStatus((status) => {
+                this._log('info', 'debug', 'Update status received: ' + JSON.stringify(status));
+                this.updateStatus = status;
+                this._updateUpdateStatusDisplay();
+            });
+        }
+    }
+    
+    /**
+     * Met à jour l'affichage du statut de mise à jour
+     */
+    _updateUpdateStatusDisplay() {
+        const statusEl = document.getElementById('config-update-status');
+        const btnEl = document.getElementById('config-check-update');
+        if (!statusEl) return;
+        
+        if (this.updateStatus.checking) {
+            statusEl.textContent = '🔍 Vérification en cours...';
+            if (btnEl) btnEl.disabled = true;
+        } else if (this.updateStatus.downloading) {
+            statusEl.textContent = `⬇️ Téléchargement ${this.updateStatus.progress}%`;
+            if (btnEl) btnEl.disabled = true;
+        } else if (this.updateStatus.error) {
+            statusEl.textContent = `❌ ${this.updateStatus.error}`;
+            if (btnEl) btnEl.disabled = false;
+        } else if (this.updateStatus.available) {
+            statusEl.textContent = `✅ v${this.updateStatus.version} disponible`;
+            if (btnEl) btnEl.disabled = false;
+        } else {
+            statusEl.textContent = '✅ À jour';
+            if (btnEl) btnEl.disabled = false;
+        }
+    }
+    
+    /**
+     * Vérifie manuellement les mises à jour
+     */
+    async checkForUpdates() {
+        this._log('info', 'debug', 'Manual update check requested');
+        const statusEl = document.getElementById('config-update-status');
+        const btnEl = document.getElementById('config-check-update');
+        
+        if (statusEl) statusEl.textContent = '🔍 Vérification en cours...';
+        if (btnEl) btnEl.disabled = true;
+        
+        try {
+            if (window.api && window.api.checkForUpdates) {
+                const result = await window.api.checkForUpdates();
+                this._log('info', 'debug', 'Update check result: ' + JSON.stringify(result));
+                
+                if (result.success) {
+                    if (result.updateInfo) {
+                        if (statusEl) statusEl.textContent = `✅ v${result.updateInfo.version} disponible - téléchargement...`;
+                    } else {
+                        if (statusEl) statusEl.textContent = '✅ Aucune mise à jour disponible';
+                    }
+                } else {
+                    if (statusEl) statusEl.textContent = `❌ ${result.error || 'Erreur inconnue'}`;
+                }
+            } else {
+                if (statusEl) statusEl.textContent = '❌ API non disponible';
+            }
+        } catch (e) {
+            this._log('error', 'debug', 'Update check failed: ' + e.message);
+            if (statusEl) statusEl.textContent = `❌ ${e.message}`;
+        } finally {
+            if (btnEl) btnEl.disabled = false;
+        }
     }
     
     /**
@@ -250,6 +327,7 @@ class DebugOverlay {
                         <label for="config-env">Environnement</label>
                         <select id="config-env">
                             <option value="prod">Production (soek.fr)</option>
+                            <option value="beta">Beta (beta.soek.fr)</option>
                             <option value="local">Local (localhost:8000)</option>
                         </select>
                     </div>
@@ -335,6 +413,19 @@ class DebugOverlay {
                     <div class="config-group config-readonly">
                         <label>Refresh API</label>
                         <span class="config-value" id="config-server-refresh">-</span>
+                    </div>
+                    
+                    <div class="config-section-title">🔄 Mises à jour</div>
+                    <div class="config-group config-readonly">
+                        <label>Version actuelle</label>
+                        <span class="config-value" id="config-app-version">-</span>
+                    </div>
+                    <div class="config-group config-readonly">
+                        <label>Statut</label>
+                        <span class="config-value" id="config-update-status">-</span>
+                    </div>
+                    <div class="config-group">
+                        <button class="config-btn config-btn-update" id="config-check-update" onclick="window.debugOverlay.checkForUpdates()">Vérifier les mises à jour</button>
                     </div>
                 </div>
                 <div class="config-footer">
@@ -440,6 +531,32 @@ class DebugOverlay {
         const refresh = apiResponse.refreshInterval || '-';
         document.getElementById('config-server-refresh').textContent = 
             refresh !== '-' ? `${refresh}s` : '-';
+        
+        // Section Mises à jour
+        this._populateUpdateSection();
+    }
+    
+    /**
+     * Remplit la section mise à jour
+     */
+    async _populateUpdateSection() {
+        // Version de l'application
+        const versionEl = document.getElementById('config-app-version');
+        if (versionEl) {
+            try {
+                if (window.api && window.api.getAppVersion) {
+                    const version = await window.api.getAppVersion();
+                    versionEl.textContent = `v${version}`;
+                } else {
+                    versionEl.textContent = '-';
+                }
+            } catch (e) {
+                versionEl.textContent = '-';
+            }
+        }
+        
+        // Statut de mise à jour
+        this._updateUpdateStatusDisplay();
     }
     
     /**
@@ -800,6 +917,29 @@ class DebugOverlay {
             
             .config-btn-save:hover {
                 background: #0a7ae6;
+            }
+            
+            .config-btn-update {
+                width: 100%;
+                background: #28a745;
+                color: #fff;
+                padding: 10px 16px;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 500;
+                transition: background 0.2s;
+            }
+            
+            .config-btn-update:hover {
+                background: #218838;
+            }
+            
+            .config-btn-update:disabled {
+                background: #6c757d;
+                cursor: not-allowed;
+                opacity: 0.7;
             }
         `;
         

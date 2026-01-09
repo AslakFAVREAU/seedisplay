@@ -36,6 +36,28 @@ function safeJoin(base, p) {
 }
 
 contextBridge.exposeInMainWorld('api', {
+  // Update management
+  checkForUpdates: async () => {
+    try {
+      return await ipcRenderer.invoke('check-for-updates');
+    } catch (e) {
+      console.error('[preload] checkForUpdates failed:', e.message);
+      return { success: false, error: e.message };
+    }
+  },
+  getAppVersion: async () => {
+    try {
+      return await ipcRenderer.invoke('get-app-version');
+    } catch (e) {
+      console.error('[preload] getAppVersion failed:', e.message);
+      return 'unknown';
+    }
+  },
+  onUpdateStatus: (callback) => {
+    ipcRenderer.on('update-status', (event, status) => {
+      callback(status);
+    });
+  },
   getConfig: async () => {
     console.log('[preload] getConfig called, hasNode =', hasNode)
     // If we have node, read directly, else ask main process

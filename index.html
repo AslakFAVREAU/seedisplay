@@ -511,6 +511,7 @@
         <label for="setupEnv">Environnement</label>
         <select id="setupEnv">
           <option value="prod">Production (soek.fr)</option>
+          <option value="beta">Beta (beta.soek.fr)</option>
           <option value="local">Local (localhost:8000)</option>
         </select>
       </div>
@@ -938,7 +939,7 @@
       // Construire l'URL de test selon l'environnement
       const baseUrl = env === 'local' 
         ? 'http://localhost:8000' 
-        : 'https://soek.fr'
+        : env === 'beta' ? 'https://beta.soek.fr' : 'https://soek.fr'
       const testUrl = `${baseUrl}/see/API/diapo/${ecranUuid}`
       
       __log('info','setup','Testing API connection:', testUrl)

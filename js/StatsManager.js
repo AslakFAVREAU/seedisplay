@@ -207,7 +207,7 @@ class StatsManager {
         
         const baseUrl = env === 'local' 
             ? 'http://localhost:8000' 
-            : 'https://soek.fr';
+            : env === 'beta' ? 'https://beta.soek.fr' : 'https://soek.fr';
         
         const url = `${baseUrl}/see/API/stats/${ecranUuid}`;
         

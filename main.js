@@ -1,4 +1,4 @@
-const { app, Menu, BrowserWindow } = require('electron');
+const { app, Menu, BrowserWindow, ipcMain } = require('electron');
 const log = require('electron-log');
 const updater = require("electron-updater");
 const autoUpdater = updater.autoUpdater;
@@ -262,16 +262,61 @@ autoUpdater.on('update-downloaded', (info) => {
   autoUpdater.quitAndInstall(false, true);
 });
 
+// Track update status for renderer
+let updateStatus = { checking: false, available: false, downloading: false, progress: 0, error: null, version: null };
+
+autoUpdater.on('checking-for-update', () => {
+  updateStatus = { ...updateStatus, checking: true, error: null };
+  if (win) win.webContents.send('update-status', updateStatus);
+});
+
+autoUpdater.on('update-available', (info) => {
+  updateStatus = { ...updateStatus, checking: false, available: true, version: info.version };
+  if (win) win.webContents.send('update-status', updateStatus);
+});
+
+autoUpdater.on('update-not-available', (info) => {
+  updateStatus = { ...updateStatus, checking: false, available: false };
+  if (win) win.webContents.send('update-status', updateStatus);
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  updateStatus = { ...updateStatus, downloading: true, progress: Math.round(progressObj.percent) };
+  if (win) win.webContents.send('update-status', updateStatus);
+});
+
+autoUpdater.on('error', (err) => {
+  updateStatus = { ...updateStatus, checking: false, downloading: false, error: err.message };
+  if (win) win.webContents.send('update-status', updateStatus);
+});
+
+// IPC handler for manual update check from renderer
+ipcMain.handle('check-for-updates', async () => {
+  log.info('Manual update check requested from renderer');
+  try {
+    const result = await autoUpdater.checkForUpdatesAndNotify();
+    return { success: true, updateInfo: result?.updateInfo || null };
+  } catch (e) {
+    log.error('Manual update check failed:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+// IPC handler to get current app version
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
+
 app.on('ready', function() {
   // Vérifier les mises à jour au démarrage
   log.info('Checking for updates...');
   autoUpdater.checkForUpdatesAndNotify();
   
-  // Vérifier périodiquement les mises à jour (toutes les 4 heures)
+  // Vérifier périodiquement les mises à jour (une fois par jour)
   setInterval(() => {
-    log.info('Periodic update check...');
+    log.info('Daily update check...');
     autoUpdater.checkForUpdatesAndNotify();
-  }, 4 * 60 * 60 * 1000); // 4 heures
+  }, 24 * 60 * 60 * 1000); // 24 heures
 });
 
 ///////////////////
@@ -318,7 +363,6 @@ function createWindow () {
 }
 
 // Listen for renderer log messages from preload
-const { ipcMain } = require('electron')
 ipcMain.on('renderer-log', (event, { level, msg }) => {
   log.log(level || 'info', `[renderer-ipc] ${msg}`)
 })

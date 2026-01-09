@@ -13,8 +13,13 @@ if (typeof window !== 'undefined') {
  */
 function getMediaBaseUrl() {
     try {
-        if (typeof window !== 'undefined' && window.configSEE && window.configSEE.env === 'local') {
-            return 'http://localhost:8000/uploads/see/media/'
+        if (typeof window !== 'undefined' && window.configSEE) {
+            if (window.configSEE.env === 'local') {
+                return 'http://localhost:8000/uploads/see/media/'
+            }
+            if (window.configSEE.env === 'beta') {
+                return 'https://beta.soek.fr/uploads/see/media/'
+            }
         }
     } catch(e) {}
     return 'https://soek.fr/uploads/see/media/'
@@ -35,7 +40,7 @@ async function downloadFondEcran(fondEcran) {
         
         // Build full URL
         var env = window.configSEE?.env || window.env || 'prod'
-        var domain = env === 'local' ? 'http://localhost:8000' : 'https://soek.fr'
+        var domain = env === 'local' ? 'http://localhost:8000' : env === 'beta' ? 'https://beta.soek.fr' : 'https://soek.fr'
         var fullUrl = fondEcran.startsWith('/') ? domain + fondEcran : fondEcran
         
         __log('debug', 'defaultScreen', 'downloadFondEcran: downloading ' + filename + ' from ' + fullUrl)
@@ -101,7 +106,7 @@ async function applyPageDefaultBackground(fondEcran) {
             if (fondEcran.startsWith('/')) {
                 // Full path from API (e.g. /uploads/see/fonds/...)
                 var env = window.configSEE?.env || window.env || 'prod'
-                var domain = env === 'local' ? 'http://localhost:8000' : 'https://soek.fr'
+                var domain = env === 'local' ? 'http://localhost:8000' : env === 'beta' ? 'https://beta.soek.fr' : 'https://soek.fr'
                 imageUrl = domain + fondEcran
             } else {
                 // Just filename - use media base URL
@@ -178,7 +183,7 @@ function showSleepScreen() {
     function buildMediaUrl(path) {
         if (!path) return null
         var env = window.configSEE?.env || window.env || 'prod'
-        var domain = env === 'local' ? 'http://localhost:8000' : 'https://soek.fr'
+        var domain = env === 'local' ? 'http://localhost:8000' : env === 'beta' ? 'https://beta.soek.fr' : 'https://soek.fr'
         return path.startsWith('/') ? domain + path : path
     }
     
