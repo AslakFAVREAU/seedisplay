@@ -8,8 +8,8 @@
   CreateDirectory "C:\SEE\fonds"
   CreateDirectory "C:\SEE\logs"
   
-  ; Set permissions for all users (optional, for shared machines)
-  AccessControl::GrantOnFile "C:\SEE" "(BU)" "FullAccess"
+  ; Note: AccessControl plugin not available, permissions set manually if needed
+  ; AccessControl::GrantOnFile "C:\SEE" "(BU)" "FullAccess"
   
   ; Log creation
   DetailPrint "Created SEE data directories in C:\SEE\"
