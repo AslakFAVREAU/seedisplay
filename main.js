@@ -1,8 +1,9 @@
-const { app, Menu, BrowserWindow, ipcMain } = require('electron');
+const { app, Menu, BrowserWindow, ipcMain, screen } = require('electron');
 const log = require('electron-log');
 const updater = require("electron-updater");
 const autoUpdater = updater.autoUpdater;
 const path = require('path');
+const fs = require('fs');
 
 //-------------------------------------------------------------------
 // Performance & Hardware Acceleration
@@ -61,6 +62,30 @@ function sendStatusToWindow(text) {
   log.info(text);
   win.webContents.send('message', text);
 }
+
+/**
+ * Lit la config pour récupérer les dimensions custom si elles existent
+ */
+function getScreenDimensionsFromConfig() {
+  const configPath = path.join('C:/SEE/', 'configSEE.json')
+  try {
+    if (fs.existsSync(configPath)) {
+      const raw = fs.readFileSync(configPath, 'utf8')
+      const config = JSON.parse(raw)
+      // IMPORTANT: vérifier isCustomResolution - si false ou absent, on reste en fullscreen
+      if (config.isCustomResolution === true && config.screenWidth && config.screenHeight) {
+        log.info(`[main] Found CUSTOM dimensions in config: ${config.screenWidth}x${config.screenHeight} (isCustomResolution=true)`)
+        return { width: config.screenWidth, height: config.screenHeight }
+      } else if (config.screenWidth && config.screenHeight) {
+        log.info(`[main] Found standard dimensions in config: ${config.screenWidth}x${config.screenHeight} but isCustomResolution=${config.isCustomResolution}, using fullscreen`)
+      }
+    }
+  } catch (e) {
+    log.warn('[main] Could not read config for dimensions:', e.message)
+  }
+  return null  // null = fullscreen
+}
+
 function createDefaultWindow() {
   // Détecter le mode de production
   const isProduction = process.env.NODE_ENV === 'production' || !process.defaultApp;
@@ -68,22 +93,55 @@ function createDefaultWindow() {
   // Load app icon from build directory
   const appIcon = path.join(__dirname, 'build', 'icon.ico');
   
-  win = new BrowserWindow({
-    icon: appIcon, // Add window icon for taskbar
-    fullscreen: true, // Toujours en plein écran
-    show: false, // Ne pas afficher immédiatement
-    frame: false, // Pas de frame (bordure Windows)
-    autoHideMenuBar: true, // Toujours masquer la barre de menu
-    alwaysOnTop: isProduction, // Premier plan en production
-    skipTaskbar: isProduction, // Ne pas afficher dans la barre des tâches en production
-    kiosk: isProduction, // Mode kiosk en production (masque la barre des tâches)
+  // Vérifier si des dimensions custom sont configurées
+  const customDims = getScreenDimensionsFromConfig()
+  const useCustomDimensions = customDims !== null
+  
+  log.info(`[main] createDefaultWindow: useCustomDimensions=${useCustomDimensions}`, customDims)
+  
+  // Options de base
+  const windowOptions = {
+    icon: appIcon,
+    show: false,
+    frame: false,
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      devTools: !isProduction // Désactiver DevTools en production
+      devTools: !isProduction
     }
-  });
+  }
+  
+  if (useCustomDimensions) {
+    // Mode dimensions personnalisées : fenêtre fixe, pas de fullscreen/kiosk
+    windowOptions.width = customDims.width
+    windowOptions.height = customDims.height
+    windowOptions.x = 0
+    windowOptions.y = 0
+    windowOptions.fullscreen = false
+    windowOptions.kiosk = false
+    windowOptions.resizable = false
+    windowOptions.alwaysOnTop = true  // Toujours au premier plan
+    windowOptions.skipTaskbar = true
+    windowOptions.minWidth = customDims.width
+    windowOptions.minHeight = customDims.height
+    windowOptions.maxWidth = customDims.width
+    windowOptions.maxHeight = customDims.height
+    windowOptions.transparent = false
+    windowOptions.hasShadow = false
+    windowOptions.roundedCorners = false  // Pas de coins arrondis (Windows 11)
+    log.info(`[main] Window will be ${customDims.width}x${customDims.height} at (0,0), alwaysOnTop=true`)
+  } else {
+    // Mode fullscreen standard - laisser Electron gérer le plein écran
+    windowOptions.fullscreen = true
+    windowOptions.kiosk = true  // Mode kiosk pour vrai plein écran
+    windowOptions.alwaysOnTop = true
+    windowOptions.skipTaskbar = true
+    log.info(`[main] Window will be fullscreen (kiosk mode)`)
+  }
+  
+  win = new BrowserWindow(windowOptions);
   
   // Forward renderer console messages to main log so we can see them in the terminal
   try {
@@ -119,11 +177,19 @@ function createDefaultWindow() {
   win.once('ready-to-show', () => {
     win.show();
     
-    // Passer immédiatement en plein écran
-    win.setFullScreen(true);
+    // Passer en plein écran UNIQUEMENT si pas de dimensions custom
+    if (!useCustomDimensions) {
+      win.setFullScreen(true);
+      log.info('[main] ready-to-show: setting fullscreen');
+    } else {
+      // S'assurer que le fullscreen est désactivé et positionner en haut à gauche
+      win.setFullScreen(false);
+      win.setBounds({ x: 0, y: 0, width: customDims.width, height: customDims.height });
+      log.info(`[main] ready-to-show: custom dimensions ${customDims.width}x${customDims.height} at (0,0)`);
+    }
     
-    // S'assurer que la fenêtre est au premier plan
-    if (isProduction) {
+    // S'assurer que la fenêtre est au premier plan (seulement en fullscreen production)
+    if (isProduction && !useCustomDimensions) {
       win.focus();
       win.setAlwaysOnTop(true, 'screen-saver');
     }
@@ -326,23 +392,56 @@ app.on('ready', function() {
 function createWindow () {
   // Cree la fenetre du navigateur.
   const isProduction = process.env.NODE_ENV === 'production' || !process.defaultApp;
-  const win = new BrowserWindow({
+  
+  // Vérifier si des dimensions custom sont configurées
+  const customDims = getScreenDimensionsFromConfig()
+  const useCustomDimensions = customDims !== null
+  
+  log.info(`[main] createWindow: isProduction=${isProduction}, useCustomDimensions=${useCustomDimensions}`, customDims)
+  
+  // Options de base - en fullscreen, désactiver DevTools même en dev
+  const windowOptions = {
     icon: 'assets/Flavicon.png',
-    width: 800,
-    height: 600,
-    // En production, s'assurer que la fenêtre est sans bordure, pleine et au premier plan
-    fullscreen: isProduction || true,
-    frame: !isProduction ? true : false,
-    alwaysOnTop: isProduction ? true : false,
-    kiosk: isProduction ? true : false,
     webPreferences: {
       nodeIntegration: false,
       nativeWindowOpen: true,
       contextIsolation: true,
       preload: require('path').join(__dirname, 'preload.js'),
-      devTools: !isProduction
+      devTools: useCustomDimensions ? true : false  // DevTools seulement en mode custom, pas en fullscreen
     }
-  })
+  }
+  
+  if (useCustomDimensions) {
+    // Mode dimensions personnalisées : fenêtre fixe, pas de fullscreen/kiosk
+    windowOptions.width = customDims.width
+    windowOptions.height = customDims.height
+    windowOptions.x = 0
+    windowOptions.y = 0
+    windowOptions.fullscreen = false
+    windowOptions.kiosk = false
+    windowOptions.frame = false
+    windowOptions.resizable = false
+    windowOptions.alwaysOnTop = true  // Toujours au premier plan
+    windowOptions.skipTaskbar = true
+    windowOptions.minWidth = customDims.width
+    windowOptions.minHeight = customDims.height
+    windowOptions.maxWidth = customDims.width
+    windowOptions.maxHeight = customDims.height
+    windowOptions.transparent = false
+    windowOptions.hasShadow = false
+    windowOptions.roundedCorners = false  // Pas de coins arrondis (Windows 11)
+    log.info(`[main] createWindow: custom ${customDims.width}x${customDims.height} at (0,0), alwaysOnTop=true`)
+  } else {
+    // Mode fullscreen standard - laisser Electron gérer le plein écran
+    windowOptions.fullscreen = true
+    windowOptions.kiosk = true  // Mode kiosk pour vrai plein écran
+    windowOptions.frame = false
+    windowOptions.alwaysOnTop = true
+    windowOptions.skipTaskbar = true
+    log.info(`[main] createWindow: fullscreen kiosk mode`)
+  }
+  
+  win = new BrowserWindow(windowOptions)
 
   // et charger le fichier index.html de l'application.
   win.loadFile('index.html')
@@ -356,8 +455,8 @@ function createWindow () {
     log.warn('Could not attach console-message listener to index window', e);
   }
   
-  // Ouvrir DevTools uniquement en mode développement
-  if (!isProduction) {
+  // Ouvrir DevTools uniquement en mode custom (pas en fullscreen)
+  if (useCustomDimensions) {
     win.webContents.openDevTools();
   }
 }
@@ -373,8 +472,59 @@ ipcMain.on('quit-app', () => {
   app.quit()
 })
 
+// Resize window to specific dimensions (from API screen config)
+ipcMain.handle('resize-window', async (evt, width, height) => {
+  if (!win) {
+    log.warn('[main] resize-window: no window')
+    return false
+  }
+  
+  try {
+    log.info(`[main] resize-window: requesting ${width}x${height}`)
+    
+    // Désactiver le mode kiosk d'abord si actif
+    if (win.isKiosk()) {
+      win.setKiosk(false)
+      log.info('[main] resize-window: kiosk mode disabled')
+    }
+    
+    // Désactiver le fullscreen si actif
+    if (win.isFullScreen()) {
+      win.setFullScreen(false)
+      log.info('[main] resize-window: fullscreen disabled')
+    }
+    
+    // Attendre que les changements de mode soient appliqués
+    await new Promise(resolve => setTimeout(resolve, 100))
+    
+    // Permettre le redimensionnement temporairement
+    win.setResizable(true)
+    
+    // Désactiver alwaysOnTop pour permettre le redimensionnement
+    win.setAlwaysOnTop(false)
+    
+    // Positionner en haut à gauche
+    win.setPosition(0, 0)
+    
+    // Redimensionner la fenêtre
+    win.setSize(width, height)
+    
+    // Forcer la taille minimale et maximale pour bloquer
+    win.setMinimumSize(width, height)
+    win.setMaximumSize(width, height)
+    
+    // Désactiver le redimensionnement manuel
+    win.setResizable(false)
+    
+    log.info(`[main] resize-window: done, actual size=${win.getSize()[0]}x${win.getSize()[1]}`)
+    return true
+  } catch (e) {
+    log.error('[main] resize-window failed:', e.message)
+    return false
+  }
+})
+
 // Provide handlers for preload fallback when native modules are unavailable in preload
-const fs = require('fs')
 const axios = require('axios')
 const BASE_PATH = 'C:/SEE/'
 

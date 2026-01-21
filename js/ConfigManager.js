@@ -215,6 +215,74 @@ class ConfigManager {
       logoSOE: this.config.logoSOE
     }
   }
+
+  /**
+   * Screen dimensions configuration
+   */
+  get screenDimensions() {
+    return {
+      width: this.config.screenWidth || null,
+      height: this.config.screenHeight || null,
+      orientation: this.config.screenOrientation || 'landscape',
+      ratio: this.config.screenRatio || '16:9'
+    }
+  }
+
+  /**
+   * Update a config value in memory and optionally save to disk
+   * @param {string} key - Config key to update
+   * @param {any} value - New value
+   * @param {boolean} persist - Whether to save to disk (default: true)
+   */
+  async set(key, value, persist = true) {
+    if (!this._loaded) {
+      throw new Error('ConfigManager: config not loaded. Call load() first.')
+    }
+    
+    this._config[key] = value
+    this._log.debug('config-manager', `Config updated: ${key} = ${JSON.stringify(value)}`)
+    
+    if (persist) {
+      await this.save()
+    }
+  }
+
+  /**
+   * Update multiple config values at once
+   * @param {Object} updates - Object with key-value pairs to update
+   * @param {boolean} persist - Whether to save to disk (default: true)
+   */
+  async setMultiple(updates, persist = true) {
+    if (!this._loaded) {
+      throw new Error('ConfigManager: config not loaded. Call load() first.')
+    }
+    
+    Object.assign(this._config, updates)
+    this._log.debug('config-manager', `Config updated multiple keys: ${Object.keys(updates).join(', ')}`)
+    
+    if (persist) {
+      await this.save()
+    }
+  }
+
+  /**
+   * Save current config to disk
+   */
+  async save() {
+    try {
+      if (!window.api?.writeFile) {
+        throw new Error('window.api.writeFile not available')
+      }
+      
+      const configJson = JSON.stringify(this._config, null, 2)
+      await window.api.writeFile('configSEE.json', configJson)
+      this._log.info('config-manager', 'Configuration saved to disk')
+      return true
+    } catch (error) {
+      this._log.error('config-manager', 'Failed to save config:', error.message)
+      return false
+    }
+  }
 }
 
 // Singleton instance

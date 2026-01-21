@@ -58,6 +58,16 @@ contextBridge.exposeInMainWorld('api', {
       callback(status);
     });
   },
+  // Window resize (for custom screen dimensions from API)
+  resizeWindow: async (width, height) => {
+    try {
+      console.log('[preload] resizeWindow:', width, 'x', height);
+      return await ipcRenderer.invoke('resize-window', width, height);
+    } catch (e) {
+      console.error('[preload] resizeWindow failed:', e.message);
+      return false;
+    }
+  },
   getConfig: async () => {
     console.log('[preload] getConfig called, hasNode =', hasNode)
     // If we have node, read directly, else ask main process

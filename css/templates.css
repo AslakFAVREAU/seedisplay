@@ -661,3 +661,554 @@
     border-radius: 0.3vw;
     z-index: 10;
 }
+
+/* ========================================
+   TEMPLATE ANNIVERSAIRE
+   ======================================== */
+
+.anniversaire-template {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    color: white;
+    text-align: center;
+    padding: 5%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.anniversaire-decoration {
+    position: absolute;
+    top: 3vh;
+    right: 5vw;
+    font-size: 8vw;
+    opacity: 0.3;
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-1vh) rotate(5deg); }
+}
+
+.anniversaire-content {
+    position: relative;
+    z-index: 1;
+    max-width: 90%;
+}
+
+.anniversaire-titre {
+    font-size: 6vw;
+    font-weight: 700;
+    margin: 0 0 4vh 0;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% { text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3); }
+    50% { text-shadow: 2px 2px 20px rgba(255, 255, 255, 0.5); }
+}
+
+.anniversaire-personnes {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 4vw;
+    flex-wrap: wrap;
+    margin-bottom: 4vh;
+}
+
+.anniversaire-personnes.anniversaire-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 2vw;
+    max-width: 80%;
+}
+
+.anniversaire-personne {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.anniversaire-photo {
+    width: 12vw;
+    height: 12vw;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid white;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    margin-bottom: 1.5vh;
+}
+
+.anniversaire-avatar {
+    width: 12vw;
+    height: 12vw;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    border: 4px solid white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 4vw;
+    font-weight: 700;
+    margin-bottom: 1.5vh;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.anniversaire-nom {
+    font-size: 2.5vw;
+    font-weight: 600;
+    margin-bottom: 0.5vh;
+}
+
+.anniversaire-service {
+    font-size: 1.5vw;
+    opacity: 0.8;
+}
+
+.anniversaire-date {
+    font-size: 2vw;
+    opacity: 0.9;
+    margin-bottom: 2vh;
+}
+
+.anniversaire-message {
+    font-size: 2vw;
+    font-style: italic;
+    opacity: 0.9;
+    max-width: 70%;
+    margin: 0 auto;
+}
+
+.anniversaire-confetti {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='10' cy='10' r='2' fill='%23FFD700' opacity='0.6'/%3E%3Ccircle cx='90' cy='20' r='3' fill='%23FF69B4' opacity='0.5'/%3E%3Ccircle cx='30' cy='80' r='2' fill='%2300CED1' opacity='0.6'/%3E%3Ccircle cx='70' cy='90' r='2' fill='%23FFD700' opacity='0.5'/%3E%3C/svg%3E");
+    animation: confetti-fall 10s linear infinite;
+    opacity: 0.3;
+}
+
+@keyframes confetti-fall {
+    0% { background-position: 0 0; }
+    100% { background-position: 100px 100px; }
+}
+
+/* ========================================
+   TEMPLATE MENU
+   ======================================== */
+
+.menu-template {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
+    color: #333;
+    overflow: hidden;
+}
+
+.menu-header {
+    padding: 2vh 5vw;
+    color: white;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.menu-titre {
+    font-size: 3.5vw;
+    font-weight: 700;
+    margin: 0 0 0.5vh 0;
+    text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.menu-date {
+    font-size: 1.6vw;
+    opacity: 0.95;
+}
+
+.menu-lieu {
+    font-size: 1.5vw;
+    opacity: 0.85;
+    margin-top: 0.5vh;
+}
+
+/* ====== MODE JOURNALIER (Day Meal Planner) ====== */
+.menu-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 1vh 3vw;
+    overflow: hidden;
+}
+
+.menu-jour-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+}
+
+.menu-jour-header {
+    background: #8fbc8f;
+    color: #333;
+    text-align: center;
+    padding: 0.8vh 2vw;
+    font-size: 1.5vw;
+    font-weight: 600;
+    margin-bottom: 0;
+    flex-shrink: 0;
+}
+
+.menu-jour-sections {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.menu-section {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    min-height: 0;
+    border-bottom: 2px solid #ddd;
+}
+
+.menu-section:last-child {
+    border-bottom: none;
+}
+
+.menu-section-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    background: #7b68a0;
+    color: white;
+    font-size: 1.1vw;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1vw;
+    padding: 1vh 0.5vw;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.8vw;
+}
+
+.menu-section-items {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0.8vh 2vw;
+    background: #f5f5dc;
+}
+
+.menu-section.entrees .menu-section-items { background: #fffacd; }
+.menu-section.plats .menu-section-items { background: #e8f5e9; }
+.menu-section.accompagnements .menu-section-items { background: #e8f5e9; }
+.menu-section.desserts .menu-section-items { background: #c8e6c9; }
+.menu-section.gouters .menu-section-items { background: #dcedc8; }
+
+.menu-item {
+    font-size: 1.4vw;
+    padding: 0.2vh 0;
+    color: #333;
+    text-align: center;
+}
+
+/* ====== MODE SEMAINE (Weekly Meal Planner) ====== */
+.menu-semaine-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.menu-semaine-header {
+    display: flex;
+    background: #8fbc8f;
+}
+
+.menu-semaine-corner {
+    min-width: 3.5vw;
+    background: transparent;
+}
+
+.menu-semaine-jours {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+}
+
+.menu-semaine-jour-header {
+    text-align: center;
+    padding: 1.2vh 0.5vw;
+    font-size: 1.4vw;
+    font-weight: 700;
+    color: #333;
+    text-transform: uppercase;
+    background: #8fbc8f;
+    border-left: 1px solid #7aa87a;
+}
+
+.menu-semaine-jour-header:first-child {
+    border-left: none;
+}
+
+.menu-semaine-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.menu-semaine-row {
+    display: flex;
+    flex: 1;
+    min-height: 10vh;
+    border-bottom: 2px solid #ddd;
+}
+
+.menu-semaine-row:last-child {
+    border-bottom: none;
+}
+
+.menu-semaine-row .menu-section-label {
+    min-width: 3.5vw;
+}
+
+.menu-semaine-cells {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+}
+
+.menu-semaine-cell {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 1vh 0.5vw;
+    border-left: 1px solid #ddd;
+    text-align: center;
+}
+
+.menu-semaine-cell:first-child {
+    border-left: none;
+}
+
+.menu-semaine-row.entrees .menu-semaine-cell { background: #fffacd; }
+.menu-semaine-row.plats .menu-semaine-cell { background: #e8f5e9; }
+.menu-semaine-row.accompagnements .menu-semaine-cell { background: #e8f5e9; }
+.menu-semaine-row.desserts .menu-semaine-cell { background: #c8e6c9; }
+.menu-semaine-row.gouters .menu-semaine-cell { background: #dcedc8; }
+
+.menu-semaine-cell .menu-item {
+    font-size: 1.3vw;
+    padding: 0.3vh 0;
+}
+
+/* ====== COMMUNS ====== */
+.menu-item-info {
+    font-size: 1.2vw;
+    color: #666;
+    font-style: italic;
+}
+
+.menu-item-allergenes {
+    font-size: 1vw;
+    color: #e65100;
+    background: #fff3e0;
+    padding: 0.2vh 0.5vw;
+    border-radius: 0.3vw;
+}
+
+.menu-prix {
+    padding: 1.5vh 5vw;
+    background: #f9f9f9;
+    text-align: center;
+    font-size: 2vw;
+    font-weight: 600;
+    color: #4CAF50;
+}
+
+.menu-info {
+    padding: 1vh 5vw 2vh;
+    text-align: center;
+    font-size: 1.3vw;
+    color: #666;
+    font-style: italic;
+}
+
+.menu-vide {
+    text-align: center;
+    color: #999;
+    font-size: 2vw;
+    padding: 5vh 0;
+}
+
+/* Chef icon for header */
+.menu-chef-icon {
+    position: absolute;
+    left: 2vw;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 6vw;
+}
+
+/* ========================================
+   TEMPLATE ANNONCE
+   ======================================== */
+
+.annonce-template {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    color: white;
+    text-align: center;
+    padding: 5%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.annonce-content {
+    position: relative;
+    z-index: 1;
+    max-width: 85%;
+}
+
+.annonce-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5vw;
+    margin-bottom: 3vh;
+}
+
+.annonce-icon {
+    font-size: 4vw;
+}
+
+.annonce-type-label {
+    font-size: 2vw;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    opacity: 0.9;
+    font-weight: 500;
+}
+
+.annonce-titre {
+    font-size: 5vw;
+    font-weight: 700;
+    margin: 0 0 2vh 0;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+    line-height: 1.2;
+}
+
+.annonce-sous-titre {
+    font-size: 2.5vw;
+    font-weight: 400;
+    margin: 0 0 3vh 0;
+    opacity: 0.95;
+}
+
+.annonce-image {
+    max-width: 40%;
+    max-height: 30vh;
+    object-fit: contain;
+    border-radius: 1vw;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    margin: 2vh 0;
+}
+
+.annonce-message {
+    font-size: 2.2vw;
+    line-height: 1.5;
+    margin-bottom: 3vh;
+    max-width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.annonce-periode {
+    font-size: 1.8vw;
+    opacity: 0.9;
+    margin-bottom: 1.5vh;
+    font-weight: 500;
+}
+
+.annonce-lieu {
+    font-size: 1.8vw;
+    opacity: 0.9;
+    margin-bottom: 1vh;
+}
+
+.annonce-contact {
+    font-size: 1.5vw;
+    opacity: 0.85;
+}
+
+/* Annonce urgente - animation */
+.annonce-urgente {
+    animation: urgent-pulse 2s ease-in-out infinite;
+}
+
+@keyframes urgent-pulse {
+    0%, 100% { 
+        box-shadow: inset 0 0 0 0 rgba(255, 0, 0, 0);
+    }
+    50% { 
+        box-shadow: inset 0 0 50px 10px rgba(255, 0, 0, 0.2);
+    }
+}
+
+.annonce-urgente .annonce-icon {
+    animation: shake 0.5s ease-in-out infinite;
+}
+
+@keyframes shake {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-10deg); }
+    75% { transform: rotate(10deg); }
+}
+
+/* ========================================
+   TEMPLATE DEFAULT
+   ======================================== */
+
+.default-template {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    text-align: center;
+    padding: 5%;
+}
+
+.default-template h1 {
+    font-size: 5vw;
+    font-weight: 700;
+    margin: 0 0 3vh 0;
+}
+
+.default-template p {
+    font-size: 2.5vw;
+    opacity: 0.9;
+    max-width: 70%;
+}

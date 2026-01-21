@@ -2,17 +2,8 @@
 
 Documentation de l'API pour le projet **seedisplay** (affichage dynamique sur écrans).
 
-> **Version**: 2.6 (Janvier 2026)
-
-### 🌐 Environnements disponibles
-
-| Environnement | URL de base | Description |
-|---------------|-------------|-------------|
-| **Production** | `https://soek.fr/see/API/` | Serveur de production principal |
-| **Beta** | `https://beta.soek.fr/see/API/` | Serveur de test/préproduction |
-| **Local** | `http://localhost:8000/see/API/` | Développement local |
-
-L'environnement se configure dans seedisplay via le menu de configuration (écran de setup ou overlay debug).
+> **URL de base**: `https://soek.fr/see/API/`
+> **Version**: 2.7 (Janvier 2026)
 
 ---
 
@@ -929,9 +920,70 @@ function listeDiapo(data) {
 
 ---
 
-## 🔧 Gestion de l'orientation
+## 🔧 Gestion de l'orientation et des dimensions
 
-L'API retourne l'orientation de l'écran dans `orientation`:
+L'API retourne l'orientation, le ratio et les dimensions de l'écran. seedisplay adapte automatiquement l'affichage.
+
+### Adaptation automatique des dimensions (v2.7)
+
+seedisplay utilise la fonction `applyScreenDimensions()` pour adapter l'affichage aux dimensions configurées dans SOEK :
+
+```javascript
+// Exemple de données API
+{
+  "orientation": "landscape",
+  "ratio": "16:9",
+  "dimensions": "1920x1080",
+  "customResolution": null  // ou { "largeur": 2560, "hauteur": 1440 }
+}
+```
+
+**Comportement** :
+1. Si `customResolution` est défini, utilise ces valeurs exactes
+2. Sinon, parse `dimensions` (ex: `"1920x1080"`)
+3. Calcule le scale nécessaire pour rentrer dans l'écran physique (jamais > 100%)
+4. Centre l'affichage avec des barres noires (letterbox/pillarbox) si nécessaire
+
+```javascript
+// Implémentation dans seedisplay (API/listeDiapo.js)
+function applyScreenDimensions(data) {
+  var width, height;
+  
+  // Priorité aux dimensions custom
+  if (data.customResolution && data.customResolution.largeur) {
+    width = data.customResolution.largeur;
+    height = data.customResolution.hauteur;
+  } else if (data.dimensions) {
+    var parts = data.dimensions.split('x');
+    width = parseInt(parts[0], 10);
+    height = parseInt(parts[1], 10);
+  }
+  
+  if (!width || !height) return; // Plein écran par défaut
+  
+  // Calculer le scale (jamais > 1)
+  var screenWidth = window.innerWidth;
+  var screenHeight = window.innerHeight;
+  var scale = Math.min(screenWidth / width, screenHeight / height, 1);
+  
+  // Appliquer aux containers
+  var finalWidth = Math.round(width * scale);
+  var finalHeight = Math.round(height * scale);
+  var offsetX = Math.round((screenWidth - finalWidth) / 2);
+  var offsetY = Math.round((screenHeight - finalHeight) / 2);
+  
+  // mediaContainer, pageDefault, etc.
+  var el = document.getElementById('mediaContainer');
+  el.style.width = finalWidth + 'px';
+  el.style.height = finalHeight + 'px';
+  el.style.left = offsetX + 'px';
+  el.style.top = offsetY + 'px';
+}
+```
+
+### Gestion de l'orientation (legacy)
+
+Pour les anciennes implémentations :
 
 ```javascript
 // Adapter l'affichage selon l'orientation
@@ -972,7 +1024,7 @@ function applyOrientation(ecranData) {
 
 ---
 
-## � Gestion de la luminosité
+## 💡 Gestion de la luminosité
 
 L'API retourne la luminosité actuelle et les paramètres du mode nuit. L'écran d'affichage peut ajuster son CSS en fonction.
 
@@ -1225,6 +1277,250 @@ async function fetchDiapoData(ecranId) {
                                               │ 3. Tri par priorité           │
                                               │ 4. Extraction médias          │
                                               └───────────────────────────────┘
+```
+
+---
+
+## 🎨 Templates Dynamiques
+
+L'API peut retourner un tableau `templates` contenant des contenus dynamiques à afficher dans la boucle de diaporama. Ces templates sont rendus côté seedisplay avec des designs prédéfinis.
+
+### Structure du tableau `templates`
+
+```json
+{
+  "status": "active",
+  "timeline": [...],
+  "diapos": [...],
+  "templates": [
+    {
+      "id": 1,
+      "type": "anniversaire",
+      "ordre": 1,
+      "duree": 15,
+      "titre": "Joyeux Anniversaire !",
+      "date": "2026-01-17",
+      "personnes": [
+        { "nom": "Marie Martin", "service": "Comptabilité", "photo": "/uploads/see/photos/marie.jpg" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "menu",
+      "ordre": 2,
+      "duree": 20,
+      "titre": "Menu du Jour",
+      "date": "2026-01-17",
+      "entrees": ["Salade César", "Soupe du jour"],
+      "plats": ["Bœuf bourguignon", "Poisson grillé"],
+      "desserts": ["Tarte aux pommes", "Mousse au chocolat"]
+    },
+    {
+      "id": 3,
+      "type": "annonce",
+      "ordre": 3,
+      "duree": 12,
+      "typeAnnonce": "info",
+      "titre": "Fermeture exceptionnelle",
+      "message": "Les bureaux seront fermés le 20 janvier",
+      "dateDebut": "2026-01-15",
+      "dateFin": "2026-01-19"
+    }
+  ]
+}
+```
+
+### Champs communs à tous les templates
+
+| Champ | Type | Requis | Description |
+|-------|------|--------|-------------|
+| `id` | integer | Oui | ID unique du template |
+| `type` | string | Oui | Type: `anniversaire`, `menu`, `annonce` |
+| `ordre` | integer | Non | Position dans la boucle (1, 2, 3...). Les templates sont triés par ordre croissant |
+| `duree` | integer | Non | Durée d'affichage en secondes (défaut: 15) |
+| `titre` | string | Non | Titre principal du template |
+| `couleur` | string | Non | Couleur hex du thème (#E91E63, etc.) |
+| `date` | string | Non | Date spécifique (YYYY-MM-DD) - template affiché uniquement ce jour |
+| `dateDebut` | ISO8601 | Non | Date/heure de début de validité |
+| `dateFin` | ISO8601 | Non | Date/heure de fin de validité |
+| `programmation` | object | Non | Plages horaires et jours d'affichage |
+
+### Template `anniversaire`
+
+Affiche les anniversaires du jour avec photos et noms.
+
+```json
+{
+  "type": "anniversaire",
+  "ordre": 1,
+  "duree": 15,
+  "titre": "Joyeux Anniversaire !",
+  "date": "2026-01-17",
+  "couleur": "#E91E63",
+  "message": "Toute l'équipe vous souhaite une excellente journée !",
+  "personnes": [
+    {
+      "nom": "Marie Martin",
+      "service": "Comptabilité",
+      "photo": "/uploads/see/photos/marie.jpg"
+    },
+    {
+      "nom": "Pierre Dupont",
+      "service": "IT"
+    }
+  ]
+}
+```
+
+| Champ spécifique | Type | Description |
+|------------------|------|-------------|
+| `personnes` | array | Liste des personnes fêtant leur anniversaire |
+| `personnes[].nom` | string | Nom complet de la personne |
+| `personnes[].service` | string | Service/département (optionnel) |
+| `personnes[].photo` | string | URL de la photo (optionnel, affiche initiales si absent) |
+| `message` | string | Message personnalisé (optionnel) |
+
+### Template `menu`
+
+Affiche le menu du jour (cantine, restaurant d'entreprise).
+
+```json
+{
+  "type": "menu",
+  "ordre": 2,
+  "duree": 20,
+  "titre": "Menu du Jour",
+  "date": "2026-01-17",
+  "lieu": "Restaurant d'entreprise",
+  "couleur": "#4CAF50",
+  "entrees": [
+    "Salade César",
+    { "nom": "Soupe du jour", "info": "Potiron" }
+  ],
+  "plats": [
+    { "nom": "Bœuf bourguignon", "allergenes": "Sulfites" },
+    "Poisson grillé sauce citron"
+  ],
+  "accompagnements": ["Riz", "Haricots verts"],
+  "fromages": ["Plateau du jour"],
+  "desserts": ["Tarte aux pommes", "Mousse au chocolat", "Fruit de saison"],
+  "boissons": ["Eau", "Café"],
+  "prix": "8,50 € / 12,00 €",
+  "info": "Service de 11h30 à 14h00"
+}
+```
+
+| Champ spécifique | Type | Description |
+|------------------|------|-------------|
+| `entrees` | array | Liste des entrées |
+| `plats` | array | Liste des plats principaux |
+| `accompagnements` | array | Liste des accompagnements |
+| `fromages` | array | Liste des fromages |
+| `desserts` | array | Liste des desserts |
+| `boissons` | array | Liste des boissons |
+| `prix` | string | Prix du menu (optionnel) |
+| `lieu` | string | Lieu du restaurant (optionnel) |
+| `info` | string | Information additionnelle (optionnel) |
+
+> **Note**: Chaque item peut être une string simple ou un objet avec `nom`, `info` (description), et `allergenes`.
+
+### Template `annonce`
+
+Affiche des annonces, alertes ou communications.
+
+```json
+{
+  "type": "annonce",
+  "ordre": 3,
+  "duree": 12,
+  "typeAnnonce": "info",
+  "titre": "Fermeture exceptionnelle",
+  "sousTitre": "Maintenance des locaux",
+  "message": "Les bureaux seront fermés le lundi 20 janvier pour travaux de maintenance.",
+  "dateDebut": "2026-01-15",
+  "dateFin": "2026-01-19",
+  "lieu": "Bâtiment A",
+  "contact": "accueil@entreprise.fr",
+  "image": "/uploads/see/annonces/maintenance.jpg",
+  "backgroundImage": "/uploads/see/annonces/bg-info.jpg"
+}
+```
+
+| Champ spécifique | Type | Description |
+|------------------|------|-------------|
+| `typeAnnonce` | string | Type visuel: `info`, `alerte`, `urgent`, `succes`, `evenement`, `maintenance`, `communication` |
+| `label` | string | Label personnalisé au lieu du type (optionnel) |
+| `sousTitre` | string | Sous-titre (optionnel) |
+| `message` | string | Corps de l'annonce |
+| `lieu` | string | Lieu concerné (optionnel) |
+| `contact` | string | Contact pour plus d'infos (optionnel) |
+| `image` | string | Image d'illustration dans le contenu (optionnel) |
+| `backgroundImage` | string | Image de fond (optionnel) |
+| `icon` | string | Emoji/icône personnalisé (optionnel) |
+
+#### Types d'annonces et couleurs par défaut
+
+| Type | Couleur | Icône | Utilisation |
+|------|---------|-------|-------------|
+| `info` | #2196F3 (bleu) | ℹ️ | Informations générales |
+| `alerte` | #FF5722 (orange) | ⚠️ | Alertes modérées |
+| `urgent` | #F44336 (rouge) | 🚨 | Messages urgents (animation) |
+| `succes` | #4CAF50 (vert) | ✅ | Confirmations, succès |
+| `evenement` | #9C27B0 (violet) | 📅 | Événements à venir |
+| `maintenance` | #FF9800 (orange) | 🔧 | Travaux, maintenance |
+| `communication` | #00BCD4 (cyan) | 📢 | Communications corporate |
+
+### Programmation des templates
+
+Chaque template peut avoir une `programmation` pour définir quand il s'affiche :
+
+```json
+{
+  "type": "menu",
+  "titre": "Menu du Midi",
+  "programmation": {
+    "heureDebut": "11:00",
+    "heureFin": "14:30",
+    "joursSemaine": [1, 2, 3, 4, 5]
+  },
+  "entrees": [...]
+}
+```
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `heureDebut` | string | Heure de début d'affichage (HH:mm) |
+| `heureFin` | string | Heure de fin d'affichage (HH:mm) |
+| `joursSemaine` | array | Jours autorisés (0=Dim, 1=Lun, ..., 6=Sam) |
+
+### Ordre d'affichage
+
+Les templates sont insérés dans la boucle de diaporama selon leur `ordre`. Ils sont affichés **avant** les médias de la timeline.
+
+Exemple avec `ordre` :
+1. Template anniversaire (ordre: 1) → 15s
+2. Template menu (ordre: 2) → 20s  
+3. Template annonce (ordre: 3) → 12s
+4. Médias de la timeline → durées variables
+
+### Implémentation seedisplay
+
+```javascript
+// Dans listeDiapo.js - les templates sont parsés et ajoutés à ArrayImg
+if (data.templates && Array.isArray(data.templates)) {
+  data.templates.sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+  
+  for (const template of data.templates) {
+    if (isTemplateActive(template)) {
+      ArrayImg.push(['template', template, template.duree || 15]);
+    }
+  }
+}
+
+// Dans loopDiapo.js - le type 'template' est géré par TemplateRenderer
+if (mediaType === 'template') {
+  window.templateRenderer.show(templateData, duree);
+}
 ```
 
 ---
@@ -1646,7 +1942,15 @@ L'API fournit les données brutes. seedisplay peut les afficher de différentes 
 
 ## 🔄 Changelog API
 
+### v2.7 (Janvier 2026)
+- ✅ **Adaptation automatique des dimensions** : seedisplay adapte l'affichage aux dimensions reçues de l'API (`dimensions`, `customResolution`)
+- ✅ **Letterbox/Pillarbox** : Barres noires automatiques si le ratio écran ≠ ratio configuré
+- ✅ **Scale intelligent** : Mise à l'échelle proportionnelle (jamais > 100%) avec centrage automatique
+- ✅ **Debug overlay** : Nouvelles infos "Dimensions appliquées" affichant taille finale et % de scale
+
 ### v2.6 (Janvier 2026)
+- ✅ **Templates dynamiques** : Nouveaux types `anniversaire`, `menu`, `annonce` dans le tableau `templates`
+- ✅ **Ordre et durée** : Champs `ordre` et `duree` sur chaque template pour contrôler l'affichage
 - ✅ **Fond d'écran personnalisé** : Nouveau champ `fondEcran` pour définir un arrière-plan custom
 - ✅ **Masquer page par défaut** : Nouveau champ `masquerPageDefault` pour cacher horloge/logo si pas de médias
 - ✅ **Planning avancé** : Nouveaux champs `slideDuree` et `maxSallesPerPage` pour pagination multi-salles
@@ -1710,4 +2014,4 @@ En cas de problème avec l'API :
 
 ---
 
-*Documentation mise à jour le 09 janvier 2026*
+*Documentation mise à jour le 21 janvier 2026*

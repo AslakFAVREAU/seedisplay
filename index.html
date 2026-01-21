@@ -898,11 +898,31 @@
   
   /**
    * Affiche l'écran de configuration initiale
+   * Pré-remplit les champs avec les valeurs existantes si disponibles
    */
-  function showSetupScreen() {
-    __log('info','setup','Showing setup screen (first run)')
+  function showSetupScreen(config = null) {
+    __log('info','setup','Showing setup screen')
     document.getElementById('loadingScreen').style.display = 'none'
     document.getElementById('setupScreen').classList.add('active')
+    
+    // Pré-remplir avec la config existante si disponible
+    const cfg = config || window.configSEE || {}
+    
+    if (cfg.ecranUuid) {
+      document.getElementById('setupEcranUuid').value = cfg.ecranUuid
+      __log('info','setup','Pre-filled ecranUuid:', cfg.ecranUuid)
+    }
+    
+    if (cfg.env) {
+      document.getElementById('setupEnv').value = cfg.env
+      __log('info','setup','Pre-filled env:', cfg.env)
+    }
+    
+    if (cfg.apiToken) {
+      document.getElementById('setupApiToken').value = cfg.apiToken
+      __log('info','setup','Pre-filled apiToken')
+    }
+    
     document.getElementById('setupEcranUuid').focus()
   }
 
@@ -969,20 +989,22 @@
       __log('info','setup','API test successful, ecranNom:', data.ecranNom)
       statusDiv.textContent = `✅ Écran trouvé: "${data.ecranNom}"`
 
-      // Sauvegarder la configuration
+      // Sauvegarder la configuration (garder les valeurs existantes comme screenWidth, screenHeight)
+      const existingConfig = window.configSEE || {}
       const newConfig = {
+        ...existingConfig, // Conserver screenWidth, screenHeight, etc. si existantes
         ecranUuid: ecranUuid,
         env: env,
         apiToken: apiToken || '', // Token API optionnel
         // Valeurs par défaut (seront écrasées par l'API)
-        meteo: true,
-        meteoLat: 48.8566,
-        meteoLon: 2.3522,
-        meteoUnits: 'metric',
-        logoSOE: true,
-        weekNo: true,
-        weekType: false,
-        weekDisplay: true
+        meteo: existingConfig.meteo !== undefined ? existingConfig.meteo : true,
+        meteoLat: existingConfig.meteoLat || 48.8566,
+        meteoLon: existingConfig.meteoLon || 2.3522,
+        meteoUnits: existingConfig.meteoUnits || 'metric',
+        logoSOE: existingConfig.logoSOE !== undefined ? existingConfig.logoSOE : true,
+        weekNo: existingConfig.weekNo !== undefined ? existingConfig.weekNo : true,
+        weekType: existingConfig.weekType !== undefined ? existingConfig.weekType : false,
+        weekDisplay: existingConfig.weekDisplay !== undefined ? existingConfig.weekDisplay : true
       }
 
       // Sauvegarder via preload API
@@ -1017,10 +1039,13 @@
   window.api.getConfig().then((config) => {
     __log('info','bootstrap','api.getConfig returned', config)
     
+    // Stocker la config pour que showSetupScreen puisse y accéder
+    window.configSEE = config || {}
+    
     // Vérifier si c'est le premier démarrage (pas de config ou pas d'ecranUuid)
     if (!config || !config.ecranUuid) {
       __log('info','bootstrap','No ecranUuid found - first run, showing setup screen')
-      showSetupScreen()
+      showSetupScreen(config)
       return // Ne pas continuer le bootstrap normal
     }
     
@@ -1028,6 +1053,19 @@
     try {
       // Expose la config au code legacy qui s'attend à trouver window.configSEE
       window.configSEE = config
+      
+      // Charger ConfigManager et appliquer les dimensions sauvegardées immédiatement
+      if (window.configManager && typeof window.configManager.load === 'function') {
+        window.configManager.load().then(() => {
+          __log('info','bootstrap','ConfigManager loaded, applying saved screen dimensions')
+          // Appliquer les dimensions sauvegardées au démarrage (avant l'appel API)
+          if (typeof applyScreenDimensionsFromConfig === 'function') {
+            applyScreenDimensionsFromConfig()
+          }
+        }).catch((e) => {
+          __log('warn','bootstrap','ConfigManager load failed:', e.message)
+        })
+      }
       
       // Configure PlaybackLogger avec l'UUID écran pour les logs régie pub
       if (window.playbackLogger && config.ecranUuid) {

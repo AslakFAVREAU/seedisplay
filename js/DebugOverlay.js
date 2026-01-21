@@ -320,8 +320,8 @@ class DebugOverlay {
                 <div class="config-content">
                     <div class="config-section-title">🔗 Connexion API</div>
                     <div class="config-group">
-                        <label for="config-id-ecran">ID Écran</label>
-                        <input type="number" id="config-id-ecran" min="1" placeholder="1" />
+                        <label for="config-id-ecran">UUID Écran</label>
+                        <input type="text" id="config-id-ecran" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
                     </div>
                     <div class="config-group">
                         <label for="config-env">Environnement</label>
@@ -351,6 +351,10 @@ class DebugOverlay {
                     <div class="config-group config-readonly">
                         <label>Résolution</label>
                         <span class="config-value" id="config-server-resolution">-</span>
+                    </div>
+                    <div class="config-group config-readonly">
+                        <label>Dimensions appliquées</label>
+                        <span class="config-value" id="config-applied-dimensions">-</span>
                     </div>
                     <div class="config-group config-readonly">
                         <label>Luminosité</label>
@@ -464,7 +468,16 @@ class DebugOverlay {
         
         const dims = apiResponse.dimensions || {};
         document.getElementById('config-server-resolution').textContent = 
-            dims.width && dims.height ? `${dims.width}x${dims.height}` : '-';
+            typeof dims === 'string' ? dims : (dims.width && dims.height ? `${dims.width}x${dims.height}` : '-');
+        
+        // Show applied dimensions
+        const applied = window.appliedDimensions || {};
+        if (applied.width && applied.height) {
+            document.getElementById('config-applied-dimensions').textContent = 
+                `${applied.width}x${applied.height}`;
+        } else {
+            document.getElementById('config-applied-dimensions').textContent = 'Plein écran';
+        }
         
         document.getElementById('config-server-brightness').textContent = 
             apiResponse.luminosite !== undefined ? `${apiResponse.luminosite}%` : '-';
@@ -563,9 +576,12 @@ class DebugOverlay {
      * Sauvegarde la configuration
      */
     async saveConfig() {
-        // Ne sauvegarder que les paramètres locaux essentiels
-        // Les autres paramètres (météo, logo, week...) viennent de l'API serveur
+        // Charger la config existante pour ne pas perdre les autres valeurs (dimensions, etc.)
+        const existingConfig = window.configSEE || {};
+        
+        // Mettre à jour avec les nouvelles valeurs du formulaire
         const newConfig = {
+            ...existingConfig, // Garder toutes les propriétés existantes (screenWidth, screenHeight, etc.)
             ecranUuid: document.getElementById('config-id-ecran').value.trim() || '',
             env: document.getElementById('config-env').value,
             apiToken: document.getElementById('config-api-token').value.trim() || ''

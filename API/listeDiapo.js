@@ -8,6 +8,232 @@ var _log = (function(){
 })()
 
 /**
+ * Applique les dimensions d'affichage reçues de l'API
+ * Adapte le container media aux dimensions configurées dans SOEK
+ * Position: haut-gauche, taille exacte en pixels
+ * Sauvegarde dans la config locale pour persistence au redémarrage
+ * @param {Object} data - Réponse API avec dimensions, customResolution, orientation, ratio
+ */
+function applyScreenDimensions(data) {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  
+  var width = null
+  var height = null
+  var orientation = data.orientation || 'landscape'
+  var ratio = data.ratio || '16:9'
+  var isCustomResolution = false  // true seulement si customResolution est défini
+  
+  // Priorité aux dimensions custom si présentes
+  if (data.customResolution && data.customResolution.largeur && data.customResolution.hauteur) {
+    width = data.customResolution.largeur
+    height = data.customResolution.hauteur
+    isCustomResolution = true  // Format personnalisé → pas de fullscreen
+    _log('info', 'screen', 'applyScreenDimensions: using customResolution ' + width + 'x' + height + ' (isCustom=true)')
+  } else if (data.dimensions) {
+    // Parse "1920x1080" format - c'est un format standard, on reste en fullscreen
+    var parts = data.dimensions.split('x')
+    if (parts.length === 2) {
+      width = parseInt(parts[0], 10)
+      height = parseInt(parts[1], 10)
+      isCustomResolution = false  // Format standard → fullscreen
+      _log('info', 'screen', 'applyScreenDimensions: using dimensions ' + width + 'x' + height + ' (isCustom=false, fullscreen)')
+    }
+  }
+  
+  // Store for later use
+  window.screenDimensions = {
+    width: width,
+    height: height,
+    orientation: orientation,
+    ratio: ratio,
+    isCustomResolution: isCustomResolution
+  }
+  
+  // Sauvegarder dans la config locale pour le prochain démarrage
+  if (window.configManager && window.configManager.isLoaded) {
+    var configUpdates = {
+      screenWidth: width,
+      screenHeight: height,
+      screenOrientation: orientation,
+      screenRatio: ratio,
+      isCustomResolution: isCustomResolution  // Important: détermine si fullscreen ou pas au démarrage
+    }
+    window.configManager.setMultiple(configUpdates, true).then(function() {
+      _log('info', 'screen', 'applyScreenDimensions: saved to config (isCustomResolution=' + isCustomResolution + ')')
+    }).catch(function(e) {
+      _log('warn', 'screen', 'applyScreenDimensions: failed to save config: ' + e.message)
+    })
+  }
+  
+  if (!width || !height) {
+    _log('debug', 'screen', 'applyScreenDimensions: no valid dimensions, using fullscreen')
+    return
+  }
+  
+  // Ne redimensionner que si c'est un format personnalisé, sinon on reste en fullscreen
+  if (isCustomResolution) {
+    _applyDimensionsToDOM(width, height)
+  } else {
+    _log('info', 'screen', 'applyScreenDimensions: standard format ' + width + 'x' + height + ', keeping fullscreen (no resize)')
+  }
+}
+
+/**
+ * Applique les dimensions au DOM et redimensionne la fenêtre Electron
+ */
+function _applyDimensionsToDOM(width, height) {
+  if (!width || !height) return
+  
+  _log('info', 'screen', '_applyDimensionsToDOM: applying ' + width + 'x' + height)
+  
+  // Redimensionner la fenêtre Electron elle-même
+  if (window.api && typeof window.api.resizeWindow === 'function') {
+    window.api.resizeWindow(width, height).then(function(success) {
+      if (success) {
+        _log('info', 'screen', '_applyDimensionsToDOM: window resized to ' + width + 'x' + height)
+      } else {
+        _log('warn', 'screen', '_applyDimensionsToDOM: window resize failed, applying CSS fallback')
+        _applyCssDimensions(width, height)
+      }
+    }).catch(function(e) {
+      _log('warn', 'screen', '_applyDimensionsToDOM: resize error, applying CSS fallback: ' + e.message)
+      _applyCssDimensions(width, height)
+    })
+  } else {
+    // Fallback CSS si l'API n'est pas disponible
+    _log('debug', 'screen', '_applyDimensionsToDOM: no resizeWindow API, using CSS')
+    _applyCssDimensions(width, height)
+  }
+  
+  // Store applied dimensions for debug overlay
+  window.appliedDimensions = {
+    width: width,
+    height: height,
+    position: 'top-left'
+  }
+}
+
+/**
+ * Fallback CSS si le resize de fenêtre ne fonctionne pas
+ */
+function _applyCssDimensions(width, height) {
+  // Apply to main containers - top-left position, exact dimensions
+  var mainContainers = ['mediaContainer', 'pageDefault']
+  
+  mainContainers.forEach(function(id) {
+    var el = document.getElementById(id)
+    if (el) {
+      el.style.setProperty('width', width + 'px', 'important')
+      el.style.setProperty('height', height + 'px', 'important')
+      el.style.setProperty('top', '0', 'important')
+      el.style.setProperty('left', '0', 'important')
+      el.style.setProperty('right', 'auto', 'important')
+      el.style.setProperty('bottom', 'auto', 'important')
+    }
+  })
+  
+  // Child elements fill their parent (100%)
+  var childContainers = ['divImg1', 'divImg2', 'divVideo1', 'divVideo2', 'templateContainer']
+  
+  childContainers.forEach(function(id) {
+    var el = document.getElementById(id)
+    if (el) {
+      el.style.setProperty('width', '100%', 'important')
+      el.style.setProperty('height', '100%', 'important')
+    }
+  })
+  
+  // Black background for any overflow
+  document.body.style.setProperty('background-color', '#000', 'important')
+  document.body.style.setProperty('overflow', 'hidden', 'important')
+  
+  _log('info', 'screen', '_applyCssDimensions: done')
+}
+
+/**
+ * Applique les dimensions sauvegardées dans la config (appelé au démarrage)
+ */
+function applyScreenDimensionsFromConfig() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  
+  if (!window.configManager || !window.configManager.isLoaded) {
+    _log('debug', 'screen', 'applyScreenDimensionsFromConfig: configManager not ready')
+    return
+  }
+  
+  var dims = window.configManager.screenDimensions
+  var isCustom = window.configManager.config && window.configManager.config.isCustomResolution === true
+  
+  if (dims.width && dims.height) {
+    _log('info', 'screen', 'applyScreenDimensionsFromConfig: found saved dimensions ' + dims.width + 'x' + dims.height + ', isCustomResolution=' + isCustom)
+    
+    // Store for later use
+    window.screenDimensions = dims
+    
+    // Apply to DOM ONLY if custom resolution, otherwise stay fullscreen
+    if (isCustom) {
+      _applyDimensionsToDOM(dims.width, dims.height)
+    } else {
+      _log('info', 'screen', 'applyScreenDimensionsFromConfig: standard format, keeping fullscreen')
+    }
+  } else {
+    _log('debug', 'screen', 'applyScreenDimensionsFromConfig: no saved dimensions')
+  }
+}
+
+/**
+ * Vérifie si un template est actuellement actif (dates et programmation)
+ * @param {Object} template - Template avec dates et programmation optionnelles
+ * @returns {boolean}
+ */
+function isTemplateActive(template) {
+  if (!template) return false
+  
+  var now = new Date()
+  var currentTime = now.toTimeString().slice(0, 5) // "HH:mm"
+  var currentDay = now.getDay() // 0=Dim, 1=Lun, ...
+  
+  // Check date range
+  if (template.dateDebut) {
+    var debut = new Date(template.dateDebut)
+    if (now < debut) return false
+  }
+  if (template.dateFin) {
+    var fin = new Date(template.dateFin)
+    // Si dateFin est une date sans heure, elle doit inclure toute la journée
+    if (template.dateFin.length === 10) { // "YYYY-MM-DD"
+      fin.setHours(23, 59, 59, 999)
+    }
+    if (now > fin) return false
+  }
+  
+  // Check specific date (for anniversaries, menus)
+  if (template.date && !template.dateDebut && !template.dateFin) {
+    var targetDate = new Date(template.date)
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    var target = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
+    if (today.getTime() !== target.getTime()) return false
+  }
+  
+  // Check programmation (hours / days)
+  if (template.programmation) {
+    var prog = template.programmation
+    
+    // Check days
+    if (prog.joursSemaine && Array.isArray(prog.joursSemaine) && prog.joursSemaine.length > 0) {
+      if (!prog.joursSemaine.includes(currentDay)) return false
+    }
+    
+    // Check hours
+    if (prog.heureDebut && prog.heureFin) {
+      if (currentTime < prog.heureDebut || currentTime > prog.heureFin) return false
+    }
+  }
+  
+  return true
+}
+
+/**
  * Initialise et affiche le planning selon la configuration
  * @param {Object} planningConfig - { actif, position, refreshInterval, duree, ... }
  * 
@@ -191,6 +417,11 @@ function listeDiapoV2(data) {
       _log('info','diapo','listeDiapoV2: screen status = ' + data.status)
     }
     
+    // Apply screen dimensions from API (resolution/ratio adaptation)
+    if (data.dimensions || data.customResolution) {
+      applyScreenDimensions(data)
+    }
+    
     // Store sleep mode config
     if (data.typeHorsPlage) window.typeHorsPlage = data.typeHorsPlage
     if (data.imageHorsPlage) window.imageHorsPlage = data.imageHorsPlage
@@ -362,6 +593,146 @@ function listeDiapoV2(data) {
       if (window.diaposWithTemplates.length > 0) {
         _log('info','diapo','listeDiapoV2: found ' + window.diaposWithTemplates.length + ' diapos with templateData')
       }
+    }
+  }
+  
+  // NEW: Process dynamic templates from 'templates' array in API response
+  // Templates dynamiques: anniversaires, menus, annonces avec ordre et durée
+  if (data.templates && Array.isArray(data.templates) && data.templates.length > 0) {
+    _log('info','diapo','listeDiapoV2: processing ' + data.templates.length + ' dynamic templates')
+    
+    // Sort templates by ordre
+    var sortedTemplates = data.templates.slice().sort(function(a, b) {
+      return (a.ordre || 0) - (b.ordre || 0)
+    })
+    
+    for (var t = 0; t < sortedTemplates.length; t++) {
+      var template = sortedTemplates[t]
+      if (!template || !template.type) continue
+      
+      // Check if template is active (actif flag from API)
+      if (template.actif === false) {
+        _log('debug','diapo','listeDiapoV2: skipping inactive template "' + (template.nom) + '"')
+        continue
+      }
+      
+      // Normalize type to lowercase for comparison
+      var templateType = (template.type || '').toLowerCase()
+      // Handle plural types from API (ANNIVERSAIRES -> anniversaire)
+      if (templateType === 'anniversaires') templateType = 'anniversaire'
+      if (templateType === 'menus') templateType = 'menu'
+      if (templateType === 'annonces') templateType = 'annonce'
+      
+      // API uses dureeAffichage, fallback to duree
+      var templateDuree = template.dureeAffichage || template.duree || 15 // Default 15 seconds
+      
+      // Get presentation/config from API
+      var presentation = template.presentation || {}
+      var config = template.config || {}
+      
+      var templateData = {
+        type: templateType,
+        titre: config.titre || template.nom,
+        sousTitre: template.sousTitre,
+        message: template.message,
+        // Couleurs from presentation
+        couleur: presentation.couleurPrimaire || presentation.couleur_texte || template.couleur,
+        backgroundColor: presentation.backgroundColor || presentation.couleur_fond,
+        emoji: presentation.emoji,
+        icon: template.icon,
+        image: template.image,
+        backgroundImage: template.backgroundImage,
+        date: template.date,
+        dateDebut: template.dateDebut,
+        dateFin: template.dateFin,
+        lieu: template.lieu,
+        contact: template.contact,
+        // Pass full config/presentation for advanced rendering
+        config: config,
+        presentation: presentation
+      }
+      
+      // Type-specific data from template.data (API structure)
+      var apiData = template.data || {}
+      
+      switch (templateType) {
+        case 'anniversaire':
+          // API sends data.anniversairesDuJour and data.personnes
+          templateData.personnes = apiData.anniversairesDuJour || apiData.personnes || []
+          templateData.totalPersonnes = apiData.totalPersonnes || templateData.personnes.length
+          templateData.afficherAge = config.afficherAge || config.afficher_age
+          templateData.afficherClasse = config.afficherClasse
+          
+          // Skip if no birthdays today
+          if (!templateData.personnes || templateData.personnes.length === 0) {
+            _log('info','diapo','listeDiapoV2: skipping anniversaire template - no birthdays today')
+            continue
+          }
+          break
+          
+        case 'menu':
+          // API sends data.menus (array with dates), data.menuDuJour, data.menusDeLaSemaine
+          var menuDuJour = apiData.menuDuJour || {}
+          var menuItems = menuDuJour.items || apiData.items || []
+          
+          // Include full menus array for week mode
+          templateData.menus = apiData.menus || []
+          templateData.menusDeLaSemaine = apiData.menusDeLaSemaine || []
+          templateData.menuDuJour = apiData.menuDuJour
+          
+          // Parse items by category from API format (fallback for compatibility)
+          templateData.entrees = []
+          templateData.plats = []
+          templateData.accompagnements = []
+          templateData.fromages = []
+          templateData.desserts = []
+          templateData.boissons = []
+          templateData.gouters = []
+          
+          // Map API categories to template arrays
+          for (var mi = 0; mi < menuItems.length; mi++) {
+            var item = menuItems[mi]
+            if (!item || !item.nom) continue
+            var cat = (item.categorie || '').toLowerCase()
+            if (cat === 'entrée' || cat === 'entree' || cat === 'entrées') {
+              templateData.entrees.push(item.nom)
+            } else if (cat === 'plat' || cat === 'plats') {
+              templateData.plats.push(item.nom)
+            } else if (cat === 'accompagnement' || cat === 'accompagnements' || cat === 'garniture') {
+              templateData.accompagnements.push(item.nom)
+            } else if (cat === 'fromage' || cat === 'fromages') {
+              templateData.fromages.push(item.nom)
+            } else if (cat === 'dessert' || cat === 'desserts') {
+              templateData.desserts.push(item.nom)
+            } else if (cat === 'boisson' || cat === 'boissons') {
+              templateData.boissons.push(item.nom)
+            } else if (cat === 'goûter' || cat === 'gouter' || cat === 'gouters') {
+              templateData.gouters.push(item.nom)
+            }
+          }
+          
+          // Fallback to direct arrays if provided
+          if (templateData.entrees.length === 0 && apiData.entrees) templateData.entrees = apiData.entrees
+          if (templateData.plats.length === 0 && apiData.plats) templateData.plats = apiData.plats
+          if (templateData.accompagnements.length === 0 && apiData.accompagnements) templateData.accompagnements = apiData.accompagnements
+          if (templateData.desserts.length === 0 && apiData.desserts) templateData.desserts = apiData.desserts
+          
+          templateData.date = menuDuJour.date || template.date
+          templateData.prix = apiData.prix || template.prix
+          templateData.info = apiData.info || template.info
+          templateData.allergenes = config.listeAllergenes || []
+          templateData.afficherAllergenes = config.afficherAllergenes
+          break
+          
+        case 'annonce':
+          templateData.typeAnnonce = apiData.typeAnnonce || template.typeAnnonce || 'info'
+          templateData.label = apiData.label || template.label
+          templateData.contenu = apiData.contenu || template.contenu
+          break
+      }
+      
+      ArrayImg.push(['template', templateData, templateDuree, { templateId: template.id, ordre: template.ordre }])
+      _log('info','diapo','listeDiapoV2: added template "' + templateData.titre + '" (type=' + templateType + ', duree=' + templateDuree + 's, ordre=' + template.ordre + ')')
     }
   }
 
