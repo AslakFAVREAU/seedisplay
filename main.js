@@ -25,6 +25,9 @@ app.commandLine.appendSwitch('disable-frame-rate-limit');
 
 log.info('Hardware acceleration enabled for smooth video playback');
 
+// Définir le nom de l'application pour Windows
+app.setName('SEE Display');
+
 //-------------------------------------------------------------------
 // Logging
 //
@@ -101,6 +104,7 @@ function createDefaultWindow() {
   
   // Options de base
   const windowOptions = {
+    title: 'SEE Display',
     icon: appIcon,
     show: false,
     frame: false,
@@ -123,7 +127,6 @@ function createDefaultWindow() {
     windowOptions.kiosk = false
     windowOptions.resizable = false
     windowOptions.alwaysOnTop = true  // Toujours au premier plan
-    windowOptions.skipTaskbar = true
     windowOptions.minWidth = customDims.width
     windowOptions.minHeight = customDims.height
     windowOptions.maxWidth = customDims.width
@@ -137,7 +140,6 @@ function createDefaultWindow() {
     windowOptions.fullscreen = true
     windowOptions.kiosk = true  // Mode kiosk pour vrai plein écran
     windowOptions.alwaysOnTop = true
-    windowOptions.skipTaskbar = true
     log.info(`[main] Window will be fullscreen (kiosk mode)`)
   }
   
@@ -401,7 +403,8 @@ function createWindow () {
   
   // Options de base - en fullscreen, désactiver DevTools même en dev
   const windowOptions = {
-    icon: 'assets/Flavicon.png',
+    title: 'SEE Display',
+    icon: path.join(__dirname, 'build', 'icon.ico'),
     webPreferences: {
       nodeIntegration: false,
       nativeWindowOpen: true,
@@ -422,7 +425,6 @@ function createWindow () {
     windowOptions.frame = false
     windowOptions.resizable = false
     windowOptions.alwaysOnTop = true  // Toujours au premier plan
-    windowOptions.skipTaskbar = true
     windowOptions.minWidth = customDims.width
     windowOptions.minHeight = customDims.height
     windowOptions.maxWidth = customDims.width
@@ -437,7 +439,6 @@ function createWindow () {
     windowOptions.kiosk = true  // Mode kiosk pour vrai plein écran
     windowOptions.frame = false
     windowOptions.alwaysOnTop = true
-    windowOptions.skipTaskbar = true
     log.info(`[main] createWindow: fullscreen kiosk mode`)
   }
   
