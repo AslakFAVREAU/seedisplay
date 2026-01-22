@@ -6,6 +6,16 @@ const path = require('path');
 const fs = require('fs');
 
 //-------------------------------------------------------------------
+// Auto-updater GitHub Token Configuration
+// Required for private repositories
+//-------------------------------------------------------------------
+autoUpdater.requestHeaders = { 
+  'Authorization': 'token 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'
+};
+// Also set it in the options for the GitHub provider
+process.env.GH_TOKEN = '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';
+
+//-------------------------------------------------------------------
 // Performance & Hardware Acceleration
 // Optimisations pour lecture vidéo fluide et transitions CUT
 //-------------------------------------------------------------------
@@ -385,10 +395,13 @@ autoUpdater.on('error', (err) => {
 ipcMain.handle('check-for-updates', async () => {
   log.info('Manual update check requested from renderer');
   try {
+    log.info('Calling autoUpdater.checkForUpdatesAndNotify()...');
     const result = await autoUpdater.checkForUpdatesAndNotify();
+    log.info('Update check result:', JSON.stringify(result?.updateInfo || 'no update info'));
     return { success: true, updateInfo: result?.updateInfo || null };
   } catch (e) {
-    log.error('Manual update check failed:', e);
+    log.error('Manual update check failed:', e.message);
+    log.error('Full error:', e);
     return { success: false, error: e.message };
   }
 });

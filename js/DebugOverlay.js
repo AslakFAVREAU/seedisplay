@@ -78,20 +78,23 @@ class DebugOverlay {
         if (btnEl) btnEl.disabled = true;
         
         try {
+            this._log('info', 'debug', 'Checking if window.api.checkForUpdates exists: ' + (window.api && typeof window.api.checkForUpdates));
             if (window.api && window.api.checkForUpdates) {
+                this._log('info', 'debug', 'Calling window.api.checkForUpdates()...');
                 const result = await window.api.checkForUpdates();
                 this._log('info', 'debug', 'Update check result: ' + JSON.stringify(result));
                 
-                if (result.success) {
-                    if (result.updateInfo) {
+                if (result && result.success) {
+                    if (result.updateInfo && result.updateInfo.version) {
                         if (statusEl) statusEl.textContent = `✅ v${result.updateInfo.version} disponible - téléchargement...`;
                     } else {
-                        if (statusEl) statusEl.textContent = '✅ Aucune mise à jour disponible';
+                        if (statusEl) statusEl.textContent = '✅ À jour (pas de nouvelle version)';
                     }
                 } else {
-                    if (statusEl) statusEl.textContent = `❌ ${result.error || 'Erreur inconnue'}`;
+                    if (statusEl) statusEl.textContent = `❌ ${result?.error || 'Erreur inconnue'}`;
                 }
             } else {
+                this._log('error', 'debug', 'window.api.checkForUpdates not available');
                 if (statusEl) statusEl.textContent = '❌ API non disponible';
             }
         } catch (e) {
