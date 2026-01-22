@@ -1,33 +1,17 @@
 const { app, Menu, BrowserWindow, ipcMain, screen } = require('electron');
 const log = require('electron-log');
-
-// IMPORTANT: Set GH_TOKEN before loading electron-updater
-const GH_TOKEN = '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';
-process.env.GH_TOKEN = GH_TOKEN;
-
 const updater = require("electron-updater");
 const autoUpdater = updater.autoUpdater;
 const path = require('path');
 const fs = require('fs');
 
 //-------------------------------------------------------------------
-// Auto-updater GitHub Token Configuration
-// Required for private repositories
+// Auto-updater Configuration
+// GitHub releases (public repo)
 //-------------------------------------------------------------------
-// Configure autoUpdater for private GitHub repo
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
-
-// Set the feed URL with token for private repo
-autoUpdater.setFeedURL({
-  provider: 'github',
-  owner: 'AslakFAVREAU',
-  repo: 'seedisplay',
-  private: true,
-  token: GH_TOKEN
-});
-
-log.info('Auto-updater configured for private GitHub repo');
+log.info('Auto-updater configured for GitHub releases');
 
 //-------------------------------------------------------------------
 // Performance & Hardware Acceleration
