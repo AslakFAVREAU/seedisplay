@@ -64,6 +64,12 @@ class SleepManager {
     // Initial check
     this._checkSleepStatus()
     this._checkNightModeStatus()
+    
+    // Apply initial luminosity if not sleeping and not in night mode
+    // This ensures day-time luminosity is applied at startup
+    if (!this._isSleeping && !this._isNightMode) {
+      this.applyLuminosity(this._currentLuminosity, false)
+    }
 
     return this
   }
@@ -87,11 +93,25 @@ class SleepManager {
       this._sleepConfig = ecranConfig.sleepMode
     }
     
+    // Update day luminosity from config
+    const newLuminosity = ecranConfig?.luminosite
+    const luminosityChanged = newLuminosity !== undefined && newLuminosity !== this._currentLuminosity
+    
+    if (newLuminosity !== undefined) {
+      this._currentLuminosity = newLuminosity
+    }
+    
     // Refresh night mode config
     this._updateNightModeConfig()
     
     this._checkSleepStatus()
     this._checkNightModeStatus()
+    
+    // Apply updated day luminosity if we're in normal mode (not sleeping, not night)
+    if (luminosityChanged && !this._isSleeping && !this._isNightMode) {
+      this._log.info('sleep-manager', `Applying updated day luminosity: ${this._currentLuminosity}%`)
+      this.applyLuminosity(this._currentLuminosity, true)
+    }
   }
 
   /**

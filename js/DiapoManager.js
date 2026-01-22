@@ -396,7 +396,8 @@ class DiapoManager {
     return {
       id: response.ecran?.id || response.Ecran?.Id || null,
       nom: response.ecran?.nom || response.Ecran?.Nom || '',
-      luminosite: response.ecran?.luminosite || response.Ecran?.Luminosite || 100,
+      // luminosite is at root level in API v2, not inside ecran
+      luminosite: response.luminosite ?? response.ecran?.luminosite ?? response.Ecran?.Luminosite ?? 100,
       sleepMode: response.ecran?.sleepMode || response.Ecran?.SleepMode || null
     }
   }

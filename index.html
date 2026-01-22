@@ -718,6 +718,29 @@
   <script src="js/dateHeure.js"></script>
   <script src="js/ephe.js"></script>
   <script src="js/getConfigSEE.js"></script>
+  
+  <script>
+    // Initialize SleepManager with luminosity config
+    // This must be done after scripts are loaded but before media loop starts
+    (function initSleepManager() {
+      // Wait for API response to be available, then init SleepManager
+      const checkAndInit = () => {
+        if (window.apiV2Response && window.sleepManager) {
+          const ecranConfig = {
+            luminosite: window.apiV2Response.luminosite ?? window.luminosite ?? 100,
+            sleepMode: window.apiV2Response.sleepMode || null
+          };
+          window.sleepManager.init(ecranConfig);
+          if (window.logger) window.logger.info('init', 'SleepManager initialized with luminosity: ' + ecranConfig.luminosite + '%');
+        } else {
+          // Retry in 500ms if API not loaded yet
+          setTimeout(checkAndInit, 500);
+        }
+      };
+      // Start checking after a short delay to allow API call to complete
+      setTimeout(checkAndInit, 1000);
+    })();
+  </script>
   <script src="API/listeDiapo.js"></script>
   <script src="js/meteo.js"></script>
   <script src="js/restartGif.js"></script>

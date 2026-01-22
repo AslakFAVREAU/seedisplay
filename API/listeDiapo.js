@@ -473,9 +473,13 @@ function listeDiapoV2(data) {
       }
     }
     
-    // Initialize/update night mode in SleepManager
+    // Update SleepManager with current config (luminosity, night mode, etc.)
     if (window.sleepManager) {
-      window.sleepManager.checkNightMode()
+      const ecranConfig = {
+        luminosite: data.luminosite ?? window.luminosite ?? 100,
+        sleepMode: data.sleepMode || null
+      }
+      window.sleepManager.updateConfig(ecranConfig)
     }
   }
   

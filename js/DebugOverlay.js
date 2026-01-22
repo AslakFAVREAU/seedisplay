@@ -1029,12 +1029,17 @@ class DebugOverlay {
     /**
      * Met à jour toutes les valeurs affichées
      */
-    _updateValues() {
+    async _updateValues() {
         const config = window.configSEE || {};
         const apiResponse = window.apiV2Response || {};
         
-        // Version
-        this._setValue('debug-version', 'v1.9.3');
+        // Version (récupérée dynamiquement depuis le main process)
+        try {
+            const version = await window.api?.getAppVersion?.() || '?';
+            this._setValue('debug-version', `v${version}`);
+        } catch (e) {
+            this._setValue('debug-version', 'v?');
+        }
         
         // UUID Écran
         const uuid = config.ecranUuid || window.ecranUuid || '?';
