@@ -103,6 +103,39 @@ class DebugOverlay {
     }
     
     /**
+     * Force un refresh API immédiat (raccourci R)
+     */
+    async _forceApiRefresh() {
+        this._log('info', 'debug', '🔄 Forcing API refresh...');
+        
+        try {
+            // Appeler requestJsonDiapo si disponible (défini dans listeDiapo.js)
+            if (typeof window.requestJsonDiapo === 'function') {
+                await window.requestJsonDiapo();
+                this._log('info', 'debug', '✅ API refresh completed via requestJsonDiapo');
+            } else if (window.startDiapoRefreshTimer) {
+                // Alternative: stopper et redémarrer le timer (ce qui force un refresh)
+                if (window.stopDiapoRefreshTimer) window.stopDiapoRefreshTimer();
+                window.startDiapoRefreshTimer();
+                this._log('info', 'debug', '✅ API refresh timer restarted');
+            } else {
+                this._log('warn', 'debug', '⚠️ No refresh function available');
+            }
+            
+            // Feedback visuel si l'overlay est visible
+            if (this.visible && this.overlay) {
+                const flashEl = document.createElement('div');
+                flashEl.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#4CAF50;color:white;padding:10px 20px;border-radius:5px;z-index:99999;font-weight:bold;';
+                flashEl.textContent = '🔄 API Refresh OK';
+                document.body.appendChild(flashEl);
+                setTimeout(() => flashEl.remove(), 2000);
+            }
+        } catch (e) {
+            this._log('error', 'debug', '❌ API refresh failed: ' + e.message);
+        }
+    }
+    
+    /**
      * Initialise les raccourcis clavier
      */
     _initKeyboardShortcuts() {
@@ -130,6 +163,12 @@ class DebugOverlay {
                 if (window.api?.quitApp) {
                     window.api.quitApp();
                 }
+            }
+            
+            // R = forcer un refresh API immédiat
+            if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.altKey) {
+                window.logger?.info('DebugOverlay', '🔄 Manual API refresh triggered (R)');
+                this._forceApiRefresh();
             }
         });
     }
@@ -234,8 +273,16 @@ class DebugOverlay {
                     <div class="debug-value" id="debug-local-time">-</div>
                 </div>
                 <div class="debug-section">
-                    <div class="debug-label">Heure Serveur</div>
+                    <div class="debug-label">Dernier Pull</div>
                     <div class="debug-value" id="debug-server-time">-</div>
+                </div>
+                <div class="debug-section">
+                    <div class="debug-label">Nb Pulls</div>
+                    <div class="debug-value" id="debug-pull-count">0</div>
+                </div>
+                <div class="debug-section">
+                    <div class="debug-label">Démarré à</div>
+                    <div class="debug-value" id="debug-start-time">-</div>
                 </div>
                 <div class="debug-section">
                     <div class="debug-label">Uptime</div>
@@ -619,6 +666,7 @@ class DebugOverlay {
         style.textContent = `
             #debug-overlay {
                 position: fixed;
+                top: 20px;
                 bottom: 20px;
                 right: 20px;
                 width: 320px;
@@ -658,8 +706,6 @@ class DebugOverlay {
             
             .debug-content {
                 padding: 10px 15px;
-                max-height: 400px;
-                overflow-y: auto;
             }
             
             .debug-section {
@@ -1002,13 +1048,26 @@ class DebugOverlay {
         // Heure locale
         this._setValue('debug-local-time', new Date().toLocaleTimeString('fr-FR'));
         
-        // Heure serveur
-        if (apiResponse.serverTime) {
+        // Dernier Pull (heure du dernier appel API)
+        if (window.lastApiPullTime) {
+            const lastPull = new Date(window.lastApiPullTime).toLocaleTimeString('fr-FR');
+            const ago = Math.floor((Date.now() - window.lastApiPullTime) / 1000);
+            this._setValue('debug-server-time', lastPull + ' (il y a ' + this._formatDuration(ago) + ')');
+        } else if (apiResponse.serverTime) {
+            // Fallback sur serverTime si lastApiPullTime pas dispo
             const serverTime = new Date(apiResponse.serverTime).toLocaleTimeString('fr-FR');
             this._setValue('debug-server-time', serverTime);
         } else {
             this._setValue('debug-server-time', '-', 'warning');
         }
+        
+        // Nombre de pulls depuis l'uptime
+        const pullCount = window.apiPullCount || 0;
+        this._setValue('debug-pull-count', pullCount + ' pulls');
+        
+        // Heure de démarrage
+        const startTimeStr = new Date(this.startTime).toLocaleTimeString('fr-FR');
+        this._setValue('debug-start-time', startTimeStr);
         
         // Uptime
         const uptime = Math.floor((Date.now() - this.startTime) / 1000);
@@ -1043,13 +1102,20 @@ class DebugOverlay {
             this._setValue('debug-next-wakeup', '-');
         }
         
-        // Prochain refresh
+        // Prochain refresh (compteur réel)
         const refreshInterval = window.refreshInterval || 300;
-        if (screenStatus === 'sleep') {
-            // En mode sleep: refresh toutes les 5 min
+        if (window.lastApiPullTime) {
+            const elapsed = Math.floor((Date.now() - window.lastApiPullTime) / 1000);
+            const remaining = Math.max(0, refreshInterval - elapsed);
+            if (remaining === 0) {
+                this._setValue('debug-next-refresh', '⏳ imminent...', 'warning');
+            } else {
+                this._setValue('debug-next-refresh', 'dans ' + this._formatDuration(remaining), 'ok');
+            }
+        } else if (screenStatus === 'sleep') {
             this._setValue('debug-next-refresh', '5 min (sleep)');
         } else {
-            this._setValue('debug-next-refresh', this._formatDuration(refreshInterval));
+            this._setValue('debug-next-refresh', 'toutes les ' + this._formatDuration(refreshInterval));
         }
         
         // Cache offline

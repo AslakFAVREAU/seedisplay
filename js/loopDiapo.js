@@ -197,8 +197,38 @@ function showMedia(mediaIndex) {
                 });
             };
             
+            // Flag pour éviter double exécution
+            let videoStarted = false;
+            
             // Écouter plusieurs événements pour robustesse
-            freshVideoEl.addEventListener('loadeddata', showVideo, { once: true });
+            freshVideoEl.addEventListener('loadeddata', () => {
+                if (!videoStarted) {
+                    videoStarted = true;
+                    showVideo();
+                }
+            }, { once: true });
+            
+            // Fallback sur canplaythrough si loadeddata ne se déclenche pas
+            freshVideoEl.addEventListener('canplaythrough', () => {
+                if (!videoStarted) {
+                    __log('warn', 'diapo', 'video canplaythrough fallback (loadeddata missed)');
+                    videoStarted = true;
+                    showVideo();
+                }
+            }, { once: true });
+            
+            // TIMEOUT FALLBACK: si la vidéo ne charge pas en 10s, passer au suivant
+            const videoTimeout = setTimeout(() => {
+                if (!videoStarted) {
+                    __log('error', 'diapo', 'video timeout after 10s, skipping to next');
+                    videoStarted = true;
+                    showMedia(currentMediaIndex + 1);
+                }
+            }, 10000);
+            
+            // Annuler le timeout si la vidéo démarre
+            const cancelTimeout = () => clearTimeout(videoTimeout);
+            freshVideoEl.addEventListener('playing', cancelTimeout, { once: true });
             
             // Logger le chargement des données
             freshVideoEl.addEventListener('loadstart', () => {
@@ -212,12 +242,14 @@ function showMedia(mediaIndex) {
             // Écouter la fin de la vidéo
             freshVideoEl.addEventListener('ended', () => {
                 __log('info', 'diapo', 'video ended, next in 200ms');
+                clearTimeout(videoTimeout);
                 setTimeout(() => showMedia(currentMediaIndex + 1), 200);
             }, { once: true });
             
             // Écouter les erreurs
             freshVideoEl.addEventListener('error', (e) => {
                 __log('error', 'diapo', 'video error: ' + (e.message || 'load failed'));
+                clearTimeout(videoTimeout);
                 setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
             }, { once: true });
             

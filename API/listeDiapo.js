@@ -444,7 +444,14 @@ function listeDiapoV2(data) {
     
     // Store screen config
     if (data.luminosite !== undefined) window.luminosite = data.luminosite
-    if (data.refreshInterval) window.refreshInterval = parseInt(data.refreshInterval) || 300
+    if (data.refreshInterval) {
+      // Limiter entre 60s (1 min) et 600s (10 min) pour éviter des valeurs aberrantes
+      var apiInterval = parseInt(data.refreshInterval) || 300
+      window.refreshInterval = Math.min(600, Math.max(60, apiInterval))
+      if (apiInterval !== window.refreshInterval) {
+        _log('warn','diapo','listeDiapoV2: refreshInterval clamped from ' + apiInterval + ' to ' + window.refreshInterval)
+      }
+    }
     _log('debug','diapo','listeDiapoV2: stored apiV2Response, refreshInterval=' + window.refreshInterval)
     
     // Store and handle planning config (can be in data.planning or data.config.planning)
@@ -904,8 +911,12 @@ const getDiapoJson = async () => {
     var intervalMs = (window.refreshInterval || 300) * 1000
     _log('info','diapo','startRefreshTimer: scheduling API refresh every ' + (intervalMs/1000) + 's')
     
+    // Enregistrer l'heure du prochain refresh prévu
+    window.lastApiPullTime = Date.now()
+    
     refreshTimer = setInterval(async function() {
       _log('info','diapo','refreshTimer: refreshing diapo data from API...')
+      window.lastApiPullTime = Date.now()  // Mettre à jour l'heure du pull
       await requestJsonDiapo()
       _log('info','diapo','refreshTimer: refresh complete, ArrayDiapo has ' + (ArrayDiapo ? ArrayDiapo.length : 0) + ' items')
     }, intervalMs)
@@ -923,9 +934,17 @@ const getDiapoJson = async () => {
   if (typeof window !== 'undefined') {
     window.startDiapoRefreshTimer = startRefreshTimer
     window.stopDiapoRefreshTimer = stopRefreshTimer
+    window.requestJsonDiapo = null  // Sera défini après la déclaration de requestJsonDiapo
   }
 
   const requestJsonDiapo = async () => {
+    // Mettre à jour l'heure du dernier pull et incrémenter le compteur
+    if (typeof window !== 'undefined') {
+      window.lastApiPullTime = Date.now()
+      window.apiPullCount = (window.apiPullCount || 0) + 1
+      _log('info','diapo','requestJsonDiapo: pull #' + window.apiPullCount)
+    }
+    
     const JsonDiapo = await getDiapoJson()
     _log('debug','diapo','requestJsonDiapo: JsonDiapo=', JsonDiapo ? 'object' : 'null', 'JsonDiapo.data=', JsonDiapo && JsonDiapo.data ? 'present' : 'missing')
     if (JsonDiapo) {
@@ -969,4 +988,9 @@ const getDiapoJson = async () => {
         startRefreshTimer()
       }
     }
+  }
+  
+  // Exposer requestJsonDiapo sur window pour le raccourci R (refresh manuel)
+  if (typeof window !== 'undefined') {
+    window.requestJsonDiapo = requestJsonDiapo
   }

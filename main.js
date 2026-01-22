@@ -281,6 +281,29 @@ app.on('ready', function() {
   globalShortcut.register('CommandOrControl+Q', () => {
     app.quit();
   });
+  
+  //-------------------------------------------------------------------
+  // Auto-update : Vérification au démarrage + toutes les 24h
+  //-------------------------------------------------------------------
+  const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 heures en ms
+  
+  // Vérifier les mises à jour au démarrage (après 30 secondes pour laisser l'app se charger)
+  setTimeout(() => {
+    log.info('[auto-update] Initial update check...');
+    autoUpdater.checkForUpdatesAndNotify().catch(err => {
+      log.warn('[auto-update] Initial check failed:', err.message);
+    });
+  }, 30000);
+  
+  // Vérifier toutes les 24h
+  setInterval(() => {
+    log.info('[auto-update] Scheduled 24h update check...');
+    autoUpdater.checkForUpdatesAndNotify().catch(err => {
+      log.warn('[auto-update] Scheduled check failed:', err.message);
+    });
+  }, CHECK_INTERVAL_MS);
+  
+  log.info('[auto-update] Update checks scheduled: startup + every 24h');
 });
 
 app.on('window-all-closed', () => {
