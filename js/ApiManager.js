@@ -53,6 +53,7 @@ class ApiManager {
 
   /**
    * Wrapper pour GET axios avec timeout et retry
+   * Ajoute automatiquement les headers requis par SOEK
    */
   async _axiosGetWithTimeout(url, timeoutMs) {
     // Créer une promesse de timeout
@@ -60,14 +61,29 @@ class ApiManager {
       setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs)
     );
 
-    // Construire les headers avec token API si disponible
+    // Construire les headers requis par SOEK
     const headers = {};
     try {
+      // Token API si disponible
       if (typeof window !== 'undefined' && window.configSEE && window.configSEE.apiToken) {
         headers['X-API-Token'] = window.configSEE.apiToken;
       }
+      
+      // Headers obligatoires pour SOEK (tracking version et canal)
+      if (typeof window !== 'undefined' && window.api) {
+        // Version de l'application
+        const appVersion = await window.api.getAppVersion();
+        if (appVersion) {
+          headers['X-App-Version'] = appVersion;
+        }
+        
+        // Canal de mise à jour (stable ou beta)
+        const updateChannel = window.configSEE?.updateChannel || 'stable';
+        headers['X-Update-Channel'] = updateChannel;
+      }
     } catch (e) {
-      // Ignore si window ou configSEE non disponible
+      // Ignore si window, api ou configSEE non disponible
+      _log('warn', 'api-manager', 'Could not set SOEK headers:', e.message);
     }
 
     try {

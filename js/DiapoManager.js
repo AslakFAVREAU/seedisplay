@@ -305,28 +305,44 @@ class DiapoManager {
 
   /**
    * Download and cache media files
+   * Uses ETag/Last-Modified to detect changes on remote server
    */
   async _downloadMedia() {
     const timeline = this._cache.timeline
     if (!timeline.length) return
 
-    this._log.info('diapo-manager', 'Downloading', timeline.length, 'media files...')
+    this._log.info('diapo-manager', 'Checking/downloading', timeline.length, 'media files...')
 
     for (const media of timeline) {
       try {
         if (!media.nom) continue
         
-        // Check if already cached
-        if (window.api?.existsSync && window.api.existsSync('media/' + media.nom)) {
-          this._log.debug('diapo-manager', 'Already cached:', media.nom)
+        const url = window.configManager.mediaBaseUrl + media.nom
+        const relativePath = 'media/' + media.nom
+
+        // Use saveBinaryWithCache (with ETag support) to detect remote changes
+        if (window.api?.saveBinaryWithCache) {
+          const result = await window.api.saveBinaryWithCache(relativePath, url)
+          if (result.success) {
+            if (result.cached) {
+              this._log.debug('diapo-manager', 'Up to date (304):', media.nom)
+            } else {
+              this._log.info('diapo-manager', 'Downloaded new/updated:', media.nom, `(${result.size} bytes)`)
+            }
+          } else {
+            this._log.warn('diapo-manager', 'Download failed:', media.nom, result.error)
+          }
           continue
         }
 
-        // Download via preload saveBinary
+        // Fallback: saveBinary without cache (skip if file exists)
         if (window.api?.saveBinary) {
-          const url = window.configManager.mediaBaseUrl + media.nom
-          await window.api.saveBinary('media/' + media.nom, url)
-          this._log.debug('diapo-manager', 'Downloaded:', media.nom)
+          if (window.api?.existsSync && window.api.existsSync(relativePath)) {
+            this._log.debug('diapo-manager', 'Already cached (fallback):', media.nom)
+            continue
+          }
+          await window.api.saveBinary(relativePath, url)
+          this._log.debug('diapo-manager', 'Downloaded (fallback):', media.nom)
         }
       } catch (e) {
         this._log.warn('diapo-manager', 'Failed to download:', media.nom, e.message)

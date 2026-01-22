@@ -1,6 +1,6 @@
 {
   "name": "seedisplay",
-  "version": "1.9.13",
+  "version": "1.9.14",
   "description": "SEE Display Application",
   "main": "main.js",
   "scripts": {
@@ -102,11 +102,13 @@
     "portable": {
       "artifactName": "SEE-Display-Portable-${version}.exe"
     },
-    "publish": {
-      "provider": "github",
-      "owner": "AslakFAVREAU",
-      "repo": "seedisplay"
-    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://soek.fr/updates/seedisplay",
+        "channel": "stable"
+      }
+    ],
     "compression": "normal",
     "icon": "build/icon.ico",
     "mac": {

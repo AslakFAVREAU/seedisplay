@@ -7,11 +7,61 @@ const fs = require('fs');
 
 //-------------------------------------------------------------------
 // Auto-updater Configuration
-// GitHub releases (public repo)
+// Supports two channels hosted on SOEK server:
+//   - STABLE: https://soek.fr/updates/seedisplay
+//   - BETA:   https://soek.fr/updates/seedisplay/beta
 //-------------------------------------------------------------------
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
-log.info('Auto-updater configured for GitHub releases');
+
+// Logger pour debug
+autoUpdater.logger = log;
+autoUpdater.logger.transports.file.level = 'info';
+
+/**
+ * Détermine le canal de mise à jour (stable ou beta)
+ * Lit la config pour voir si l'utilisateur veut les beta
+ */
+function getUpdateChannel() {
+  const configPath = path.join('C:/SEE/', 'configSEE.json');
+  try {
+    if (fs.existsSync(configPath)) {
+      const raw = fs.readFileSync(configPath, 'utf8');
+      const config = JSON.parse(raw);
+      if (config.updateChannel === 'beta') {
+        return 'beta';
+      }
+    }
+  } catch (e) {
+    log.warn('Could not read config for update channel, using stable:', e.message);
+  }
+  return 'stable';
+}
+
+/**
+ * Configure l'URL du serveur de mise à jour selon le canal
+ * URL SOEK: stable = /updates/seedisplay, beta = /updates/seedisplay/beta
+ */
+function configureUpdateServer() {
+  const channel = getUpdateChannel();
+  const baseUrl = 'https://soek.fr/updates/seedisplay';
+  const url = channel === 'beta' ? `${baseUrl}/beta` : baseUrl;
+  
+  autoUpdater.setFeedURL({
+    provider: 'generic',
+    url: url,
+    channel: channel
+  });
+  
+  log.info(`Auto-updater configured for ${channel.toUpperCase()} channel: ${url}`);
+  return channel;
+}
+
+// Initialize update server
+const updateChannel = configureUpdateServer();
+
+// Export pour être utilisé par ApiManager (headers)
+module.exports = { getUpdateChannel };
 
 //-------------------------------------------------------------------
 // Performance & Hardware Acceleration
