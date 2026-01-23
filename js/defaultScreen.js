@@ -338,7 +338,8 @@ if (monthGif == 11)
     // On remet le compteur de la loop à 0
     numImage = 0;
     __log('debug','default','init=' + init)
-    // On passe par la fontion pour recup le diapo si Init est a false
+    // On passe par la fonction pour recup le diapo si Init est a false
+    // MAIS on évite de boucler infiniment si l'API vient d'être appelée
     if (init == false) {
         __log('info','default','init false')
     // Double DIV IMG
@@ -350,8 +351,15 @@ if (monthGif == 11)
      noplayer = 2
      playerLoad = 1
 
-
-        requestJsonDiapo()
+        // Protection anti-boucle infinie : ne pas relancer l'API si elle vient d'être appelée
+        var now = Date.now()
+        var minDelayBetweenCalls = 10000 // 10 secondes minimum entre les appels
+        if (!window._lastApiCallTime || (now - window._lastApiCallTime) > minDelayBetweenCalls) {
+            window._lastApiCallTime = now
+            requestJsonDiapo()
+        } else {
+            __log('debug','default','API call skipped (anti-loop protection, last call was ' + Math.round((now - window._lastApiCallTime)/1000) + 's ago)')
+        }
     }
     init= false
     // Mise a jour si le lastUdpate est superieur a refresh time

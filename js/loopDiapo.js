@@ -90,6 +90,8 @@ function showMedia(mediaIndex) {
     
     // Wrap-around - afficher pageDefault entre chaque cycle (sauf si masquerPageDefault)
     if (mediaIndex >= mediaLoop.length) {
+        __log('info', 'diapo', 'wrap-around detected: index=' + mediaIndex + ' length=' + mediaLoop.length);
+        
         // Si masquerPageDefault est activé, boucler directement sans pause
         if (window.masquerPageDefault) {
             __log('info', 'diapo', 'end of loop, masquerPageDefault=true, looping immediately');
@@ -117,6 +119,20 @@ function showMedia(mediaIndex) {
     }
     
     const media = mediaLoop[mediaIndex];
+    
+    // Protection: vérifier que le média existe et a le bon format
+    if (!media || !Array.isArray(media) || media.length < 2) {
+        __log('error', 'diapo', 'Invalid media at index ' + mediaIndex + ':', JSON.stringify(media));
+        // Passer au suivant ou redémarrer la boucle
+        if (mediaIndex + 1 < mediaLoop.length) {
+            setTimeout(() => showMedia(mediaIndex + 1), 100);
+        } else {
+            __log('warn', 'diapo', 'End of loop reached with invalid media, restarting');
+            setTimeout(() => showMedia(0), 1000);
+        }
+        return;
+    }
+    
     const mediaType = media[0];
     const mediaFile = media[1];
     const delay = (media[2] && Number(media[2]) > 0) ? Number(media[2]) * 1000 : 5000;
