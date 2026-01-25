@@ -79,8 +79,7 @@ function configureUpdateServer() {
   
   autoUpdater.setFeedURL({
     provider: 'generic',
-    url: url,
-    channel: channel
+    url: url
   });
   
   log.info(`Auto-updater configured for ENV=${env.toUpperCase()}: ${url}`);
