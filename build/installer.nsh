@@ -16,15 +16,8 @@
 !macroend
 
 !macro customUnInstall
-  ; Ask user if they want to delete data
-  MessageBox MB_YESNO "Voulez-vous supprimer les données locales (médias, configuration) ?" IDNO skipDelete
-    RMDir /r "C:\SEE\media"
-    RMDir /r "C:\SEE\fonds"
-    RMDir /r "C:\SEE\logs"
-    Delete "C:\SEE\configSEE.json"
-    Delete "C:\SEE\api-cache.json"
-    ; Keep C:\SEE folder in case user has other files
-    RMDir "C:\SEE"
-    DetailPrint "SEE data directories removed"
-  skipDelete:
+  ; Ne JAMAIS supprimer les données utilisateur automatiquement
+  ; L'utilisateur peut utiliser le Reset Mode (touche R au démarrage) si nécessaire
+  ; Ou supprimer manuellement C:\SEE\ après désinstallation
+  DetailPrint "User data preserved in C:\SEE\"
 !macroend
