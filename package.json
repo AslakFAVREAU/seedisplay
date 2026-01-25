@@ -1,6 +1,6 @@
 {
   "name": "seedisplay",
-  "version": "1.9.20",
+  "version": "1.9.21",
   "description": "SEE Display Application",
   "main": "main.js",
   "scripts": {
@@ -105,8 +105,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://soek.fr/updates/seedisplay",
-        "channel": "stable"
+        "url": "https://soek.fr/updates/seedisplay"
       }
     ],
     "compression": "normal",

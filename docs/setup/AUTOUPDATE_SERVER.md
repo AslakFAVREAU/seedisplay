@@ -26,6 +26,19 @@ soek.fr/
 | **STABLE** | `https://soek.fr/updates/seedisplay` | Production |
 | **BETA** | `https://soek.fr/updates/seedisplay/beta` | Tests/Preview |
 
+### ⚠️ IMPORTANT : Nom du fichier manifest
+
+Le fichier de version **DOIT** s'appeler **`latest.yml`** (PAS `stable.yml` !)
+
+```
+✅ latest.yml        → Correct
+❌ stable.yml        → NE FONCTIONNERA PAS
+❌ beta.yml          → NE FONCTIONNERA PAS
+```
+
+**Pourquoi ?** electron-updater avec `provider: 'generic'` cherche toujours `latest.yml` par défaut.
+Si vous passez un paramètre `channel`, il cherchera `{channel}.yml` mais cela cause des erreurs de type "Cannot find channel 'xxx'".
+
 ---
 
 ## 🔐 Zone Admin d'Upload

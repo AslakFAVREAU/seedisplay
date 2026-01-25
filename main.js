@@ -77,10 +77,16 @@ function configureUpdateServer() {
   
   const url = updateUrls[env] || updateUrls.prod;
   
+  // Configuration avec useMultipleRangeRequest: false pour éviter les problèmes de téléchargement
+  // Ne PAS spécifier de channel pour que electron-updater cherche "latest.yml" par défaut
   autoUpdater.setFeedURL({
     provider: 'generic',
-    url: url
+    url: url,
+    useMultipleRangeRequest: false
   });
+  
+  // Désactiver explicitement la vérification de channel dans le yml
+  autoUpdater.channel = 'latest';
   
   log.info(`Auto-updater configured for ENV=${env.toUpperCase()}: ${url}`);
   return env;
