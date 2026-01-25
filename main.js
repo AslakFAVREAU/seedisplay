@@ -495,6 +495,48 @@ ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
 
+// IPC handler pour supprimer les données utilisateur (reset)
+ipcMain.handle('reset-user-data', async () => {
+  log.info('[main] Reset user data requested');
+  const basePath = 'C:/SEE/';
+  
+  try {
+    // Supprimer les fichiers de cache et config
+    const filesToDelete = [
+      path.join(basePath, 'configSEE.json'),
+      path.join(basePath, 'api-cache.json')
+    ];
+    
+    for (const file of filesToDelete) {
+      if (fs.existsSync(file)) {
+        fs.unlinkSync(file);
+        log.info(`[main] Deleted: ${file}`);
+      }
+    }
+    
+    // Supprimer les dossiers media et fonds (récursivement)
+    const foldersToDelete = [
+      path.join(basePath, 'media'),
+      path.join(basePath, 'fonds')
+    ];
+    
+    for (const folder of foldersToDelete) {
+      if (fs.existsSync(folder)) {
+        fs.rmSync(folder, { recursive: true, force: true });
+        log.info(`[main] Deleted folder: ${folder}`);
+        // Recréer le dossier vide
+        fs.mkdirSync(folder, { recursive: true });
+      }
+    }
+    
+    log.info('[main] User data reset complete');
+    return { success: true };
+  } catch (e) {
+    log.error('[main] Reset user data failed:', e.message);
+    return { success: false, error: e.message };
+  }
+});
+
 app.on('ready', function() {
   // Vérifier les mises à jour au démarrage
   log.info('Checking for updates...');

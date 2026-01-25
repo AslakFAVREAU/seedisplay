@@ -483,6 +483,24 @@
 </head>
 
 <body style='cursor:none'>
+  <!-- Indicateur de Reset Mode (visible pendant 5 secondes au démarrage) -->
+  <div id="resetModeIndicator" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:rgba(255,0,0,0.8); color:white; padding:15px 30px; border-radius:10px; font-size:18px; z-index:99999; text-align:center;">
+    <div>Appuyez sur <strong>R</strong> pour réinitialiser les données</div>
+    <div id="resetCountdown" style="font-size:14px; margin-top:5px;">5s</div>
+  </div>
+  
+  <!-- Confirmation de Reset -->
+  <div id="resetConfirmDialog" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); z-index:999999; justify-content:center; align-items:center;">
+    <div style="background:#333; padding:40px; border-radius:15px; text-align:center; max-width:500px;">
+      <div style="font-size:24px; margin-bottom:20px; color:#ff6b6b;">⚠️ Réinitialisation</div>
+      <div style="margin-bottom:30px; color:white;">Voulez-vous vraiment supprimer toutes les données locales ?<br><small>(Configuration, médias en cache)</small></div>
+      <div style="display:flex; gap:20px; justify-content:center;">
+        <button id="resetConfirmYes" style="padding:15px 40px; font-size:18px; background:#ff4444; color:white; border:none; border-radius:8px; cursor:pointer;">Oui, supprimer</button>
+        <button id="resetConfirmNo" style="padding:15px 40px; font-size:18px; background:#444; color:white; border:none; border-radius:8px; cursor:pointer;">Annuler</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Écran de chargement avec default.jpg -->
   <div id="loadingScreen">
     <div style="text-align: top;">
@@ -757,6 +775,82 @@
   <script src="js/PlanningManager.js"></script>
 
   <script>
+    // ==================== RESET MODE ====================
+    // Permet de réinitialiser les données en appuyant sur R pendant les 5 premières secondes
+    (function() {
+      const RESET_WINDOW_SECONDS = 5;
+      let resetModeActive = true;
+      let countdown = RESET_WINDOW_SECONDS;
+      
+      const indicator = document.getElementById('resetModeIndicator');
+      const countdownEl = document.getElementById('resetCountdown');
+      const confirmDialog = document.getElementById('resetConfirmDialog');
+      const confirmYes = document.getElementById('resetConfirmYes');
+      const confirmNo = document.getElementById('resetConfirmNo');
+      
+      // Afficher l'indicateur
+      indicator.style.display = 'block';
+      
+      // Countdown
+      const countdownInterval = setInterval(() => {
+        countdown--;
+        if (countdownEl) countdownEl.textContent = countdown + 's';
+        if (countdown <= 0) {
+          clearInterval(countdownInterval);
+          resetModeActive = false;
+          indicator.style.display = 'none';
+        }
+      }, 1000);
+      
+      // Écouter la touche R
+      function onKeyDown(e) {
+        if (resetModeActive && (e.key === 'r' || e.key === 'R')) {
+          e.preventDefault();
+          clearInterval(countdownInterval);
+          indicator.style.display = 'none';
+          resetModeActive = false;
+          // Afficher la confirmation
+          confirmDialog.style.display = 'flex';
+        }
+      }
+      document.addEventListener('keydown', onKeyDown);
+      
+      // Bouton Oui
+      if (confirmYes) {
+        confirmYes.addEventListener('click', async () => {
+          confirmYes.textContent = 'Suppression...';
+          confirmYes.disabled = true;
+          
+          if (window.api && window.api.resetUserData) {
+            const result = await window.api.resetUserData();
+            if (result.success) {
+              // Recharger l'app
+              window.location.reload();
+            } else {
+              alert('Erreur: ' + (result.error || 'Échec de la réinitialisation'));
+              confirmDialog.style.display = 'none';
+            }
+          } else {
+            alert('API non disponible');
+            confirmDialog.style.display = 'none';
+          }
+        });
+      }
+      
+      // Bouton Non
+      if (confirmNo) {
+        confirmNo.addEventListener('click', () => {
+          confirmDialog.style.display = 'none';
+        });
+      }
+      
+      // Nettoyer après 5 secondes
+      setTimeout(() => {
+        document.removeEventListener('keydown', onKeyDown);
+      }, RESET_WINDOW_SECONDS * 1000 + 100);
+    })();
+    
+    // ==================== LOADING SCREEN ====================
     // Gestion de l'écran de chargement
     function hideLoadingScreen() {
       const loadingScreen = document.getElementById('loadingScreen');

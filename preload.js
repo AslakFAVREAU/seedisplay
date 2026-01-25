@@ -58,6 +58,15 @@ contextBridge.exposeInMainWorld('api', {
       callback(status);
     });
   },
+  // Reset user data (delete config, cache, media)
+  resetUserData: async () => {
+    try {
+      return await ipcRenderer.invoke('reset-user-data');
+    } catch (e) {
+      console.error('[preload] resetUserData failed:', e.message);
+      return { success: false, error: e.message };
+    }
+  },
   // Window resize (for custom screen dimensions from API)
   resizeWindow: async (width, height) => {
     try {
