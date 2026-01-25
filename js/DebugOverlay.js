@@ -80,15 +80,27 @@ class DebugOverlay {
         try {
             this._log('info', 'debug', 'Checking if window.api.checkForUpdates exists: ' + (window.api && typeof window.api.checkForUpdates));
             if (window.api && window.api.checkForUpdates) {
+                // Récupérer la version actuelle pour comparaison
+                const currentVersion = await window.api?.getAppVersion?.() || '0.0.0';
+                this._log('info', 'debug', 'Current app version: ' + currentVersion);
+                
                 this._log('info', 'debug', 'Calling window.api.checkForUpdates()...');
                 const result = await window.api.checkForUpdates();
                 this._log('info', 'debug', 'Update check result: ' + JSON.stringify(result));
                 
                 if (result && result.success) {
                     if (result.updateInfo && result.updateInfo.version) {
-                        if (statusEl) statusEl.textContent = `✅ v${result.updateInfo.version} disponible - téléchargement...`;
+                        const serverVersion = result.updateInfo.version;
+                        // Comparer les versions - si identiques, on est à jour
+                        if (serverVersion === currentVersion) {
+                            if (statusEl) statusEl.textContent = '✅ Vous êtes à jour (v' + currentVersion + ')';
+                            this._log('info', 'debug', 'Already on latest version: ' + currentVersion);
+                        } else {
+                            if (statusEl) statusEl.textContent = `✅ v${serverVersion} disponible - téléchargement...`;
+                            this._log('info', 'debug', 'Update available: ' + serverVersion + ' (current: ' + currentVersion + ')');
+                        }
                     } else {
-                        if (statusEl) statusEl.textContent = '✅ À jour (pas de nouvelle version)';
+                        if (statusEl) statusEl.textContent = '✅ Vous êtes à jour';
                     }
                 } else {
                     if (statusEl) statusEl.textContent = `❌ ${result?.error || 'Erreur inconnue'}`;
