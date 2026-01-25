@@ -1,6 +1,6 @@
 {
   "name": "seedisplay",
-  "version": "1.9.26",
+  "version": "1.9.27",
   "description": "SEE Display Application",
   "main": "main.js",
   "scripts": {
