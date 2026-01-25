@@ -72,7 +72,8 @@ function configureUpdateServer() {
     beta: 'https://beta.soek.fr/updates/seedisplay',
     prod: 'https://soek.fr/updates/seedisplay',
     soek: 'https://soek.fr/updates/seedisplay',
-    localhost: 'http://localhost:8000/updates/seedisplay'
+    localhost: 'http://localhost:8000/updates/seedisplay',
+    local: 'http://localhost:8000/updates/seedisplay'
   };
   
   const url = updateUrls[env] || updateUrls.prod;
