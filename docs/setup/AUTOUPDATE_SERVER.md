@@ -211,19 +211,21 @@ releaseDate: '2026-01-22T10:30:00.000Z'
 
 ## 📱 Configuration côté Client
 
-Les clients SEE Display choisissent leur canal via `configSEE.json` :
+L'URL d'auto-update est déterminée automatiquement par le champ `env` dans `configSEE.json` :
 
 ```json
 {
-  "id_ecran": "xxx",
-  "updateChannel": "stable"
+  "env": "beta",
+  "ecranUuid": "xxx"
 }
 ```
 
-| Valeur | Serveur |
-|--------|---------|
-| `"stable"` (défaut) | soek.fr |
-| `"beta"` | beta.soek.fr |
+| Valeur `env` | URL de mise à jour |
+|--------------|-------------------|
+| `"beta"` | `https://beta.soek.fr/updates/seedisplay` |
+| `"prod"` | `https://soek.fr/updates/seedisplay` |
+| `"soek"` | `https://soek.fr/updates/seedisplay` |
+| `"localhost"` | `http://localhost:8000/updates/seedisplay` |
 
 ---
 

@@ -39,13 +39,43 @@ function getUpdateChannel() {
 }
 
 /**
- * Configure l'URL du serveur de mise à jour selon le canal
- * URL SOEK: stable = /updates/seedisplay, beta = /updates/seedisplay/beta
+ * Détermine l'environnement (beta, prod, localhost) depuis la config
+ */
+function getEnvironment() {
+  const configPath = path.join('C:/SEE/', 'configSEE.json');
+  try {
+    if (fs.existsSync(configPath)) {
+      const raw = fs.readFileSync(configPath, 'utf8');
+      const config = JSON.parse(raw);
+      if (config.env) {
+        return config.env.toLowerCase();
+      }
+    }
+  } catch (e) {
+    log.warn('Could not read config for environment, using prod:', e.message);
+  }
+  return 'prod';
+}
+
+/**
+ * Configure l'URL du serveur de mise à jour selon l'environnement
+ * - beta → https://beta.soek.fr/updates/seedisplay
+ * - prod/soek → https://soek.fr/updates/seedisplay
+ * - localhost → http://localhost:3000/updates/seedisplay (pour tests)
  */
 function configureUpdateServer() {
+  const env = getEnvironment();
   const channel = getUpdateChannel();
-  const baseUrl = 'https://soek.fr/updates/seedisplay';
-  const url = channel === 'beta' ? `${baseUrl}/beta` : baseUrl;
+  
+  // Mapping environnement → URL de mise à jour
+  const updateUrls = {
+    beta: 'https://beta.soek.fr/updates/seedisplay',
+    prod: 'https://soek.fr/updates/seedisplay',
+    soek: 'https://soek.fr/updates/seedisplay',
+    localhost: 'http://localhost:8000/updates/seedisplay'
+  };
+  
+  const url = updateUrls[env] || updateUrls.prod;
   
   autoUpdater.setFeedURL({
     provider: 'generic',
@@ -53,8 +83,8 @@ function configureUpdateServer() {
     channel: channel
   });
   
-  log.info(`Auto-updater configured for ${channel.toUpperCase()} channel: ${url}`);
-  return channel;
+  log.info(`Auto-updater configured for ENV=${env.toUpperCase()}: ${url}`);
+  return env;
 }
 
 // Initialize update server
