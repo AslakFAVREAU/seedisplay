@@ -1,6 +1,6 @@
 {
   "name": "seedisplay",
-  "version": "1.9.24",
+  "version": "1.9.25",
   "description": "SEE Display Application",
   "main": "main.js",
   "scripts": {
@@ -84,8 +84,7 @@
       "icon": "build/icon.ico"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
       "allowElevation": true,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
@@ -96,7 +95,6 @@
       "artifactName": "SEE-Display-Setup-${version}.exe",
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true,
-      "license": "LICENSE",
       "include": "build/installer.nsh"
     },
     "portable": {
