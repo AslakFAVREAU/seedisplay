@@ -473,6 +473,56 @@ function listeDiapoV2(data) {
       }
     }
     
+    // Apply meteo config from API (overrides local config if present)
+    var meteoConfig = data.config && data.config.meteo
+    if (meteoConfig) {
+      _log('info','diapo','listeDiapoV2: meteo config from API: actif=' + meteoConfig.actif + ', lat=' + meteoConfig.latitude + ', lon=' + meteoConfig.longitude)
+      // Apply latitude/longitude if provided by API
+      if (meteoConfig.latitude !== null && meteoConfig.latitude !== undefined) {
+        window.meteoLat = meteoConfig.latitude
+      }
+      if (meteoConfig.longitude !== null && meteoConfig.longitude !== undefined) {
+        window.meteoLon = meteoConfig.longitude
+      }
+      if (meteoConfig.units) {
+        window.meteoUnits = meteoConfig.units
+      }
+      // Apply meteo visibility
+      if (meteoConfig.actif === false) {
+        var zoneMeteo = document.getElementById('zone_meteo')
+        if (zoneMeteo) zoneMeteo.style.display = 'none'
+        _log('info','diapo','listeDiapoV2: météo désactivée via API')
+      } else if (meteoConfig.actif === true) {
+        var zoneMeteo = document.getElementById('zone_meteo')
+        if (zoneMeteo) zoneMeteo.style.display = 'flex'
+      }
+    }
+    
+    // Apply affichage config from API (week, logo, etc.)
+    var affichageConfig = data.config && data.config.affichage
+    if (affichageConfig) {
+      _log('info','diapo','listeDiapoV2: affichage config from API:', JSON.stringify(affichageConfig))
+      // Week display
+      if (affichageConfig.weekDisplay === false) {
+        var weekDiv = document.getElementById('weekDiv')
+        if (weekDiv) weekDiv.style.display = 'none'
+      } else if (affichageConfig.weekDisplay === true) {
+        var weekDiv = document.getElementById('weekDiv')
+        if (weekDiv) weekDiv.style.display = 'flex'
+      }
+      // Logo SOE
+      if (affichageConfig.logoSOE === false) {
+        var footer = document.getElementById('footer')
+        if (footer) footer.style.display = 'none'
+      } else if (affichageConfig.logoSOE === true) {
+        var footer = document.getElementById('footer')
+        if (footer) footer.style.display = 'flex'
+      }
+      // Store for later use
+      if (affichageConfig.weekNo !== undefined) window.weekNo = affichageConfig.weekNo
+      if (affichageConfig.weekType !== undefined) window.weekType = affichageConfig.weekType
+    }
+    
     // Update SleepManager with current config (luminosity, night mode, etc.)
     if (window.sleepManager) {
       const ecranConfig = {

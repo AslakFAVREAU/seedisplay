@@ -43,17 +43,24 @@ function getUpdateChannel() {
  */
 function getEnvironment() {
   const configPath = path.join('C:/SEE/', 'configSEE.json');
+  log.info(`[getEnvironment] Reading config from: ${configPath}`);
   try {
     if (fs.existsSync(configPath)) {
       const raw = fs.readFileSync(configPath, 'utf8');
       const config = JSON.parse(raw);
+      log.info(`[getEnvironment] Config env value: ${config.env}`);
       if (config.env) {
-        return config.env.toLowerCase();
+        const envLower = config.env.toLowerCase();
+        log.info(`[getEnvironment] Returning environment: ${envLower}`);
+        return envLower;
       }
+    } else {
+      log.warn(`[getEnvironment] Config file does not exist: ${configPath}`);
     }
   } catch (e) {
     log.warn('Could not read config for environment, using prod:', e.message);
   }
+  log.info('[getEnvironment] Falling back to prod');
   return 'prod';
 }
 
@@ -67,6 +74,8 @@ function configureUpdateServer() {
   const env = getEnvironment();
   const channel = getUpdateChannel();
   
+  log.info(`[configureUpdateServer] env=${env}, channel=${channel}`);
+  
   // Mapping environnement → URL de mise à jour
   const updateUrls = {
     beta: 'https://beta.soek.fr/updates/seedisplay',
@@ -77,6 +86,8 @@ function configureUpdateServer() {
   };
   
   const url = updateUrls[env] || updateUrls.prod;
+  
+  log.info(`[configureUpdateServer] Selected URL for env "${env}": ${url}`);
   
   // Configuration avec useMultipleRangeRequest: false pour éviter les problèmes de téléchargement
   // Ne PAS spécifier de channel pour que electron-updater cherche "latest.yml" par défaut
