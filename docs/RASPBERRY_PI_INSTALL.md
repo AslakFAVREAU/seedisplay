@@ -27,9 +27,14 @@ Guide d'installation et d'utilisation de SEE Display sur Raspberry Pi.
 ### Option 1 : Script automatique (recommandé)
 
 ```bash
-# Télécharger et exécuter le script d'installation
+# Avec wget (installé par défaut sur Raspberry Pi OS)
+wget -qO- https://raw.githubusercontent.com/AslakFAVREAU/seedisplay/raspberry/scripts/install-raspberry-pi.sh | bash
+
+# OU avec curl (si installé)
 curl -sSL https://raw.githubusercontent.com/AslakFAVREAU/seedisplay/raspberry/scripts/install-raspberry-pi.sh | bash
 ```
+
+> **Note** : Si `curl` n'est pas installé : `sudo apt update && sudo apt install -y curl`
 
 ### Option 2 : Installation manuelle
 

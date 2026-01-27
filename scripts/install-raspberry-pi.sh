@@ -174,20 +174,58 @@ EOF
 # Reload systemd
 sudo systemctl daemon-reload
 
-# Create example config if not exists
+# Configuration interactive
 if [ ! -f "$DATA_DIR/configSEE.json" ]; then
-    echo -e "${YELLOW}   Creating example configuration...${NC}"
-    cat > $DATA_DIR/configSEE.json << 'EOF'
+    echo ""
+    echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║                  📝 CONFIGURATION DE L'ÉCRAN                 ║${NC}"
+    echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}Ces informations sont fournies par SOEK pour votre écran.${NC}"
+    echo -e "${YELLOW}Vous pouvez les trouver dans l'interface d'administration SOEK.${NC}"
+    echo ""
+    
+    # Demander l'UUID de l'écran
+    read -p "🔑 UUID de l'écran (ex: 96371d93-ed93-11f0-88b0-00e04cdaf7ae): " ECRAN_UUID
+    
+    # Demander le token API
+    read -p "🔐 Token API (ex: c5068d1e-f396-5307-7945-4624d1ee4f68): " API_TOKEN
+    
+    # Demander l'environnement
+    echo ""
+    echo "🌐 Environnement:"
+    echo "   1) prod  - Production (serveurs SOEK)"
+    echo "   2) beta  - Beta/Test (serveurs beta)"
+    read -p "Choix [1/2, défaut=1]: " ENV_CHOICE
+    case $ENV_CHOICE in
+        2) ENV_VALUE="beta" ;;
+        *) ENV_VALUE="prod" ;;
+    esac
+    
+    # Valider les entrées
+    if [ -z "$ECRAN_UUID" ] || [ -z "$API_TOKEN" ]; then
+        echo -e "${YELLOW}⚠️  UUID ou Token non fourni, utilisation de valeurs par défaut.${NC}"
+        echo -e "${YELLOW}   Vous devrez éditer $DATA_DIR/configSEE.json manuellement.${NC}"
+        ECRAN_UUID="VOTRE-UUID-ICI"
+        API_TOKEN="VOTRE-TOKEN-ICI"
+    fi
+    
+    # Créer le fichier de configuration
+    echo -e "${GREEN}   Création de la configuration...${NC}"
+    cat > $DATA_DIR/configSEE.json << EOF
 {
-    "ecranUuid": "YOUR-ECRAN-UUID-HERE",
-    "apiToken": "YOUR-API-TOKEN-HERE",
-    "env": "beta",
+    "ecranUuid": "$ECRAN_UUID",
+    "apiToken": "$API_TOKEN",
+    "env": "$ENV_VALUE",
     "meteo": true,
     "meteoLat": 48.8566,
     "meteoLon": 2.3522
 }
 EOF
-    echo -e "${YELLOW}   ⚠️  Edit $DATA_DIR/configSEE.json with your screen credentials${NC}"
+    
+    echo -e "${GREEN}✅ Configuration créée: $DATA_DIR/configSEE.json${NC}"
+else
+    echo -e "${YELLOW}   Configuration existante conservée: $DATA_DIR/configSEE.json${NC}"
 fi
 
 echo -e "\n${GREEN}"
@@ -198,35 +236,25 @@ echo "║                                                              ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
-echo -e "${BLUE}📁 Installation directory:${NC} $INSTALL_DIR"
-echo -e "${BLUE}📁 Data directory:${NC} $DATA_DIR"
-echo -e "${BLUE}📁 Config file:${NC} $DATA_DIR/configSEE.json"
+echo -e "${BLUE}📁 Installation:${NC} $INSTALL_DIR"
+echo -e "${BLUE}📁 Config:${NC} $DATA_DIR/configSEE.json"
 echo ""
-echo -e "${YELLOW}📝 Next steps:${NC}"
-echo ""
-echo "   1. Edit configuration with your screen credentials:"
-echo "      ${GREEN}nano $DATA_DIR/configSEE.json${NC}"
-echo ""
-echo "   2. Test the application manually:"
-echo "      ${GREEN}cd $INSTALL_DIR && npm start${NC}"
-echo ""
-echo "   3. Enable auto-start on boot:"
-echo "      ${GREEN}sudo systemctl enable $SERVICE_NAME${NC}"
-echo ""
-echo "   4. Start the service:"
-echo "      ${GREEN}sudo systemctl start $SERVICE_NAME${NC}"
-echo ""
-echo "   5. Check status:"
-echo "      ${GREEN}sudo systemctl status $SERVICE_NAME${NC}"
-echo ""
-echo "   6. View logs:"
-echo "      ${GREEN}journalctl -u $SERVICE_NAME -f${NC}"
-echo ""
-echo -e "${BLUE}🔄 To update later, run:${NC}"
-echo "   ${GREEN}cd $INSTALL_DIR && git pull && npm install${NC}"
-echo ""
-echo -e "${BLUE}🗑️  To uninstall:${NC}"
-echo "   ${GREEN}sudo systemctl disable $SERVICE_NAME${NC}"
-echo "   ${GREEN}sudo rm /etc/systemd/system/${SERVICE_NAME}.service${NC}"
-echo "   ${GREEN}sudo rm -rf $INSTALL_DIR${NC}"
-echo ""
+
+# Proposer de lancer l'application maintenant
+echo -e "${YELLOW}🚀 Voulez-vous lancer l'application maintenant?${NC}"
+read -p "   Lancer SEE Display? [O/n]: " LAUNCH_NOW
+if [[ ! $LAUNCH_NOW =~ ^[Nn]$ ]]; then
+    echo ""
+    echo -e "${GREEN}▶️  Lancement de SEE Display...${NC}"
+    echo -e "${YELLOW}   Appuyez sur Ctrl+C pour arrêter${NC}"
+    echo ""
+    cd $INSTALL_DIR && npm start
+else
+    echo ""
+    echo -e "${YELLOW}📝 Pour lancer manuellement:${NC}"
+    echo "      ${GREEN}cd $INSTALL_DIR && npm start${NC}"
+    echo ""
+    echo -e "${YELLOW}📝 Pour activer le démarrage automatique:${NC}"
+    echo "      ${GREEN}sudo systemctl enable $SERVICE_NAME${NC}"
+    echo "      ${GREEN}sudo systemctl start $SERVICE_NAME${NC}"
+fi
