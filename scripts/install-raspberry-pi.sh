@@ -136,10 +136,10 @@ else
     git checkout $BRANCH
 fi
 
-# Install npm dependencies
+# Install npm dependencies (including electron which is in devDependencies)
 echo -e "\n${BLUE}📦 Step 5/6: Installing npm dependencies (this may take a while)...${NC}"
 cd $INSTALL_DIR
-npm install --production
+npm install
 
 # Rebuild native modules for ARM64
 echo -e "${YELLOW}   Rebuilding native modules for ARM64...${NC}"
