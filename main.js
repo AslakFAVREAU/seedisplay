@@ -999,7 +999,7 @@ app.whenReady().then(createWindow)
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 // Get system info (CPU, memory, IPs) for debug overlay
-const os = require('os')
+// Note: os module already imported at top of file
 ipcMain.handle('preload-getSystemInfo', async () => {
   try {
     // Get process memory usage
