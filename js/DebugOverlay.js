@@ -18,6 +18,13 @@ class DebugOverlay {
         this.startTime = Date.now();
         this.updateStatus = { checking: false, available: false, downloading: false, progress: 0, error: null, version: null };
         
+        // Auto-close timers (1 minute = 60000ms)
+        this.autoCloseDelay = 60000;
+        this.debugAutoCloseTimer = null;
+        this.configAutoCloseTimer = null;
+        this.debugPinned = false;
+        this.configPinned = false;
+        
         this._log = window.logger 
             ? (level, tag, msg) => window.logger[level](tag, msg)
             : (level, tag, msg) => console[level](`[${tag}] ${msg}`);
@@ -208,8 +215,65 @@ class DebugOverlay {
         }
         this.overlay.style.display = 'block';
         this.visible = true;
+        // Afficher le curseur en mode debug
+        document.body.style.cursor = 'default';
         this._startUpdates();
+        
+        // Auto-close après 1 minute si non épinglé
+        this._startDebugAutoClose();
+        
         this._log('info', 'debug', 'Debug overlay shown');
+    }
+    
+    /**
+     * Démarre le timer d'auto-close pour debug
+     */
+    _startDebugAutoClose() {
+        this._clearDebugAutoClose();
+        if (!this.debugPinned) {
+            this.debugAutoCloseTimer = setTimeout(() => {
+                this._log('info', 'debug', 'Debug overlay auto-closed after 1 minute');
+                this.hide();
+            }, this.autoCloseDelay);
+            this._updateDebugPinButton();
+        }
+    }
+    
+    /**
+     * Annule le timer d'auto-close pour debug
+     */
+    _clearDebugAutoClose() {
+        if (this.debugAutoCloseTimer) {
+            clearTimeout(this.debugAutoCloseTimer);
+            this.debugAutoCloseTimer = null;
+        }
+    }
+    
+    /**
+     * Toggle l'épinglage du panneau debug
+     */
+    toggleDebugPin() {
+        this.debugPinned = !this.debugPinned;
+        if (this.debugPinned) {
+            this._clearDebugAutoClose();
+            this._log('info', 'debug', 'Debug overlay pinned');
+        } else {
+            this._startDebugAutoClose();
+            this._log('info', 'debug', 'Debug overlay unpinned');
+        }
+        this._updateDebugPinButton();
+    }
+    
+    /**
+     * Met à jour l'apparence du bouton épingler debug
+     */
+    _updateDebugPinButton() {
+        const pinBtn = document.getElementById('debug-pin-btn');
+        if (pinBtn) {
+            pinBtn.textContent = this.debugPinned ? '📌' : '📍';
+            pinBtn.title = this.debugPinned ? 'Désépingler (fermeture auto désactivée)' : 'Épingler (empêche fermeture auto)';
+            pinBtn.classList.toggle('pinned', this.debugPinned);
+        }
     }
     
     /**
@@ -220,7 +284,12 @@ class DebugOverlay {
             this.overlay.style.display = 'none';
         }
         this.visible = false;
+        // Cacher le curseur seulement si pas en mode config
+        if (!this.configMode) {
+            document.body.style.cursor = 'none';
+        }
         this._stopUpdates();
+        this._clearDebugAutoClose();
         this._log('info', 'debug', 'Debug overlay hidden');
     }
     
@@ -245,7 +314,64 @@ class DebugOverlay {
         this._populateConfigForm();
         this.configPanel.style.display = 'flex';
         this.configMode = true;
+        // Afficher le curseur en mode config
+        document.body.style.cursor = 'default';
+        
+        // Auto-close après 1 minute si non épinglé
+        this._startConfigAutoClose();
+        
         this._log('info', 'debug', 'Config panel shown');
+    }
+    
+    /**
+     * Démarre le timer d'auto-close pour config
+     */
+    _startConfigAutoClose() {
+        this._clearConfigAutoClose();
+        if (!this.configPinned) {
+            this.configAutoCloseTimer = setTimeout(() => {
+                this._log('info', 'debug', 'Config panel auto-closed after 1 minute');
+                this.hideConfig();
+            }, this.autoCloseDelay);
+            this._updateConfigPinButton();
+        }
+    }
+    
+    /**
+     * Annule le timer d'auto-close pour config
+     */
+    _clearConfigAutoClose() {
+        if (this.configAutoCloseTimer) {
+            clearTimeout(this.configAutoCloseTimer);
+            this.configAutoCloseTimer = null;
+        }
+    }
+    
+    /**
+     * Toggle l'épinglage du panneau config
+     */
+    toggleConfigPin() {
+        this.configPinned = !this.configPinned;
+        if (this.configPinned) {
+            this._clearConfigAutoClose();
+            this._log('info', 'debug', 'Config panel pinned');
+        } else {
+            this._startConfigAutoClose();
+            this._log('info', 'debug', 'Config panel unpinned');
+        }
+        this._updateConfigPinButton();
+    }
+    
+    /**
+     * Met à jour l'apparence du bouton épingler config
+     */
+    _updateConfigPinButton() {
+        const pinBtn = document.getElementById('config-pin-btn');
+        if (pinBtn) {
+            pinBtn.textContent = this.configPinned ? '📌' : '📍';
+            pinBtn.title = this.configPinned ? 'Désépingler (fermeture auto désactivée)' : 'Épingler (empêche fermeture auto)';
+            pinBtn.classList.toggle('pinned', this.configPinned);
+        }
     }
     
     /**
@@ -256,6 +382,9 @@ class DebugOverlay {
             this.configPanel.style.display = 'none';
         }
         this.configMode = false;
+        // Cacher le curseur quand on sort du mode config
+        document.body.style.cursor = 'none';
+        this._clearConfigAutoClose();
         this._log('info', 'debug', 'Config panel hidden');
     }
     
@@ -268,7 +397,10 @@ class DebugOverlay {
         this.overlay.innerHTML = `
             <div class="debug-header">
                 <span class="debug-title">🔧 Debug Mode</span>
-                <span class="debug-close" onclick="window.debugOverlay.hide()">×</span>
+                <span class="debug-header-actions">
+                    <span id="debug-pin-btn" class="debug-pin" onclick="window.debugOverlay.toggleDebugPin()" title="Épingler (empêche fermeture auto)">📍</span>
+                    <span class="debug-close" onclick="window.debugOverlay.hide()">×</span>
+                </span>
             </div>
             <div class="debug-content">
                 <div class="debug-section">
@@ -328,6 +460,10 @@ class DebugOverlay {
                     <div class="debug-value" id="debug-media-count">-</div>
                 </div>
                 <div class="debug-section">
+                    <div class="debug-label">Son Vidéos</div>
+                    <div class="debug-value" id="debug-son-actif">-</div>
+                </div>
+                <div class="debug-section">
                     <div class="debug-label">Planning</div>
                     <div class="debug-value" id="debug-planning">-</div>
                 </div>
@@ -377,7 +513,10 @@ class DebugOverlay {
             <div class="config-dialog">
                 <div class="config-header">
                     <span class="config-title">⚙️ Configuration Écran</span>
-                    <span class="config-close" onclick="window.debugOverlay.hideConfig()">×</span>
+                    <span class="config-header-actions">
+                        <span id="config-pin-btn" class="config-pin" onclick="window.debugOverlay.toggleConfigPin()" title="Épingler (empêche fermeture auto)">📍</span>
+                        <span class="config-close" onclick="window.debugOverlay.hideConfig()">×</span>
+                    </span>
                 </div>
                 <div class="config-content">
                     <div class="config-section-title">🔗 Connexion API</div>
@@ -467,6 +606,10 @@ class DebugOverlay {
                     <div class="config-group config-readonly">
                         <label>Numéro Semaine</label>
                         <span class="config-value" id="config-server-week">-</span>
+                    </div>
+                    <div class="config-group config-readonly">
+                        <label>Son Vidéos</label>
+                        <span class="config-value" id="config-server-son">-</span>
                     </div>
                     <div class="config-group config-readonly">
                         <label>Planning</label>
@@ -593,6 +736,9 @@ class DebugOverlay {
         document.getElementById('config-server-week').textContent = 
             affichageConfig.weekNo ? '✅ Visible' : '❌ Masqué';
         
+        document.getElementById('config-server-son').textContent = 
+            apiResponse.sonActif ? '🔊 Activé' : '🔇 Muet';
+        
         document.getElementById('config-server-planning').textContent = 
             planningConfig.actif ? `✅ ${planningConfig.position || 'footer'}` : '❌ Désactivé';
         
@@ -709,6 +855,30 @@ class DebugOverlay {
                 font-size: 14px;
             }
             
+            .debug-header-actions {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            
+            .debug-pin {
+                cursor: pointer;
+                font-size: 16px;
+                opacity: 0.5;
+                transition: opacity 0.2s, transform 0.2s, filter 0.2s;
+                filter: grayscale(100%);
+            }
+            
+            .debug-pin:hover {
+                opacity: 0.8;
+            }
+            
+            .debug-pin.pinned {
+                opacity: 1;
+                transform: rotate(45deg);
+                filter: grayscale(0%) drop-shadow(0 0 2px #ff4444);
+            }
+            
             .debug-close {
                 cursor: pointer;
                 font-size: 20px;
@@ -806,6 +976,30 @@ class DebugOverlay {
                 font-weight: bold;
                 font-size: 18px;
                 color: #fff;
+            }
+            
+            .config-header-actions {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            
+            .config-pin {
+                cursor: pointer;
+                font-size: 18px;
+                opacity: 0.5;
+                transition: opacity 0.2s, transform 0.2s, filter 0.2s;
+                filter: grayscale(100%);
+            }
+            
+            .config-pin:hover {
+                opacity: 0.8;
+            }
+            
+            .config-pin.pinned {
+                opacity: 1;
+                transform: rotate(45deg);
+                filter: grayscale(0%) drop-shadow(0 0 2px #ff4444);
             }
             
             .config-close {
@@ -1153,6 +1347,13 @@ class DebugOverlay {
             this._setValue('debug-media-count', window.ArrayImg.length + ' médias');
         } else {
             this._setValue('debug-media-count', '0 médias', 'warning');
+        }
+        
+        // Son vidéos
+        if (window.sonActif === true) {
+            this._setValue('debug-son-actif', '🔊 Activé', 'ok');
+        } else {
+            this._setValue('debug-son-actif', '🔇 Muet');
         }
         
         // Planning

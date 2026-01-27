@@ -388,9 +388,39 @@ app.on('ready', function() {
   });
   
   //-------------------------------------------------------------------
-  // Auto-update : Vérification au démarrage + toutes les 24h
+  // Auto-update : Vérification au démarrage + tous les jours à 2h du matin
   //-------------------------------------------------------------------
-  const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 heures en ms
+  
+  // Fonction pour calculer le temps jusqu'à la prochaine heure cible
+  function getMillisecondsUntilHour(targetHour) {
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(targetHour, 0, 0, 0); // targetHour:00:00
+    
+    // Si l'heure est déjà passée aujourd'hui, programmer pour demain
+    if (now >= target) {
+      target.setDate(target.getDate() + 1);
+    }
+    
+    return target.getTime() - now.getTime();
+  }
+  
+  // Fonction pour planifier la vérification quotidienne à 2h
+  function scheduleUpdateCheck() {
+    const msUntil2am = getMillisecondsUntilHour(2);
+    const hoursUntil = (msUntil2am / 1000 / 60 / 60).toFixed(1);
+    log.info(`[auto-update] Next scheduled check in ${hoursUntil} hours (at 2:00 AM)`);
+    
+    setTimeout(() => {
+      log.info('[auto-update] Scheduled 2:00 AM update check...');
+      autoUpdater.checkForUpdatesAndNotify().catch(err => {
+        log.warn('[auto-update] Scheduled check failed:', err.message);
+      });
+      
+      // Programmer la prochaine vérification (dans ~24h)
+      scheduleUpdateCheck();
+    }, msUntil2am);
+  }
   
   // Vérifier les mises à jour au démarrage (après 30 secondes pour laisser l'app se charger)
   setTimeout(() => {
@@ -400,15 +430,10 @@ app.on('ready', function() {
     });
   }, 30000);
   
-  // Vérifier toutes les 24h
-  setInterval(() => {
-    log.info('[auto-update] Scheduled 24h update check...');
-    autoUpdater.checkForUpdatesAndNotify().catch(err => {
-      log.warn('[auto-update] Scheduled check failed:', err.message);
-    });
-  }, CHECK_INTERVAL_MS);
+  // Planifier la vérification quotidienne à 2h du matin
+  scheduleUpdateCheck();
   
-  log.info('[auto-update] Update checks scheduled: startup + every 24h');
+  log.info('[auto-update] Update checks scheduled: startup + daily at 2:00 AM');
 });
 
 app.on('window-all-closed', () => {
@@ -695,6 +720,31 @@ ipcMain.handle('resize-window', async (evt, width, height) => {
   } catch (e) {
     log.error('[main] resize-window failed:', e.message)
     return false
+  }
+})
+
+// Capture screen for heartbeat (720p thumbnail)
+ipcMain.handle('capture-screen', async (evt, width = 1280, height = 720) => {
+  if (!win) {
+    log.warn('[main] capture-screen: no window')
+    return null
+  }
+  
+  try {
+    // Capturer la page
+    const image = await win.webContents.capturePage()
+    
+    // Redimensionner en 720p
+    const resized = image.resize({ width, height, quality: 'good' })
+    
+    // Convertir en base64 JPEG (plus léger que PNG)
+    const dataUrl = `data:image/jpeg;base64,${resized.toJPEG(80).toString('base64')}`
+    
+    log.debug('[main] capture-screen: captured', width, 'x', height)
+    return dataUrl
+  } catch (e) {
+    log.error('[main] capture-screen failed:', e.message)
+    return null
   }
 })
 

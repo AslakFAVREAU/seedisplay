@@ -192,6 +192,10 @@ function showMedia(mediaIndex) {
             freshVideoEl.loop = false;
             freshVideoEl.removeAttribute('loop');
             
+            // Gérer le son selon sonActif de l'API
+            freshVideoEl.muted = window.sonActif !== true;
+            __log('info', 'diapo', 'video muted=' + freshVideoEl.muted + ' (sonActif=' + window.sonActif + ')');
+            
             // Charger la vidéo
             freshSourceEl.src = url;
             freshVideoEl.load();

@@ -681,6 +681,9 @@
   <script src="js/StatsManager.js"></script>
   <script src="js/PlaybackLogger.js"></script>
 
+  <!-- Heartbeat System (monitoring server) -->
+  <script src="js/HeartbeatManager.js"></script>
+
   <script>
     // Phase 2 Week 1: Initialize DisplayState (replaces imgShow, imgLoad, player)
     window.displayState = new DisplayState();
@@ -1199,6 +1202,17 @@
         if (typeof startClockTimer === 'function') {
           startClockTimer();
           __log('info','bootstrap','clock timer started')
+        }
+        // Démarrer le HeartbeatManager pour envoyer le statut au serveur
+        if (window.HeartbeatManager && config.ecranUuid) {
+          window.heartbeatManager = new HeartbeatManager({ interval: 30000 });
+          window.heartbeatManager.init({
+            ecranUuid: config.ecranUuid,
+            apiToken: config.apiToken,
+            env: config.env || 'beta'
+          });
+          window.heartbeatManager.start();
+          __log('info','bootstrap','HeartbeatManager started (30s interval)')
         }
       } else {
         __log('warn','bootstrap','legacy getConfigSEE not present')

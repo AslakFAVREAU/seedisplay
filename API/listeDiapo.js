@@ -523,6 +523,12 @@ function listeDiapoV2(data) {
       if (affichageConfig.weekType !== undefined) window.weekType = affichageConfig.weekType
     }
     
+    // Son actif (audio vidéos) - à la racine de la réponse API
+    if (data.sonActif !== undefined) {
+      window.sonActif = data.sonActif
+      _log('info','diapo','listeDiapoV2: sonActif set to', data.sonActif)
+    }
+    
     // Update SleepManager with current config (luminosity, night mode, etc.)
     if (window.sleepManager) {
       const ecranConfig = {

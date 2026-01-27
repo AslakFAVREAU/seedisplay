@@ -236,7 +236,8 @@ class MediaPlayer {
 
     // Set video source
     activeEl.src = url
-    activeEl.muted = true  // Required for autoplay
+    // Muted sauf si sonActif est true (window.sonActif depuis API config.affichage.sonActif)
+    activeEl.muted = window.sonActif !== true
     activeEl.loop = false
     
     // Show and play

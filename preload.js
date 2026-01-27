@@ -67,6 +67,15 @@ contextBridge.exposeInMainWorld('api', {
       return { success: false, error: e.message };
     }
   },
+  // Capture screenshot (720p by default)
+  captureScreen: async (width = 1280, height = 720) => {
+    try {
+      return await ipcRenderer.invoke('capture-screen', width, height);
+    } catch (e) {
+      console.error('[preload] captureScreen failed:', e.message);
+      return null;
+    }
+  },
   // Window resize (for custom screen dimensions from API)
   resizeWindow: async (width, height) => {
     try {
