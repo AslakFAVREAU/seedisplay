@@ -971,9 +971,26 @@
     var env = "prod"
     var urlMedia = ""
 
-    // Path Media et config
-    const pathSEE = "C:/SEE/"
-    const pathMedia = "C:/SEE/media/"
+    // Path Media et config - Cross-platform via preload API
+    // Windows: C:/SEE/, Linux: /opt/seedisplay/data/ ou ~/.seedisplay/
+    // Ces variables seront mises à jour après chargement de la config
+    let pathSEE = "C:/SEE/"
+    let pathMedia = "C:/SEE/media/"
+    
+    // Fonction pour récupérer le base path depuis preload (cross-platform)
+    async function initBasePath() {
+      try {
+        // Le preload expose le base path via getConfig ou une méthode dédiée
+        const config = await window.api.getConfig()
+        if (config && config._basePath) {
+          pathSEE = config._basePath
+          pathMedia = config._basePath + 'media/'
+          __log('info', 'bootstrap', 'Base path set to:', pathSEE)
+        }
+      } catch (e) {
+        __log('warn', 'bootstrap', 'Could not get base path, using default:', pathSEE)
+      }
+    }
 
     // Variables pour compatibilité
     // imgShow, imgLoad, player sont déclarés globalement en haut du fichier

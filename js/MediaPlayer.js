@@ -350,7 +350,9 @@ class MediaPlayer {
     // Check if local file exists
     if (window.api?.existsSync && window.api.existsSync('media/' + filename)) {
       // Return file:// URL for local file
-      return 'file:///C:/SEE/media/' + filename
+      // Cross-platform: use pathMedia from global or construct from pathSEE
+      const basePath = window.pathMedia || (window.pathSEE ? window.pathSEE + 'media/' : '/opt/seedisplay/data/media/')
+      return 'file:///' + basePath.replace(/\\/g, '/') + filename
     }
     
     // Fall back to remote URL

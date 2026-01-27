@@ -4,6 +4,56 @@ const updater = require("electron-updater");
 const autoUpdater = updater.autoUpdater;
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+
+//-------------------------------------------------------------------
+// Cross-platform Base Path Configuration
+// Windows: C:/SEE/
+// Linux/macOS: /opt/seedisplay/data/ or ~/.seedisplay/
+//-------------------------------------------------------------------
+const IS_RASPBERRY_PI = process.platform === 'linux' && process.arch === 'arm64';
+const IS_LINUX = process.platform === 'linux';
+const IS_WINDOWS = process.platform === 'win32';
+const IS_MAC = process.platform === 'darwin';
+
+function getBasePath() {
+  if (IS_WINDOWS) {
+    return 'C:/SEE/';
+  } else if (IS_LINUX) {
+    // Sur Linux, préférer /opt/seedisplay/data si accessible, sinon ~/.seedisplay
+    const optPath = '/opt/seedisplay/data/';
+    const homePath = path.join(os.homedir(), '.seedisplay/');
+    
+    // Vérifier si /opt/seedisplay/data existe ou peut être créé
+    try {
+      if (fs.existsSync(optPath) || fs.existsSync('/opt/seedisplay/')) {
+        if (!fs.existsSync(optPath)) {
+          fs.mkdirSync(optPath, { recursive: true });
+        }
+        return optPath;
+      }
+    } catch (e) {
+      log.warn('[getBasePath] Cannot use /opt/seedisplay, falling back to home:', e.message);
+    }
+    
+    // Fallback vers home directory
+    if (!fs.existsSync(homePath)) {
+      fs.mkdirSync(homePath, { recursive: true });
+    }
+    return homePath;
+  } else if (IS_MAC) {
+    const macPath = path.join(os.homedir(), 'Library/Application Support/SEEDisplay/');
+    if (!fs.existsSync(macPath)) {
+      fs.mkdirSync(macPath, { recursive: true });
+    }
+    return macPath;
+  }
+  return 'C:/SEE/'; // Fallback Windows
+}
+
+// Global base path - accessible throughout the app
+const BASE_PATH = getBasePath();
+log.info(`[Platform] ${process.platform}/${process.arch}, BASE_PATH=${BASE_PATH}, isRaspberryPi=${IS_RASPBERRY_PI}`);
 
 //-------------------------------------------------------------------
 // Auto-updater Configuration
@@ -23,7 +73,7 @@ autoUpdater.logger.transports.file.level = 'info';
  * Lit la config pour voir si l'utilisateur veut les beta
  */
 function getUpdateChannel() {
-  const configPath = path.join('C:/SEE/', 'configSEE.json');
+  const configPath = path.join(BASE_PATH, 'configSEE.json');
   try {
     if (fs.existsSync(configPath)) {
       const raw = fs.readFileSync(configPath, 'utf8');
@@ -42,7 +92,7 @@ function getUpdateChannel() {
  * Détermine l'environnement (beta, prod, localhost) depuis la config
  */
 function getEnvironment() {
-  const configPath = path.join('C:/SEE/', 'configSEE.json');
+  const configPath = path.join(BASE_PATH, 'configSEE.json');
   log.info(`[getEnvironment] Reading config from: ${configPath}`);
   try {
     if (fs.existsSync(configPath)) {
@@ -114,14 +164,48 @@ module.exports = { getUpdateChannel };
 // Performance & Hardware Acceleration
 // Optimisations pour lecture vidéo fluide et transitions CUT
 //-------------------------------------------------------------------
-// Activer l'accélération matérielle pour les vidéos
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-zero-copy');
-app.commandLine.appendSwitch('disable-software-rasterizer');
 
-// Optimisations pour les codecs vidéo
-app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization');
+// Raspberry Pi / Linux ARM64 specific optimizations
+if (IS_RASPBERRY_PI) {
+  log.info('[Raspberry Pi] Applying ARM64 optimizations...');
+  
+  // Limiter l'utilisation mémoire
+  app.commandLine.appendSwitch('js-flags', '--max-old-space-size=512');
+  
+  // Limiter le nombre de processus renderer
+  app.commandLine.appendSwitch('renderer-process-limit', '2');
+  
+  // Désactiver les fonctionnalités non nécessaires
+  app.commandLine.appendSwitch('disable-extensions');
+  app.commandLine.appendSwitch('disable-sync');
+  app.commandLine.appendSwitch('disable-background-networking');
+  app.commandLine.appendSwitch('disable-default-apps');
+  
+  // Mode low-end device
+  app.commandLine.appendSwitch('enable-low-end-device-mode');
+  
+  // GPU optimizations for Pi
+  app.commandLine.appendSwitch('enable-gpu-rasterization');
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+  
+  // Disable software rasterizer (use hardware)
+  app.commandLine.appendSwitch('disable-software-rasterizer');
+  
+  log.info('[Raspberry Pi] Optimizations applied');
+} else {
+  // Standard Windows/Linux x64 optimizations
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+  app.commandLine.appendSwitch('enable-gpu-rasterization');
+  app.commandLine.appendSwitch('enable-zero-copy');
+  app.commandLine.appendSwitch('disable-software-rasterizer');
+}
+
+// Optimisations pour les codecs vidéo (VAAPI sur Linux)
+if (IS_LINUX) {
+  app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization');
+} else {
+  app.commandLine.appendSwitch('enable-features', 'CanvasOopRasterization');
+}
 
 // Smooth scrolling et rendering
 app.commandLine.appendSwitch('enable-smooth-scrolling');
@@ -130,7 +214,7 @@ app.commandLine.appendSwitch('disable-frame-rate-limit');
 
 log.info('Hardware acceleration enabled for smooth video playback');
 
-// Définir le nom de l'application pour Windows
+// Définir le nom de l'application
 app.setName('SEE Display');
 
 //-------------------------------------------------------------------
@@ -750,7 +834,7 @@ ipcMain.handle('capture-screen', async (evt, width = 1280, height = 720) => {
 
 // Provide handlers for preload fallback when native modules are unavailable in preload
 const axios = require('axios')
-const BASE_PATH = 'C:/SEE/'
+// BASE_PATH is defined at the top of the file
 
 ipcMain.handle('preload-getConfig', async () => {
   const p = path.join(BASE_PATH, 'configSEE.json')

@@ -5,10 +5,12 @@ let hasNode = true
 let fs = null
 let path = null
 let axios = null
+let os = null
 try {
   fs = require('fs')
   path = require('path')
   axios = require('axios')
+  os = require('os')
   // Verify fs works by checking if the module has expected methods
   if (!fs || typeof fs.readFileSync !== 'function') {
     hasNode = false
@@ -20,8 +22,59 @@ try {
 
 console.log('[preload] hasNode =', hasNode)
 
-// Limit paths to C:\\SEE by default
-const BASE_PATH = 'C:/SEE/'
+//-------------------------------------------------------------------
+// Cross-platform Base Path Configuration
+// Windows: C:/SEE/
+// Linux/macOS: /opt/seedisplay/data/ or ~/.seedisplay/
+//-------------------------------------------------------------------
+function getBasePath() {
+  if (!hasNode || !os) {
+    // Fallback si pas d'accès Node - sera géré par IPC
+    return process.platform === 'win32' ? 'C:/SEE/' : '/opt/seedisplay/data/'
+  }
+  
+  const platform = process.platform
+  
+  if (platform === 'win32') {
+    return 'C:/SEE/'
+  } else if (platform === 'linux') {
+    // Sur Linux, préférer /opt/seedisplay/data si accessible
+    const optPath = '/opt/seedisplay/data/'
+    const homePath = path.join(os.homedir(), '.seedisplay/')
+    
+    try {
+      if (fs.existsSync(optPath) || fs.existsSync('/opt/seedisplay/')) {
+        if (!fs.existsSync(optPath)) {
+          fs.mkdirSync(optPath, { recursive: true })
+        }
+        return optPath
+      }
+    } catch (e) {
+      console.log('[preload] Cannot use /opt/seedisplay, falling back to home:', e.message)
+    }
+    
+    // Fallback vers home directory
+    try {
+      if (!fs.existsSync(homePath)) {
+        fs.mkdirSync(homePath, { recursive: true })
+      }
+    } catch (e) { /* ignore */ }
+    return homePath
+  } else if (platform === 'darwin') {
+    const macPath = path.join(os.homedir(), 'Library/Application Support/SEEDisplay/')
+    try {
+      if (!fs.existsSync(macPath)) {
+        fs.mkdirSync(macPath, { recursive: true })
+      }
+    } catch (e) { /* ignore */ }
+    return macPath
+  }
+  
+  return 'C:/SEE/' // Fallback
+}
+
+const BASE_PATH = getBasePath()
+console.log('[preload] Platform:', process.platform, '/', process.arch, ', BASE_PATH:', BASE_PATH)
 
 function safeJoin(base, p) {
   if (!path) {
