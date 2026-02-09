@@ -1,6 +1,6 @@
 {
   "name": "seedisplay",
-  "version": "1.10.0",
+  "version": "1.10.2",
   "description": "SEE Display Application",
   "main": "main.js",
   "scripts": {
@@ -119,15 +119,24 @@
       "target": [
         {
           "target": "deb",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "AppImage",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "tar.gz",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "category": "Utility",
