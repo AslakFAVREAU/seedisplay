@@ -84,6 +84,12 @@ function applyScreenDimensions(data) {
 function _applyDimensionsToDOM(width, height) {
   if (!width || !height) return
   
+  // En mode custom, les dimensions sont gérées par main.js via insertCSS - ne rien toucher
+  if (window.IS_CUSTOM_MODE) {
+    _log('info', 'screen', '_applyDimensionsToDOM: SKIPPED - custom mode active, dimensions managed by main.js')
+    return
+  }
+  
   _log('info', 'screen', '_applyDimensionsToDOM: applying ' + width + 'x' + height)
   
   // Redimensionner la fenêtre Electron elle-même
@@ -117,6 +123,12 @@ function _applyDimensionsToDOM(width, height) {
  * Fallback CSS si le resize de fenêtre ne fonctionne pas
  */
 function _applyCssDimensions(width, height) {
+  // En mode custom, ne pas toucher aux dimensions CSS
+  if (window.IS_CUSTOM_MODE) {
+    _log('info', 'screen', '_applyCssDimensions: SKIPPED - custom mode active')
+    return
+  }
+  
   // Apply to main containers - top-left position, exact dimensions
   var mainContainers = ['mediaContainer', 'pageDefault']
   
@@ -280,28 +292,29 @@ function initPlanningDisplay(planningConfig) {
           display: block !important;
         `)
         // Ajuster le container des médias pour ne pas être caché par le planning
+        var heightRef = window.IS_CUSTOM_MODE ? window.CUSTOM_HEIGHT + 'px' : '100vh'
         var mediaContainer = document.getElementById('mediaContainer')
         if (mediaContainer) {
-          mediaContainer.style.setProperty('height', 'calc(100vh - 200px)', 'important')
-          mediaContainer.style.setProperty('max-height', 'calc(100vh - 200px)', 'important')
+          mediaContainer.style.setProperty('height', 'calc(' + heightRef + ' - 200px)', 'important')
+          mediaContainer.style.setProperty('max-height', 'calc(' + heightRef + ' - 200px)', 'important')
           mediaContainer.style.setProperty('overflow', 'hidden', 'important')
         }
         // Ajuster aussi les divImg pour le resize
         var divImg1 = document.getElementById('divImg1')
         var divImg2 = document.getElementById('divImg2')
         if (divImg1) {
-          divImg1.style.setProperty('height', 'calc(100vh - 200px)', 'important')
-          divImg1.style.setProperty('max-height', 'calc(100vh - 200px)', 'important')
+          divImg1.style.setProperty('height', 'calc(' + heightRef + ' - 200px)', 'important')
+          divImg1.style.setProperty('max-height', 'calc(' + heightRef + ' - 200px)', 'important')
         }
         if (divImg2) {
-          divImg2.style.setProperty('height', 'calc(100vh - 200px)', 'important')
-          divImg2.style.setProperty('max-height', 'calc(100vh - 200px)', 'important')
+          divImg2.style.setProperty('height', 'calc(' + heightRef + ' - 200px)', 'important')
+          divImg2.style.setProperty('max-height', 'calc(' + heightRef + ' - 200px)', 'important')
         }
         // Ajuster pageDefault aussi
         var pageDefault = document.getElementById('pageDefault')
         if (pageDefault) {
-          pageDefault.style.setProperty('height', 'calc(100vh - 200px)', 'important')
-          pageDefault.style.setProperty('max-height', 'calc(100vh - 200px)', 'important')
+          pageDefault.style.setProperty('height', 'calc(' + heightRef + ' - 200px)', 'important')
+          pageDefault.style.setProperty('max-height', 'calc(' + heightRef + ' - 200px)', 'important')
         }
         break
         
@@ -502,6 +515,7 @@ function listeDiapoV2(data) {
     var affichageConfig = data.config && data.config.affichage
     if (affichageConfig) {
       _log('info','diapo','listeDiapoV2: affichage config from API:', JSON.stringify(affichageConfig))
+      window.affichageConfig = affichageConfig
       // Week display
       if (affichageConfig.weekDisplay === false) {
         var weekDiv = document.getElementById('weekDiv')
@@ -511,12 +525,12 @@ function listeDiapoV2(data) {
         if (weekDiv) weekDiv.style.display = 'flex'
       }
       // Logo SOE
-      if (affichageConfig.logoSOE === false) {
+      if (affichageConfig.logoSOE !== undefined && affichageConfig.logoSOE !== null) {
         var footer = document.getElementById('footer')
-        if (footer) footer.style.display = 'none'
-      } else if (affichageConfig.logoSOE === true) {
-        var footer = document.getElementById('footer')
-        if (footer) footer.style.display = 'flex'
+        var bottomBar = document.getElementById('bottomBar')
+        var showLogo = (affichageConfig.logoSOE === true || affichageConfig.logoSOE === 'true' || affichageConfig.logoSOE === 1 || affichageConfig.logoSOE === '1')
+        if (footer) footer.style.display = showLogo ? 'flex' : 'none'
+        if (bottomBar) bottomBar.style.display = showLogo ? 'flex' : 'none'
       }
       // Store for later use
       if (affichageConfig.weekNo !== undefined) window.weekNo = affichageConfig.weekNo
@@ -961,6 +975,53 @@ const getDiapoJson = async () => {
 
   // Timer de refresh automatique
   var refreshTimer = null
+
+  // Utilitaire: extraire le nom de fichier média d'une entrée ArrayDiapo
+  function getMediaFilename(item) {
+    try {
+      if (!item || !Array.isArray(item) || item.length < 2) return null
+      const type = item[0]
+      const filename = item[1]
+      if (!filename || typeof filename !== 'string') return null
+      if (type === 'template' || type === 'planning') return null
+      return filename
+    } catch (e) { return null }
+  }
+
+  // Synchronisation robuste des médias (ETag/Last-Modified) à chaque refresh
+  async function syncMediaCache(items) {
+    try {
+      if (window._mediaSyncInProgress) return
+      if (!window.api || (!window.api.saveBinaryWithCache && !window.api.saveBinary)) return
+
+      window._mediaSyncInProgress = true
+      const mediaList = (items || []).map(getMediaFilename).filter(Boolean)
+      if (!mediaList.length) { window._mediaSyncInProgress = false; return }
+
+      for (const mediaName of mediaList) {
+        try {
+          const urlMedia = getMediaBaseUrl() + mediaName
+          const relativePath = 'media/' + mediaName
+
+          if (window.api.saveBinaryWithCache) {
+            const res = await window.api.saveBinaryWithCache(relativePath, urlMedia)
+            if (res && res.success) {
+              _log('debug','diapo','syncMediaCache: ' + (res.cached ? 'up-to-date' : 'updated') + ' ' + mediaName)
+            }
+          } else if (window.api.saveBinary) {
+            await window.api.saveBinary(relativePath, urlMedia)
+            _log('debug','diapo','syncMediaCache: downloaded ' + mediaName)
+          }
+        } catch (e) {
+          _log('warn','diapo','syncMediaCache failed for ' + mediaName + ': ' + (e && e.message))
+        }
+      }
+    } catch (e) {
+      _log('warn','diapo','syncMediaCache error: ' + (e && e.message))
+    } finally {
+      window._mediaSyncInProgress = false
+    }
+  }
   
   function startRefreshTimer() {
     if (refreshTimer) {
@@ -1021,6 +1082,9 @@ const getDiapoJson = async () => {
       
       ArrayDiapo = listeDiapo(JsonDiapo.data)
 
+      // Sync media cache on every refresh to pick up modified files
+      syncMediaCache(ArrayDiapo)
+
       // Check for sleep mode (API v2)
       if (typeof window !== 'undefined' && window.screenStatus === 'sleep') {
         _log('info','diapo','screen is in sleep mode - showing sleep screen')
@@ -1036,7 +1100,17 @@ const getDiapoJson = async () => {
       // Si aucune diapo n'est fournie, afficher l'écran par défaut pour éviter écran vide
       if (!ArrayDiapo || ArrayDiapo.length === 0) {
         _log('warn','diapo','no diapo entries returned, falling back to defaultScreen')
-        defaultScreen()
+        if (window.masquerPageDefault) {
+          try {
+            if (window.stopLoopDiapo) window.stopLoopDiapo()
+            const container = document.getElementById('mediaContainer')
+            const pageDefault = document.getElementById('pageDefault')
+            if (container) container.style.display = 'none'
+            if (pageDefault) pageDefault.style.display = 'none'
+          } catch (e) {}
+        } else {
+          defaultScreen()
+        }
         return
       }
 
@@ -1045,6 +1119,16 @@ const getDiapoJson = async () => {
         _log('info','diapo','boucle init appelle defaultScreen')
         defaultScreen()
         // Démarrer le timer de refresh automatique après l'init
+        startRefreshTimer()
+      }
+
+      // Rafraîchir la boucle même si pageDefault est masquée
+      if (init !== true && typeof window !== 'undefined' && typeof window.applyDiapoUpdate === 'function') {
+        window.applyDiapoUpdate(ArrayDiapo)
+      }
+
+      // S'assurer que le timer de refresh tourne même si init est déjà passé
+      if (!refreshTimer) {
         startRefreshTimer()
       }
     }

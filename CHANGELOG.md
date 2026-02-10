@@ -1,4 +1,66 @@
-# CHANGELOG - Session du 17 Octobre 2025
+# CHANGELOG
+
+## v1.10.1 - Custom Display Mode (9 Février 2026)
+
+### 🎯 Résumé
+- ✅ Mode résolution personnalisée (custom display) fonctionnel
+- ✅ Approche clip-path sur `<body>` pour clipper le contenu aux dimensions exactes
+- ✅ Fond noir sur le reste de l'écran via `html { background: #000 }`
+- ✅ Compatible avec tous les éléments `position: fixed`
+- ✅ Footer (bottomBar + logo) masqué en mode custom
+- ✅ Debug log masqué en mode custom
+
+### ✨ Features
+
+#### Mode Custom Resolution
+- Configuration via `configSEE.json` : `isCustomResolution`, `screenWidth`, `screenHeight`
+- Fenêtre fullscreen avec `clip-path: polygon()` sur `<body>` pour clipper le rendu
+- Le clip-path clippe TOUT y compris les éléments `position: fixed`
+- Le reste de l'écran affiche le background noir de `<html>`
+- Variable globale `window.IS_CUSTOM_MODE` pour les guards JS
+
+#### Guards IS_CUSTOM_MODE
+- `listeDiapo.js` : `_applyDimensionsToDOM()` et `_applyCssDimensions()` skip en mode custom
+- `defaultScreen.js` : sleep screen utilise les dimensions custom
+- `main.js` : `resize-window` IPC handler ignoré en mode custom
+
+### 🔧 Modifications Code
+
+**main.js**
+- `createWindow()` : injection CSS clip-path + JS globals via `did-finish-load`
+- `resize-window` handler : return early si mode custom
+- `#bottomBar` masqué via CSS `display: none !important` en mode custom
+- `#debugLog` masqué via JS en mode custom
+
+**index.html**
+- Logo footer réduit : `clamp(20px, 3vh, 35px)` (était `clamp(30px, 6vh, 50px)`)
+- Debug log : suppression de l'auto-display (`style.display = 'block'`)
+
+**API/listeDiapo.js**
+- Guard `IS_CUSTOM_MODE` en haut de `_applyDimensionsToDOM()` et `_applyCssDimensions()`
+- Planning bar utilise `CUSTOM_HEIGHT + 'px'` au lieu de `100vh` en mode custom
+
+**js/defaultScreen.js**
+- Sleep screen : dimensions custom et insertion dans `#appWrapper` en mode custom
+
+### 📊 Tests & Qualité
+- ✅ Clip-path fonctionne pour 511×1152 sur écran 2560×1600
+- ✅ Pas de régression sur le mode standard
+- ✅ Pas de debug log visible en mode custom
+- ✅ Pas de barre footer visible en mode custom
+
+---
+
+## v1.10.0 - Raspberry Pi Support
+
+- ✅ Support cross-platform (Windows/Linux/macOS)
+- ✅ Détection automatique Raspberry Pi
+- ✅ Optimisations mémoire et GPU pour ARM64
+- ✅ Script d'installation automatique
+- ✅ Service systemd pré-configuré
+- ✅ Build targets Linux ARM64 (.deb, AppImage, tar.gz)
+
+---
 
 ## v1.9.0 - Production Ready
 

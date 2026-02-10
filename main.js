@@ -249,6 +249,7 @@ let template = []
 // that updates are working.
 //-------------------------------------------------------------------
 let win;
+// backdropWin supprimé - tout géré dans une seule fenêtre
 
 function sendStatusToWindow(text) {
   log.info(text);
@@ -259,7 +260,7 @@ function sendStatusToWindow(text) {
  * Lit la config pour récupérer les dimensions custom si elles existent
  */
 function getScreenDimensionsFromConfig() {
-  const configPath = path.join('C:/SEE/', 'configSEE.json')
+  const configPath = path.join(BASE_PATH, 'configSEE.json')
   try {
     if (fs.existsSync(configPath)) {
       const raw = fs.readFileSync(configPath, 'utf8')
@@ -291,45 +292,29 @@ function createDefaultWindow() {
   
   log.info(`[main] createDefaultWindow: useCustomDimensions=${useCustomDimensions}`, customDims)
   
-  // Options de base
+  // Options de base - TOUJOURS fullscreen, le contenu sera positionné via CSS
   const windowOptions = {
     title: 'SEE Display',
     icon: appIcon,
     show: false,
     frame: false,
     autoHideMenuBar: true,
+    backgroundColor: '#000000',  // Fond noir toujours
+    fullscreen: true,
+    kiosk: true,
+    alwaysOnTop: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      devTools: !isProduction
+      devTools: !isProduction  // DevTools seulement en dev
     }
   }
   
   if (useCustomDimensions) {
-    // Mode dimensions personnalisées : fenêtre fixe, pas de fullscreen/kiosk
-    windowOptions.width = customDims.width
-    windowOptions.height = customDims.height
-    windowOptions.x = 0
-    windowOptions.y = 0
-    windowOptions.fullscreen = false
-    windowOptions.kiosk = false
-    windowOptions.resizable = false
-    windowOptions.alwaysOnTop = true  // Toujours au premier plan
-    windowOptions.minWidth = customDims.width
-    windowOptions.minHeight = customDims.height
-    windowOptions.maxWidth = customDims.width
-    windowOptions.maxHeight = customDims.height
-    windowOptions.transparent = false
-    windowOptions.hasShadow = false
-    windowOptions.roundedCorners = false  // Pas de coins arrondis (Windows 11)
-    log.info(`[main] Window will be ${customDims.width}x${customDims.height} at (0,0), alwaysOnTop=true`)
+    log.info(`[main] Custom mode: content will be ${customDims.width}x${customDims.height} at (0,0), window stays fullscreen with black background`)
   } else {
-    // Mode fullscreen standard - laisser Electron gérer le plein écran
-    windowOptions.fullscreen = true
-    windowOptions.kiosk = true  // Mode kiosk pour vrai plein écran
-    windowOptions.alwaysOnTop = true
-    log.info(`[main] Window will be fullscreen (kiosk mode)`)
+    log.info(`[main] Fullscreen mode`)
   }
   
   win = new BrowserWindow(windowOptions);
@@ -337,14 +322,13 @@ function createDefaultWindow() {
   // Forward renderer console messages to main log so we can see them in the terminal
   try {
     win.webContents.on('console-message', (event, level, message, line, sourceId) => {
-      // Log messages coming from the renderer process so they appear in the main process logs
       log.info(`[renderer-${level}] ${message} (${sourceId}:${line})`);
     });
   } catch (e) {
     log.warn('Could not attach console-message listener to default window', e);
   }
   
-  // Raccourci pour ouvrir DevTools même en production
+  // Raccourci Ctrl+Shift+I pour ouvrir DevTools (même en production, pour debug)
   win.webContents.on('before-input-event', (event, input) => {
     if (input.control && input.shift && input.key.toLowerCase() === 'i') {
       event.preventDefault();
@@ -356,42 +340,84 @@ function createDefaultWindow() {
     }
   });
   
-  // Ouvrir DevTools uniquement en mode développement
+  // NE PAS ouvrir DevTools automatiquement - même en mode dev
+  // L'utilisateur peut les ouvrir avec Ctrl+Shift+I si besoin
   if (!isProduction) {
-    win.webContents.openDevTools();
-    log.info('Mode développement - DevTools activés');
+    log.info('Mode développement - DevTools disponibles avec Ctrl+Shift+I');
   } else {
-    log.info('Mode production - Mode kiosk activé, Ctrl+Shift+I pour DevTools');
+    log.info('Mode production - Ctrl+Shift+I pour DevTools si besoin');
+  }
+  
+  // Charger l'application AVANT ready-to-show
+  win.loadFile('index.html');
+  
+  // Injecter les dimensions custom une fois la page chargée
+  if (useCustomDimensions) {
+    win.webContents.on('did-finish-load', () => {
+      // 1. Injecter le CSS via l'API native Electron
+      const customCSS = `
+        html, body { overflow: hidden !important; }
+        #appWrapper {
+          position: fixed !important;
+          top: 0 !important;
+          left: 0 !important;
+          width: ${customDims.width}px !important;
+          height: ${customDims.height}px !important;
+          max-width: ${customDims.width}px !important;
+          max-height: ${customDims.height}px !important;
+          overflow: hidden !important;
+          clip-path: inset(0) !important;
+          transform: translate(0) !important;
+        }
+        #pageDefault, #mediaContainer, #loadingScreen, #pagePsaume,
+        #planningContainer, #templateContainer {
+          width: ${customDims.width}px !important;
+          height: ${customDims.height}px !important;
+          max-width: ${customDims.width}px !important;
+          max-height: ${customDims.height}px !important;
+          min-height: 0 !important;
+          overflow: hidden !important;
+        }
+        #pagePsaume { min-height: 0 !important; }
+        #loadingScreen {
+          position: absolute !important;
+          width: ${customDims.width}px !important;
+          height: ${customDims.height}px !important;
+        }
+        #resetModeIndicator, #resetConfirmDialog, #debugLog, #gifNoel {
+          position: absolute !important;
+        }
+        #bottomBar {
+          position: absolute !important;
+          bottom: 0 !important;
+          max-height: 80px !important;
+        }
+      `;
+      win.webContents.insertCSS(customCSS).then(() => {
+        log.info('[main] Custom CSS inserted via insertCSS API (createDefaultWindow)');
+      });
+
+      // 2. Injecter les variables JS
+      win.webContents.executeJavaScript(`
+        window.CUSTOM_WIDTH = ${customDims.width};
+        window.CUSTOM_HEIGHT = ${customDims.height};
+        window.IS_CUSTOM_MODE = true;
+        document.body.classList.add('custom-mode');
+        document.documentElement.style.setProperty('--custom-width', '${customDims.width}px');
+        document.documentElement.style.setProperty('--custom-height', '${customDims.height}px');
+        var dbg = document.getElementById('debugLog');
+        if (dbg) dbg.style.display = 'none';
+      `);
+    });
+    log.info(`[main] Custom mode: content area ${customDims.width}x${customDims.height} on fullscreen window`);
   }
   
   // Afficher la fenêtre une fois prête
   win.once('ready-to-show', () => {
     win.show();
-    
-    // Passer en plein écran UNIQUEMENT si pas de dimensions custom
-    if (!useCustomDimensions) {
-      win.setFullScreen(true);
-      log.info('[main] ready-to-show: setting fullscreen');
-    } else {
-      // S'assurer que le fullscreen est désactivé et positionner en haut à gauche
-      win.setFullScreen(false);
-      win.setBounds({ x: 0, y: 0, width: customDims.width, height: customDims.height });
-      log.info(`[main] ready-to-show: custom dimensions ${customDims.width}x${customDims.height} at (0,0)`);
-    }
-    
-    // S'assurer que la fenêtre est au premier plan (seulement en fullscreen production)
-    if (isProduction && !useCustomDimensions) {
-      win.focus();
-      win.setAlwaysOnTop(true, 'screen-saver');
-    }
-    
-    if (isProduction) {
-      // En mode production, charger l'application principale
-      win.loadURL(`file://${__dirname}/index.html`);
-    } else {
-      // En mode développement, charger la page de version
-      win.loadURL(`file://${__dirname}/version.html#v${app.getVersion()}`);
-    }
+    win.setFullScreen(true);
+    win.focus();
+    log.info('[main] ready-to-show: fullscreen mode');
   });
   
   win.on('closed', () => {
@@ -521,6 +547,11 @@ app.on('ready', function() {
 });
 
 app.on('window-all-closed', () => {
+  // Fermer le backdrop si présent
+  if (backdropWin && !backdropWin.isDestroyed()) {
+    backdropWin.close()
+    backdropWin = null
+  }
   app.quit();
 });
 
@@ -674,60 +705,63 @@ app.on('ready', function() {
 ///////////////////
 
 function createWindow () {
-  // Cree la fenetre du navigateur.
   const isProduction = process.env.NODE_ENV === 'production' || !process.defaultApp;
-  
-  // Vérifier si des dimensions custom sont configurées
   const customDims = getScreenDimensionsFromConfig()
   const useCustomDimensions = customDims !== null
   
   log.info(`[main] createWindow: isProduction=${isProduction}, useCustomDimensions=${useCustomDimensions}`, customDims)
   
-  // Options de base - en fullscreen, désactiver DevTools même en dev
-  const windowOptions = {
+  // Toujours fullscreen kiosk - en mode custom, on clippe le contenu via CSS
+  win = new BrowserWindow({
     title: 'SEE Display',
     icon: path.join(__dirname, 'build', 'icon.ico'),
+    fullscreen: true,
+    kiosk: true,
+    frame: false,
+    alwaysOnTop: true,
+    backgroundColor: '#000000',
+    roundedCorners: false,
+    hasShadow: false,
+    thickFrame: false,
     webPreferences: {
       nodeIntegration: false,
       nativeWindowOpen: true,
       contextIsolation: true,
       preload: require('path').join(__dirname, 'preload.js'),
-      devTools: useCustomDimensions ? true : false  // DevTools seulement en mode custom, pas en fullscreen
+      devTools: !isProduction
     }
-  }
+  })
+  
+  win.loadFile('index.html')
   
   if (useCustomDimensions) {
-    // Mode dimensions personnalisées : fenêtre fixe, pas de fullscreen/kiosk
-    windowOptions.width = customDims.width
-    windowOptions.height = customDims.height
-    windowOptions.x = 0
-    windowOptions.y = 0
-    windowOptions.fullscreen = false
-    windowOptions.kiosk = false
-    windowOptions.frame = false
-    windowOptions.resizable = false
-    windowOptions.alwaysOnTop = true  // Toujours au premier plan
-    windowOptions.minWidth = customDims.width
-    windowOptions.minHeight = customDims.height
-    windowOptions.maxWidth = customDims.width
-    windowOptions.maxHeight = customDims.height
-    windowOptions.transparent = false
-    windowOptions.hasShadow = false
-    windowOptions.roundedCorners = false  // Pas de coins arrondis (Windows 11)
-    log.info(`[main] createWindow: custom ${customDims.width}x${customDims.height} at (0,0), alwaysOnTop=true`)
-  } else {
-    // Mode fullscreen standard - laisser Electron gérer le plein écran
-    windowOptions.fullscreen = true
-    windowOptions.kiosk = true  // Mode kiosk pour vrai plein écran
-    windowOptions.frame = false
-    windowOptions.alwaysOnTop = true
-    log.info(`[main] createWindow: fullscreen kiosk mode`)
+    // clip-path sur <body> : clippe TOUT le rendu (même position:fixed) 
+    // Le reste de l'écran montre le background noir de <html>
+    win.webContents.on('did-finish-load', () => {
+      win.webContents.insertCSS(`
+        html { background: #000 !important; }
+        body {
+          clip-path: polygon(0 0, ${customDims.width}px 0, ${customDims.width}px ${customDims.height}px, 0 ${customDims.height}px) !important;
+          -webkit-clip-path: polygon(0 0, ${customDims.width}px 0, ${customDims.width}px ${customDims.height}px, 0 ${customDims.height}px) !important;
+        }
+        #bottomBar { display: none !important; }
+      `);
+      win.webContents.executeJavaScript(`
+        window.CUSTOM_WIDTH = ${customDims.width};
+        window.CUSTOM_HEIGHT = ${customDims.height};
+        window.IS_CUSTOM_MODE = true;
+        // Masquer le debugLog et le bottomBar en mode custom
+        var dbg = document.getElementById('debugLog');
+        if (dbg) dbg.style.display = 'none';
+        var bar = document.getElementById('bottomBar');
+        if (bar) bar.style.display = 'none';
+      `);
+    });
+    log.info(`[main] Custom mode: clip-path will clip body to ${customDims.width}x${customDims.height}`)
   }
   
-  win = new BrowserWindow(windowOptions)
-
-  // et charger le fichier index.html de l'application.
-  win.loadFile('index.html')
+  win.on('closed', () => { win = null })
+  
   // Attach console forwarding for this window as well
   try {
     win.webContents.on('console-message', (event, level, message, line, sourceId) => {
@@ -738,9 +772,10 @@ function createWindow () {
     log.warn('Could not attach console-message listener to index window', e);
   }
   
-  // Ouvrir DevTools uniquement en mode custom (pas en fullscreen)
-  if (useCustomDimensions) {
-    win.webContents.openDevTools();
+  // NE PAS ouvrir DevTools automatiquement
+  // L'utilisateur peut les ouvrir avec Ctrl+Shift+I si besoin
+  if (!isProduction) {
+    log.info('[main] Mode développement - DevTools disponibles avec Ctrl+Shift+I');
   }
 }
 
@@ -756,10 +791,21 @@ ipcMain.on('quit-app', () => {
 })
 
 // Resize window to specific dimensions (from API screen config)
+// En mode custom avec isCustomResolution=true, on IGNORE le resize car la fenêtre
+// reste fullscreen et le contenu est positionné par CSS
 ipcMain.handle('resize-window', async (evt, width, height) => {
   if (!win) {
     log.warn('[main] resize-window: no window')
     return false
+  }
+  
+  // Vérifier si on est en mode custom (depuis la config)
+  const customDims = getScreenDimensionsFromConfig()
+  if (customDims !== null) {
+    // Mode custom: NE PAS redimensionner la fenêtre, elle reste fullscreen
+    // Le contenu est positionné par CSS dans le renderer
+    log.info(`[main] resize-window: IGNORED in custom mode (window stays fullscreen, content is ${width}x${height} via CSS)`)
+    return true  // Retourner true pour que le renderer ne réessaie pas
   }
   
   try {
@@ -799,7 +845,13 @@ ipcMain.handle('resize-window', async (evt, width, height) => {
     // Désactiver le redimensionnement manuel
     win.setResizable(false)
     
-    log.info(`[main] resize-window: done, actual size=${win.getSize()[0]}x${win.getSize()[1]}`)
+    // Réactiver alwaysOnTop pour que la fenêtre soit toujours au premier plan
+    win.setAlwaysOnTop(true, 'screen-saver')  // 'screen-saver' = niveau le plus élevé
+    
+    // Forcer le focus sur la fenêtre
+    win.focus()
+    
+    log.info(`[main] resize-window: done, actual size=${win.getSize()[0]}x${win.getSize()[1]}, alwaysOnTop=true`)
     return true
   } catch (e) {
     log.error('[main] resize-window failed:', e.message)

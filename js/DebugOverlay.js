@@ -444,6 +444,10 @@ class DebugOverlay {
                     <div class="debug-value" id="debug-screen-mode">-</div>
                 </div>
                 <div class="debug-section">
+                    <div class="debug-label">Échelle Windows</div>
+                    <div class="debug-value" id="debug-dpi-scale">-</div>
+                </div>
+                <div class="debug-section">
                     <div class="debug-label">Prochain Réveil</div>
                     <div class="debug-value" id="debug-next-wakeup">-</div>
                 </div>
@@ -556,6 +560,13 @@ class DebugOverlay {
                     <div class="config-group config-readonly">
                         <label>Dimensions appliquées</label>
                         <span class="config-value" id="config-applied-dimensions">-</span>
+                    </div>
+                    <div class="config-group config-readonly">
+                        <label>Échelle Windows</label>
+                        <span class="config-value" id="config-dpi-scale">-</span>
+                    </div>
+                    <div id="config-dpi-warning" class="config-warning" style="display: none;">
+                        ⚠️ <strong>Attention :</strong> Une mise à l'échelle Windows est détectée. En mode custom, cela peut causer des problèmes d'affichage. Réglez l'échelle à 100% dans les paramètres Windows.
                     </div>
                     <div class="config-group config-readonly">
                         <label>Luminosité</label>
@@ -682,6 +693,27 @@ class DebugOverlay {
                 `${applied.width}x${applied.height}`;
         } else {
             document.getElementById('config-applied-dimensions').textContent = 'Plein écran';
+        }
+        
+        // Échelle Windows (DPI)
+        const dpiScale = window.devicePixelRatio || 1;
+        const dpiPercent = Math.round(dpiScale * 100);
+        const isCustomMode = document.body.classList.contains('custom-mode') || window.IS_CUSTOM_MODE;
+        const dpiEl = document.getElementById('config-dpi-scale');
+        const dpiWarningEl = document.getElementById('config-dpi-warning');
+        
+        if (dpiScale === 1) {
+            dpiEl.textContent = `${dpiPercent}% ✅`;
+            dpiEl.style.color = '#4caf50';
+            dpiWarningEl.style.display = 'none';
+        } else if (isCustomMode) {
+            dpiEl.textContent = `${dpiPercent}% ⚠️`;
+            dpiEl.style.color = '#f44336';
+            dpiWarningEl.style.display = 'block';
+        } else {
+            dpiEl.textContent = `${dpiPercent}%`;
+            dpiEl.style.color = '#ff9800';
+            dpiWarningEl.style.display = 'none';
         }
         
         document.getElementById('config-server-brightness').textContent = 
@@ -841,6 +873,15 @@ class DebugOverlay {
                 display: none;
             }
             
+            /* En mode custom, positionner dans la zone visible */
+            body.custom-mode #debug-overlay {
+                right: auto;
+                left: calc(var(--custom-width, 100vw) - 340px);
+                bottom: auto;
+                max-height: calc(var(--custom-height, 100vh) - 40px);
+                overflow-y: auto;
+            }
+            
             .debug-header {
                 display: flex;
                 justify-content: space-between;
@@ -953,6 +994,12 @@ class DebugOverlay {
                 z-index: 100000;
             }
             
+            /* En mode custom, limiter à la zone visible */
+            body.custom-mode #config-panel {
+                width: var(--custom-width, 100%);
+                height: var(--custom-height, 100%);
+            }
+            
             .config-dialog {
                 background: #1a1a1a;
                 border-radius: 12px;
@@ -960,6 +1007,13 @@ class DebugOverlay {
                 max-width: 90vw;
                 box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
                 border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            
+            /* En mode custom, adapter la taille du dialog */
+            body.custom-mode .config-dialog {
+                max-width: calc(var(--custom-width, 100vw) - 40px);
+                max-height: calc(var(--custom-height, 100vh) - 40px);
+                overflow-y: auto;
             }
             
             .config-header {
@@ -1068,6 +1122,17 @@ class DebugOverlay {
                 color: #666;
                 margin-bottom: 12px;
                 font-style: italic;
+            }
+            
+            .config-warning {
+                background: rgba(255, 100, 100, 0.15);
+                border: 1px solid rgba(255, 100, 100, 0.4);
+                border-radius: 6px;
+                padding: 10px 12px;
+                margin: 10px 0;
+                font-size: 11px;
+                color: #ff8888;
+                line-height: 1.4;
             }
             
             .config-subsection {
@@ -1305,6 +1370,20 @@ class DebugOverlay {
             this._setValue('debug-screen-mode', '😴 Sleep', 'warning');
         } else {
             this._setValue('debug-screen-mode', '✅ Actif', 'ok');
+        }
+        
+        // Échelle Windows (DPI scaling)
+        const dpiScale = window.devicePixelRatio || 1;
+        const dpiPercent = Math.round(dpiScale * 100);
+        const isCustomMode = document.body.classList.contains('custom-mode') || window.IS_CUSTOM_MODE;
+        
+        if (dpiScale === 1) {
+            this._setValue('debug-dpi-scale', `${dpiPercent}% ✅`, 'ok');
+        } else if (isCustomMode) {
+            // Warning en mode custom avec scaling
+            this._setValue('debug-dpi-scale', `${dpiPercent}% ⚠️ Custom!`, 'error');
+        } else {
+            this._setValue('debug-dpi-scale', `${dpiPercent}%`, 'warning');
         }
         
         // Prochain réveil (si en mode sleep)

@@ -105,11 +105,11 @@ function processConfig(configSEE) {
         document.getElementById('zone_meteo').style.display = 'block';
         __log('info','config','processConfig: zone_meteo display forcé à block')
 
-        if (logoSOE == false) {
-            document.getElementById('footer').style.display = 'none';
-        } else {
-            document.getElementById('footer').style.display = 'block';
-        }
+        const footerEl = document.getElementById('footer')
+        const bottomBarEl = document.getElementById('bottomBar')
+        const showLogo = !(logoSOE === false || logoSOE === 'false' || logoSOE === 0 || logoSOE === '0')
+        if (footerEl) footerEl.style.display = showLogo ? 'flex' : 'none'
+        if (bottomBarEl) bottomBarEl.style.display = showLogo ? 'flex' : 'none'
 
         // Récupération et parsing de la liste de diapos depuis l'API
         requestJsonDiapo()

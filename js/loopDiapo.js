@@ -20,6 +20,7 @@ let mediaLoop = [];
 let loopTimeout = null;
 let currentVisibleDiv = null; // Track quel div est actuellement visible
 let pauseLoop = false; // NEW: Flag pour rester sur pageDefault en mode édition
+let mediaLoopSignature = '';
 
 // DEBUG: Variable globale accessible de la console
 // Lire DEBUG_MODE depuis preload API si disponible
@@ -524,6 +525,80 @@ function stopLoopDiapo() {
     } catch(e) {
         __log('error', 'diapo', 'stop error: ' + e.message);
     }
+}
+
+/**
+ * Calculer une signature simple de la boucle pour détecter les changements
+ */
+function computeMediaSignature(list) {
+    try {
+        if (!list || !Array.isArray(list)) return ''
+        return list.map(item => {
+            if (!item || !Array.isArray(item)) return ''
+            const type = item[0] || ''
+            const file = item[1] || ''
+            const duration = item[2] || ''
+            return `${type}:${file}:${duration}`
+        }).join('|')
+    } catch (e) {
+        return ''
+    }
+}
+
+/**
+ * Appliquer une mise à jour de diapos à chaud
+ */
+function applyDiapoUpdate(newList) {
+    try {
+        const nextSignature = computeMediaSignature(newList)
+        const hasChanged = nextSignature !== mediaLoopSignature
+
+        if (!newList || !Array.isArray(newList) || newList.length === 0) {
+            __log('warn', 'diapo', 'applyDiapoUpdate: no media available, stopping loop')
+            if (loopTimeout) {
+                clearTimeout(loopTimeout)
+                loopTimeout = null
+            }
+            hideAllMedia()
+
+            const container = document.getElementById('mediaContainer')
+            const pageDefault = document.getElementById('pageDefault')
+            if (window.masquerPageDefault) {
+                if (container) container.style.display = 'none'
+                if (pageDefault) pageDefault.style.display = 'none'
+            } else {
+                if (container) container.style.display = 'none'
+                if (pageDefault) pageDefault.style.display = 'flex'
+            }
+            mediaLoop = []
+            mediaLoopSignature = nextSignature
+            return
+        }
+
+        if (!hasChanged) {
+            return
+        }
+
+        __log('info', 'diapo', 'applyDiapoUpdate: media list changed, restarting loop')
+        mediaLoop = newList
+        mediaLoopSignature = nextSignature
+
+        if (window.DEBUG_MODE || pauseLoop) {
+            __log('info', 'diapo', 'applyDiapoUpdate: loop paused/debug, not auto-starting')
+            return
+        }
+
+        LoopDiapo()
+    } catch (e) {
+        __log('error', 'diapo', 'applyDiapoUpdate error: ' + e.message)
+    }
+}
+
+// Expose helpers for refresh logic
+if (typeof window !== 'undefined') {
+    window.LoopDiapo = LoopDiapo
+    window.stopLoopDiapo = stopLoopDiapo
+    window.applyDiapoUpdate = applyDiapoUpdate
 }
 
 /**

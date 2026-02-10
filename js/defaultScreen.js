@@ -7,6 +7,61 @@ if (typeof window !== 'undefined') {
     var __log = function(level, tag, ...args) { try { if (console && typeof console[level] === 'function') return console[level](tag, ...args); return console.log(tag, ...args) } catch(e){ try{ console.log(tag, ...args) }catch(_){} } }
 }
 
+// Ajuste l'affichage des tuiles météo selon la largeur utile (custom ou viewport)
+function applyMeteoLayout() {
+    try {
+        const isCustom = (window.IS_CUSTOM_MODE && window.CUSTOM_WIDTH)
+        const width = isCustom ? window.CUSTOM_WIDTH : window.innerWidth
+        const height = isCustom && window.CUSTOM_HEIGHT ? window.CUSTOM_HEIGHT : window.innerHeight
+        let maxCards = 5
+        // En mode custom petit: limiter à 2 tuiles pour garder le footer visible
+        if (isCustom && (height <= 900 || width <= 600)) maxCards = 2
+        else if (width < 500) maxCards = 2
+        else if (width < 700) maxCards = 3
+        else if (width < 900) maxCards = 4
+
+        const cards = ['today', 'd+1', 'd+2', 'd+3', 'd+4']
+        cards.forEach((id, idx) => {
+            const el = document.getElementById(id)
+            if (!el) return
+            const shouldShow = idx < maxCards
+            el.style.display = shouldShow ? 'flex' : 'none'
+        })
+    } catch (e) {
+        __log('warn', 'defaultScreen', 'applyMeteoLayout error: ' + e.message)
+    }
+}
+
+// Fallback pour garantir la visibilité du logo footer si activé
+function ensureFooterVisibility() {
+    try {
+        const footerEl = document.getElementById('footer')
+        const bottomBarEl = document.getElementById('bottomBar')
+        if (!footerEl && !bottomBarEl) return
+        const apiLogo = window.affichageConfig && window.affichageConfig.logoSOE
+        const confLogo = window.configSEE && window.configSEE.logoSOE
+        const raw = (apiLogo !== undefined && apiLogo !== null) ? apiLogo : (confLogo !== undefined && confLogo !== null ? confLogo : window.logoSOE)
+        const showLogo = !(raw === false || raw === 'false' || raw === 0 || raw === '0')
+        if (footerEl) footerEl.style.display = showLogo ? 'flex' : 'none'
+        if (bottomBarEl) bottomBarEl.style.display = showLogo ? 'flex' : 'none'
+    } catch (e) {
+        __log('warn', 'defaultScreen', 'ensureFooterVisibility error: ' + e.message)
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('resize', applyMeteoLayout)
+    document.addEventListener('DOMContentLoaded', () => {
+        applyMeteoLayout()
+        ensureFooterVisibility()
+        setTimeout(() => {
+            applyMeteoLayout()
+            ensureFooterVisibility()
+        }, 1000)
+        setInterval(ensureFooterVisibility, 2000)
+    })
+}
+
 /**
  * Get base URL for media files based on environment
  * Uses window.configSEE.env to determine local vs production
@@ -157,12 +212,15 @@ function showSleepScreen() {
     if (!sleepScreen) {
         sleepScreen = document.createElement("div")
         sleepScreen.id = "sleepScreen"
+        // En mode custom, utiliser les dimensions custom au lieu de 100%
+        const w = window.IS_CUSTOM_MODE ? window.CUSTOM_WIDTH + 'px' : '100%'
+        const h = window.IS_CUSTOM_MODE ? window.CUSTOM_HEIGHT + 'px' : '100%'
         sleepScreen.style.cssText = `
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
+            width: ${w};
+            height: ${h};
             background: #000;
             display: flex;
             flex-direction: column;
@@ -170,7 +228,13 @@ function showSleepScreen() {
             align-items: center;
             z-index: 9000;
         `
-        document.body.appendChild(sleepScreen)
+        // En mode custom, ajouter dans le wrapper au lieu de body
+        const wrapper = window.IS_CUSTOM_MODE ? document.getElementById('appWrapper') : null
+        if (wrapper) {
+            wrapper.appendChild(sleepScreen)
+        } else {
+            document.body.appendChild(sleepScreen)
+        }
     }
     
     const typeHorsPlage = window.typeHorsPlage || 'noir'
