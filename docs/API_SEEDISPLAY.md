@@ -1,68 +1,43 @@
-# 📺 API SEE Display - Documentation d'intégration
+# API SEE Display
 
-Documentation de l'API pour le projet **seedisplay** (affichage dynamique sur écrans).
+> Documentation de l'API consommée par l'application **SEE Display** (Electron).
+> Dernière mise à jour : 13/02/2026
 
-> **URL de base**: `https://soek.fr/see/API/`
-> **Version**: 2.7 (Janvier 2026)
+## Base URL
 
----
-
-> ⚠️ **Note**: Cette documentation est maintenue dans les deux repositories liés :
-> - **Backend (API)**: [AslakFAVREAU/app_soek](https://github.com/AslakFAVREAU/app_soek) → `docs/API_SEEDISPLAY.md`
-> - **Frontend (Affichage)**: [AslakFAVREAU/seedisplay](https://github.com/AslakFAVREAU/seedisplay) → `docs/API_SEEDISPLAY.md`
-> 
-> Toute modification doit être synchronisée entre les deux repos.
+| Environnement | URL |
+|---------------|-----|
+| **Production** | `https://soek.fr` |
+| **Beta** | `https://beta.soek.fr` |
+| **Local** | `http://localhost:8000` |
 
 ---
 
-## � Sécurité
+## 1. Récupération des diapos — `GET /see/API/diapo/{uuid}`
 
-### API et Routes - Utilisation des UUID
+Point d'entrée principal. Retourne la configuration complète de l'écran, les diapos actives, les médias et les templates.
 
-| Type | Routes | Paramètre | Description |
-|------|--------|-----------|-------------|
-| **API Diapo** | `/see/API/diapo/{uuid}` | `uuid` (UUID v4) | Endpoint principal pour récupérer les diaporamas |
-| **API Planning** | `/see/API/planning/{uuid}` | `uuid` (UUID v4) | Endpoint pour le planning des salles |
-| **Administration** | `/see/ecran/edit/{uuid}`, `/see/ecran/vue/{uuid}`, `/see/ecran/simulation/{uuid}` | `uuid` (UUID v4) | Routes back-office |
-| **Lifecycle** | `/see/ecran/{uuid}/check-deactivate`, etc. | `uuid` (UUID v4) | Gestion activation/désactivation |
-
-### Protection IDOR (Insecure Direct Object Reference)
-
-Toutes les routes utilisent des **UUID v4** (ex: `550e8400-e29b-41d4-a716-446655440000`) au lieu des ID séquentiels pour :
-- Empêcher l'énumération des ressources via l'incrémentation des URLs
-- Protéger contre les attaques par force brute
-- Masquer le nombre total d'entités dans le système
-
-> **⚠️ BREAKING CHANGE v2.5** : Les endpoints API utilisent maintenant l'UUID au lieu de l'ID numérique.
-> Mettez à jour la configuration de vos écrans seedisplay avec l'UUID (visible dans l'interface d'administration).
-
----
-
-## �📡 Endpoint Principal
-
-### GET `/see/API/diapo/{uuid}`
-
-Récupère la configuration complète d'un écran et ses diaporamas actifs.
-
-#### Paramètres
+### Paramètres
 
 | Paramètre | Type | Description |
 |-----------|------|-------------|
-| `uuid` | UUID v4 | UUID unique de l'écran (visible dans l'interface d'administration) |
+| `uuid` | string (path) | UUID de l'écran |
 
-#### Réponse (JSON)
+### Réponse : `status: "active"` (dans les heures de fonctionnement)
 
 ```json
 {
   "status": "active",
-  "ecranId": 13,
-  "ecranNom": "Écran Accueil",
-  "orientation": "landscape",
+  "ecranId": 1,
+  "ecranNom": "Écran Hall",
+  "orientation": "paysage",
   "ratio": "16:9",
-  "dimensions": "1920x1080",
-  "luminosite": 80,
+  "dimensions": "1920 × 1080",
+  "customResolution": null,
+  "luminosite": 75,
   "modeNuit": {
     "actif": true,
+    "type": "fixe",
     "luminositeNuit": 25,
     "heureDebut": "22:00",
     "heureFin": "07:00"
@@ -88,358 +63,169 @@ Récupère la configuration complète d'un écran et ses diaporamas actifs.
     },
     "planning": {
       "actif": true,
-      "position": "footer",
-      "hauteur": "200px",
-      "refreshInterval": 300,
-      "slideDuree": 10,
+      "position": "bottom",
+      "hauteur": 30,
+      "refreshInterval": 60,
+      "slideDuree": 15,
       "maxSallesPerPage": 4,
-      "apiUrl": "/see/API/planning/550e8400-e29b-41d4-a716-446655440000"
+      "apiUrl": "/see/API/planning/{uuid}"
     }
   },
   "fondEcran": "/uploads/see/fonds/background.jpg",
   "masquerPageDefault": false,
+  "sonActif": false,
   "refreshInterval": 300,
+  "serverTime": "2026-02-11T14:30:00+01:00",
   "modePrioritaire": false,
-  "serverTime": "2025-12-26T14:30:00+01:00",
   "totalDiapos": 3,
-  "totalMedias": 12,
-  "timeline": [...],
-  "diapos": [...]
+  "totalMedias": 8,
+  "timeline": [ ... ],
+  "diapos": [ ... ],
+  "templates": [ ... ]
+}
+```
+
+### Réponse : `status: "sleep"` (en dehors des heures de fonctionnement)
+
+```json
+{
+  "status": "sleep",
+  "ecranId": 1,
+  "ecranNom": "Écran Hall",
+  "orientation": "paysage",
+  "ratio": "16:9",
+  "dimensions": "1920 × 1080",
+  "customResolution": null,
+  "typeHorsPlage": "noir",
+  "imageHorsPlage": null,
+  "luminosite": 75,
+  "prochainDemarrage": "07:00",
+  "diapos": []
+}
+```
+
+### Réponse : 404 (écran non trouvé)
+
+```json
+{
+  "error": "Écran non trouvé",
+  "uuid_recherche": "xxxx-xxxx-xxxx",
+  "message": "Vérifiez que l'UUID est correct dans la configuration seedisplay"
 }
 ```
 
 ---
 
-## 🔄 Structure de la réponse
+## 2. Mode Nuit — Détail du champ `modeNuit`
 
-### Statut de l'écran
+Le mode nuit gère la réduction automatique de la luminosité de l'écran.
 
-| Champ | Type | Description |
-|-------|------|-------------|
-| `status` | string | `"active"` = en service, `"sleep"` = hors plage horaire |
-| `ecranId` | integer | ID de l'écran |
-| `ecranNom` | string | Nom de l'écran |
-| `orientation` | string | `"landscape"` ou `"portrait"` |
-| `ratio` | string | Ratio calculé (ex: `"16:9"`, `"16:10"`, `"9:16"`) |
-| `dimensions` | string | Résolution (ex: `"1920x1080"`) |
-| `luminosite` | integer | Luminosité actuelle (0-100), ajustée automatiquement si mode nuit actif |
-| `fondEcran` | string\|null | URL du fond d'écran personnalisé (ex: `/uploads/see/fonds/bg.jpg`). `null` = fond par défaut |
-| `masquerPageDefault` | boolean | Si `true`, masque la page par défaut (horloge/logo) quand il n'y a pas de médias |
-| `refreshInterval` | integer | Intervalle de refresh en secondes |
-| `modePrioritaire` | boolean | `true` si un diapo prioritaire est actif (timeline exclusive) |
-| `serverTime` | string | Date/heure serveur ISO 8601 pour synchronisation |
+### Deux modes disponibles
 
-### Mode Nuit (luminosité adaptative)
+#### Mode Fixe (`type: "fixe"`)
+
+Les heures de début et fin sont définies manuellement par l'administrateur.
 
 ```json
-"modeNuit": {
+{
   "actif": true,
+  "type": "fixe",
   "luminositeNuit": 25,
   "heureDebut": "22:00",
   "heureFin": "07:00"
 }
 ```
 
-| Champ | Type | Description |
-|-------|------|-------------|
-| `actif` | boolean | Mode nuit activé ou non |
-| `luminositeNuit` | integer | Luminosité pendant la nuit (0-100) |
-| `heureDebut` | string | Heure de début du mode nuit (format `"HH:mm"`) |
-| `heureFin` | string | Heure de fin du mode nuit (format `"HH:mm"`) |
+#### Mode Automatique (`type: "auto"`)
 
-> **Note**: Le champ `luminosite` retourne automatiquement la valeur ajustée selon l'heure (luminosité normale ou luminosité nuit).
-
-### Programmation horaire de l'écran
-
-```json
-"programmation": {
-  "active": true,
-  "heureDemarrage": "07:00",
-  "heureExtinction": "22:00",
-  "joursFonctionnement": [1, 2, 3, 4, 5]
-}
-```
-
-| Champ | Type | Description |
-|-------|------|-------------|
-| `active` | boolean | Programmation horaire activée ou non |
-| `heureDemarrage` | string | Heure de démarrage quotidien (format `"HH:mm"`) |
-| `heureExtinction` | string | Heure d'extinction quotidienne (format `"HH:mm"`) |
-| `joursFonctionnement` | array | Jours autorisés (0=Dim, 1=Lun, ..., 6=Sam) |
-
-### Statut "sleep" (hors plage horaire)
-
-Quand l'écran est configuré pour s'éteindre pendant certaines heures :
+Les heures sont calculées automatiquement à partir du **lever et coucher du soleil** de la ville configurée. L'API [sunrise-sunset.org](https://sunrise-sunset.org) est interrogée côté serveur (cache 6h).
 
 ```json
 {
-  "status": "sleep",
-  "ecranId": 13,
-  "ecranNom": "Écran Accueil",
-  "orientation": "landscape",
-  "ratio": "16:9",
-  "dimensions": "1920x1080",
-  "luminosite": 0,
-  "typeHorsPlage": "logo",
-  "imageHorsPlage": "/uploads/see/common/logo_see.png",
-  "prochainDemarrage": "07:00",
-  "diapos": []
-}
-```
-
-| Champ | Type | Description |
-|-------|------|-------------|
-| `typeHorsPlage` | string | `"noir"` = écran noir, `"logo"` = logo commun SEE, `"image"` = média personnalisé |
-| `imageHorsPlage` | string\|null | Chemin complet du média à afficher. Valeurs possibles :<br>• `null` si `typeHorsPlage = "noir"`<br>• `/uploads/see/common/logo_see.png` si `typeHorsPlage = "logo"`<br>• `/uploads/see/horsplage/{filename}` si `typeHorsPlage = "image"` |
-| `prochainDemarrage` | string\|null | Heure de prochain réveil (format `"HH:mm"`) |
-
-> **Formats supportés pour `imageHorsPlage`**:
-> - **Images**: JPG, PNG, GIF, WebP
-> - **Vidéos**: MP4, WebM (lecture en boucle recommandée)
-
-### Fond d'écran personnalisé
-
-| Champ | Type | Description |
-|-------|------|-------------|
-| `fondEcran` | string\|null | URL du fond d'écran personnalisé. `null` = fond par défaut seedisplay |
-
-```javascript
-// Appliquer le fond d'écran personnalisé
-if (ecranData.fondEcran) {
-  document.body.style.backgroundImage = `url(${ecranData.fondEcran})`;
-  document.body.style.backgroundSize = 'cover';
-  document.body.style.backgroundPosition = 'center';
-}
-```
-
-### Masquer la page par défaut
-
-| Champ | Type | Description |
-|-------|------|-------------|
-| `masquerPageDefault` | boolean | Si `true`, masque la page par défaut (horloge/logo) quand il n'y a pas de médias à afficher |
-
-> **Comportement**: 
-> - `false` (défaut) : Quand aucun média actif, affiche l'horloge/logo/météo
-> - `true` : Quand aucun média actif, affiche seulement le fond d'écran (ou noir si pas de fond)
-
----
-
-## ⚙️ Configuration Client
-
-### Structure `config`
-
-```json
-{
-  "status": "active",
-  "ecranId": 13,
-  // ... autres champs existants ...
-  
-  "config": {
-    "meteo": {
-      "actif": true,
-      "latitude": 48.8566,
-      "longitude": 2.3522,
-      "units": "metric"
-    },
-    "affichage": {
-      "logoSOE": true,
-      "weekNo": true,
-      "weekType": true,
-      "weekDisplay": true
-    }
+  "actif": true,
+  "type": "auto",
+  "luminositeNuit": 25,
+  "heureDebut": "17:42",
+  "heureFin": "07:58",
+  "solaire": {
+    "coucher": "17:42",
+    "lever": "07:58",
+    "decalageDebut": 0,
+    "decalageFin": 0,
+    "ville": "Paris (75000)"
   }
 }
 ```
 
-### Configuration Météo
+| Champ | Type | Description |
+|-------|------|-------------|
+| `actif` | bool | Mode nuit activé |
+| `type` | string | `"fixe"` ou `"auto"` |
+| `luminositeNuit` | int | Luminosité pendant la nuit (0-100) |
+| `heureDebut` | string\|null | Heure de début du mode nuit (`HH:mm`) |
+| `heureFin` | string\|null | Heure de fin du mode nuit (`HH:mm`) |
+| `solaire` | object\|absent | Présent uniquement si `type: "auto"` |
+| `solaire.coucher` | string | Heure du coucher du soleil (avant décalage) |
+| `solaire.lever` | string | Heure du lever du soleil (avant décalage) |
+| `solaire.decalageDebut` | int | Décalage en minutes après le coucher |
+| `solaire.decalageFin` | int | Décalage en minutes avant le lever |
+| `solaire.ville` | string | Nom de la ville configurée |
 
-| Champ | Type | Requis | Description |
-|-------|------|--------|-------------|
-| `meteo.actif` | boolean | Oui | Afficher le widget météo |
-| `meteo.latitude` | float | Si actif | Latitude en décimal (-90.0 à 90.0) |
-| `meteo.longitude` | float | Si actif | Longitude en décimal (-180.0 à 180.0) |
-| `meteo.units` | string | Non | `"metric"` (°C, km/h) ou `"imperial"` (°F, mph). Défaut: `"metric"` |
+### Comportement côté serveur
 
-#### Format Latitude/Longitude
+- Le champ racine `luminosite` est **pré-calculé** : le serveur détermine si l'écran est actuellement en mode nuit et retourne la bonne valeur (jour ou nuit).
+- Les champs `heureDebut` / `heureFin` sont **toujours remplis** quel que soit le type, pour que le client puisse aussi faire la transition lui-même entre deux appels API.
+- En mode auto, les heures changent chaque jour. Le cache serveur est renouvelé toutes les 6h, et une nouvelle date = nouveau calcul automatique.
 
-- **Type**: Nombre décimal (float)
-- **Précision**: 4-6 décimales recommandées
-- **Exemples**:
-  - Paris: `48.8566`, `2.3522`
-  - Lyon: `45.7640`, `4.8357`
-  - Bordeaux: `44.8378`, `-0.5792` (longitude négative = Ouest)
+### Côté SEE Display (SleepManager)
 
-### Configuration Affichage
-
-| Champ | Type | Défaut | Description |
-|-------|------|--------|-------------|
-| `affichage.logoSOE` | boolean | `true` | Afficher le logo SOE |
-| `affichage.weekNo` | boolean | `true` | Afficher le numéro de semaine |
-| `affichage.weekType` | boolean | `false` | Afficher "Paire/Impaire" au lieu de "Semaine" |
-| `affichage.weekDisplay` | boolean | `true` | Afficher la zone semaine |
-
-### Configuration Planning Salles *(Nouveau v2.3)*
-
-Affiche le planning du jour des salles associées à l'écran.
-
-```json
-"planning": {
-  "actif": true,
-  "position": "footer",
-  "hauteur": "200px",
-  "refreshInterval": 300,
-  "slideDuree": 10,
-  "maxSallesPerPage": 4,
-  "apiUrl": "/see/API/planning/550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-| Champ | Type | Défaut | Description |
-|-------|------|--------|-------------|
-| `planning.actif` | boolean | `false` | Activer l'affichage du planning |
-| `planning.position` | string | `"footer"` | Position: `"footer"`, `"sidebar"`, `"fullscreen"`, `"overlay"` |
-| `planning.hauteur` | string | `"200px"` | Hauteur du planning (CSS: `"200px"`, `"30%"`) |
-| `planning.refreshInterval` | integer | `300` | Intervalle de rafraîchissement en secondes |
-| `planning.slideDuree` | integer | `10` | Durée d'affichage de chaque page de salles (en secondes) |
-| `planning.maxSallesPerPage` | integer | `4` | Nombre maximum de salles affichées par page |
-| `planning.apiUrl` | string | - | URL de l'API planning pour cet écran |
-
-#### Positions disponibles
-
-| Position | Description |
-|----------|-------------|
-| `footer` | Barre en bas de l'écran (par-dessus les diapos) |
-| `sidebar` | Panneau latéral (à droite) |
-| `fullscreen` | Plein écran (remplace les diapos) |
-| `overlay` | Superposé semi-transparent |
-
-### Implémentation Symfony suggérée
-
-```php
-// Entité Ecran - Nouveaux champs à ajouter
-
-// Météo
-#[ORM\Column(type: 'boolean', options: ['default' => true])]
-private bool $meteoActif = true;
-
-#[ORM\Column(type: 'float', nullable: true)]
-#[Assert\Range(min: -90, max: 90, notInRangeMessage: 'Latitude: -90 à 90')]
-private ?float $meteoLatitude = null;
-
-#[ORM\Column(type: 'float', nullable: true)]
-#[Assert\Range(min: -180, max: 180, notInRangeMessage: 'Longitude: -180 à 180')]
-private ?float $meteoLongitude = null;
-
-#[ORM\Column(type: 'string', length: 10, options: ['default' => 'metric'])]
-#[Assert\Choice(choices: ['metric', 'imperial'])]
-private string $meteoUnits = 'metric';
-
-// Affichage
-#[ORM\Column(type: 'boolean', options: ['default' => true])]
-private bool $affichageLogoSOE = true;
-
-#[ORM\Column(type: 'boolean', options: ['default' => true])]
-private bool $affichageWeekNo = true;
-
-#[ORM\Column(type: 'boolean', options: ['default' => false])]
-private bool $affichageWeekType = false;
-
-#[ORM\Column(type: 'boolean', options: ['default' => true])]
-private bool $affichageWeekDisplay = true;
-```
-
-```php
-// Dans le Controller API - Ajouter à la réponse
-$response['config'] = [
-    'meteo' => [
-        'actif' => $ecran->isMeteoActif(),
-        'latitude' => $ecran->getMeteoLatitude(),
-        'longitude' => $ecran->getMeteoLongitude(),
-        'units' => $ecran->getMeteoUnits(),
-    ],
-    'affichage' => [
-        'logoSOE' => $ecran->isAffichageLogoSOE(),
-        'weekNo' => $ecran->isAffichageWeekNo(),
-        'weekType' => $ecran->isAffichageWeekType(),
-        'weekDisplay' => $ecran->isAffichageWeekDisplay(),
-    ],
-];
-```
+Le `SleepManager` lit `modeNuit.heureDebut` et `modeNuit.heureFin` toutes les 60 secondes pour gérer la transition jour/nuit en temps réel. **Aucune modification nécessaire** : les champs sont identiques en mode fixe et auto.
 
 ---
 
-## 📋 Structure de la réponse complète
+## 3. Timeline (médias pré-calculés)
 
-L'API retourne trois éléments clés :
-- **`config`** : Configuration client (météo, affichage) - voir section précédente
-- **`timeline`** : Liste pré-calculée des médias actifs maintenant (pour affichage immédiat)
-- **`diapos`** : Liste complète des diapos avec toutes leurs règles (pour fonctionnement autonome)
-
-```json
-{
-  "status": "active",
-  "serverTime": "2025-01-15T14:30:00+01:00",
-  "ecranId": 13,
-  "ecranNom": "Écran Accueil",
-  "orientation": "landscape",
-  "ratio": "16:9",
-  "dimensions": "1920x1080",
-  "luminosite": 80,
-  "modeNuit": { ... },
-  "programmation": { ... },
-  "config": {
-    "meteo": { "actif": true, "latitude": 48.8566, "longitude": 2.3522, "units": "metric" },
-    "affichage": { "logoSOE": true, "weekNo": true, "weekType": false, "weekDisplay": true }
-  },
-  "refreshInterval": 300,
-  "totalDiapos": 3,
-  "totalMedias": 12,
-  "timeline": [ ... ],
-  "diapos": [ ... ]
-}
-```
-
-### Timeline (médias actifs maintenant)
-
-La `timeline` est une liste plate des médias à afficher **immédiatement**, pré-calculée par le serveur :
+Liste ordonnée des médias actifs à afficher maintenant.
 
 ```json
 "timeline": [
   {
     "ordre": 1,
-    "diapoId": 42,
-    "diapoNom": "Annonces Urgentes",
-    "diapoType": "prioritaire",
-    "diapoPriorite": 10,
-    "mediaId": 123,
-    "mediaNom": "Alerte Météo",
+    "diapoId": 5,
+    "diapoNom": "Diapo Accueil",
+    "diapoType": "standard",
+    "diapoPriorite": 0,
+    "mediaId": 12,
+    "mediaNom": "Photo entrée",
     "mediaType": "img",
-    "mediaFichier": "alerte_meteo.jpg",
-    "mediaUrl": "/uploads/see/media/alerte_meteo.jpg",
-    "duree": 15,
+    "mediaFichier": "photo_entree.jpg",
+    "mediaUrl": "/uploads/see/media/photo_entree.jpg",
+    "duree": 10,
     "transition": "cut"
-  },
-  ...
+  }
 ]
 ```
 
-### Diapos (règles complètes pour fonctionnement autonome)
+| Champ | Type | Description |
+|-------|------|-------------|
+| `mediaType` | string | `"img"` ou `"video"` |
+| `duree` | int | Durée d'affichage en secondes |
+| `mediaUrl` | string | Chemin relatif du fichier média |
 
-Les `diapos` contiennent **toutes les règles de programmation** pour que seedisplay puisse fonctionner **en cas de perte de connexion** :
+---
+
+## 4. Diapos (détail complet)
 
 ```json
 "diapos": [
   {
-    "id": 42,
-    "nom": "Annonces Janvier",
+    "id": 5,
+    "nom": "Diapo Accueil",
     "actif": true,
-    
-    "dateDebut": "2025-01-01T00:00:00+01:00",
-    "dateFin": "2025-01-31T23:59:59+01:00",
-    
+    "dateDebut": "2026-01-01T00:00:00+01:00",
+    "dateFin": null,
     "type": "standard",
     "priorite": 0,
-    
     "programmation": {
       "mode": "simple",
       "heureDebut": "08:00",
@@ -447,1571 +233,375 @@ Les `diapos` contiennent **toutes les règles de programmation** pour que seedis
       "joursSemaine": [1, 2, 3, 4, 5],
       "plagesHoraires": null
     },
-    
+    "isEventTemplate": false,
     "medias": [
       {
         "ordre": 1,
         "duree": 10,
-        "mediaId": 123,
-        "nom": "Promo Janvier",
+        "mediaId": 12,
+        "nom": "Photo entrée",
         "type": "img",
-        "fichier": "promo_janvier.jpg",
-        "url": "/uploads/see/media/promo_janvier.jpg"
-      },
-      ...
+        "fichier": "photo_entree.jpg",
+        "url": "/uploads/see/media/photo_entree.jpg"
+      }
     ],
-    "totalMedias": 5,
-    "dureeTotale": 50
-  },
-  ...
+    "totalMedias": 1,
+    "dureeTotale": 10
+  }
 ]
 ```
 
-### Champs du Diapo
+### Diapo événement (isEventTemplate = true)
+
+```json
+{
+  "isEventTemplate": true,
+  "evenement": {
+    "id": 3,
+    "nom": "Réunion Parents",
+    "description": "Réunion trimestrielle",
+    "salle": "Salle A",
+    "heureDebut": "14:00",
+    "heureFin": "16:00",
+    "date": "2026-02-15",
+    "mode": "auto",
+    "anticipation": 30,
+    "heureDebutAffichage": "13:30"
+  }
+}
+```
+
+---
+
+## 5. Templates dynamiques
+
+```json
+"templates": [
+  {
+    "id": 1,
+    "uuid": "abc-def-123",
+    "nom": "Anniversaires",
+    "type": "ANNIVERSAIRES",
+    "ordre": 1,
+    "dureeAffichage": 15,
+    "actif": true,
+    "dateCreation": "2026-01-15T10:00:00+01:00",
+    "dateModification": "2026-02-01T14:30:00+01:00",
+    "config": {},
+    "presentation": {},
+    "data": {}
+  }
+]
+```
+
+### Données par type de template
+
+| Type | Champs `data` |
+|------|---------------|
+| `ANNIVERSAIRES` | `personnes`, `anniversairesDuJour`, `anniversairesDeLaSemaine`, `totalPersonnes` |
+| `MENU` | `menus`, `menuDuJour`, `menusDeLaSemaine`, `totalMenus` |
+| `ANNONCE` | `titre`, `message`, `niveau`, `dateDebut`, `dateFin` |
+| `BIENVENUE` | `titre`, `sousTitre`, `logo`, `couleurFond` |
+| `METEO` | `latitude`, `longitude`, `ville`, `units` |
+| `TRAFIC` | `arrets`, `apiKey` |
+
+#### Détail du template TRAFIC
+
+Le template TRAFIC fournit la configuration nécessaire pour que SEE Display interroge l'API IDFM PRIM en temps réel.
+
+##### Champs `data`
 
 | Champ | Type | Description |
 |-------|------|-------------|
-| `id` | integer | ID unique du diapo |
-| `nom` | string | Nom du diaporama |
-| `actif` | boolean | Diapo activé ou inhibé |
-| `dateDebut` | ISO8601 | Date/heure de début de validité |
-| `dateFin` | ISO8601 | Date/heure de fin de validité |
-| `type` | string | `"standard"`, `"programme"` ou `"prioritaire"` |
-| `priorite` | integer | Niveau de priorité (0-10, 10 = max) |
-| `programmation.mode` | string | `"simple"` ou `"avance"` |
-| `programmation.heureDebut` | string | Heure début (mode simple) |
-| `programmation.heureFin` | string | Heure fin (mode simple) |
-| `programmation.joursSemaine` | array | Jours autorisés [0-6] (0=Dim) |
-| `programmation.plagesHoraires` | object | Plages par jour (mode avancé) |
-| `medias` | array | Liste des médias ordonnée |
-| `totalMedias` | integer | Nombre de médias |
-| `dureeTotale` | integer | Durée totale en secondes |
+| `arrets` | array | Liste des arrêts à surveiller |
+| `apiKey` | string | Clé API IDFM PRIM pour les appels directs |
 
----
-
-## 🔌 Fonctionnement hors ligne
-
-Grâce aux règles complètes dans `diapos`, seedisplay peut :
-
-1. **Continuer à afficher** même sans connexion
-2. **Appliquer les règles de programmation** localement
-3. **Respecter les priorités** et les dates de validité
-4. **Gérer les changements d'horaire** (passage mode nuit, etc.)
-
-### Implémentation recommandée
-
-```javascript
-// Cache local des diapos
-let cachedDiapos = [];
-let lastSync = null;
-
-async function syncWithServer() {
-  try {
-    const response = await fetch(API_URL);
-    const data = await response.json();
-    
-    // Sauvegarder les diapos complets pour fonctionnement hors ligne
-    cachedDiapos = data.diapos;
-    lastSync = new Date(data.serverTime);
-    
-    // Sauvegarder en localStorage pour persistance
-    localStorage.setItem('see_diapos', JSON.stringify(cachedDiapos));
-    localStorage.setItem('see_lastSync', lastSync.toISOString());
-    
-    // Utiliser la timeline pré-calculée
-    return data.timeline;
-    
-  } catch (error) {
-    console.warn('Connexion perdue, utilisation du cache local');
-    
-    // Charger depuis localStorage
-    const cached = localStorage.getItem('see_diapos');
-    if (cached) {
-      cachedDiapos = JSON.parse(cached);
-      // Recalculer la timeline localement
-      return calculateTimelineLocally(cachedDiapos);
-    }
-    
-    return [];
-  }
-}
-
-/**
- * Calcule la timeline localement (mode hors ligne)
- */
-function calculateTimelineLocally(diapos) {
-  const now = new Date();
-  const timeline = [];
-  
-  // Filtrer les diapos actifs
-  const activeDiapos = diapos.filter(diapo => {
-    if (!diapo.actif) return false;
-    
-    // Vérifier période
-    if (diapo.dateDebut && new Date(diapo.dateDebut) > now) return false;
-    if (diapo.dateFin && new Date(diapo.dateFin) < now) return false;
-    
-    // Vérifier programmation
-    if (diapo.type === 'programme' || diapo.type === 'prioritaire') {
-      if (!isInProgrammation(diapo.programmation, now)) return false;
-    }
-    
-    return true;
-  });
-  
-  // Trier par priorité
-  activeDiapos.sort((a, b) => {
-    if (a.type === 'prioritaire' && b.type !== 'prioritaire') return -1;
-    if (b.type === 'prioritaire' && a.type !== 'prioritaire') return 1;
-    return (b.priorite || 0) - (a.priorite || 0);
-  });
-  
-  // Construire la timeline
-  let ordre = 1;
-  for (const diapo of activeDiapos) {
-    for (const media of diapo.medias) {
-      timeline.push({
-        ordre: ordre++,
-        diapoId: diapo.id,
-        diapoNom: diapo.nom,
-        diapoType: diapo.type,
-        ...media
-      });
-    }
-  }
-  
-  return timeline;
-}
-
-/**
- * Vérifie si l'heure actuelle est dans la programmation
- */
-function isInProgrammation(prog, now) {
-  const currentDay = now.getDay(); // 0=Dim
-  const currentTime = now.toTimeString().slice(0, 5); // "HH:mm"
-  const joursFr = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
-  
-  // Mode avancé
-  if (prog.mode === 'avance' && prog.plagesHoraires) {
-    const plages = prog.plagesHoraires[joursFr[currentDay]] || [];
-    return plages.some(p => currentTime >= p.debut && currentTime <= p.fin);
-  }
-  
-  // Mode simple
-  if (prog.joursSemaine && prog.joursSemaine.length > 0) {
-    if (!prog.joursSemaine.includes(currentDay)) return false;
-  }
-  
-  if (prog.heureDebut && prog.heureFin) {
-    if (currentTime < prog.heureDebut || currentTime > prog.heureFin) return false;
-  }
-  
-  return true;
-}
-```
-
----
-
-## 🎯 Types de Diaporama
-
-### `standard` (défaut)
-- **Comportement**: Affiché en permanence dans les dates de validité
-- **Programmation**: Ignorée (HeureDebut, HeureFin, JoursSemaine)
-- **Priorité**: Normale (affichage séquentiel)
-
-```javascript
-// Exemple de logique
-if (diapo.TypeDiapo === 'standard') {
-  // Afficher si dans la période DateDebut → DateFin
-  const now = Date.now();
-  const start = Date.parse(diapo.DateDebutDiapo);
-  const end = Date.parse(diapo.DateFinDiapo);
-  if (start <= now && now <= end) {
-    // ✅ Ajouter à la boucle
-  }
-}
-```
-
-### `programme`
-- **Comportement**: Affiché uniquement aux heures programmées
-- **Programmation**: Respecte HeureDebut, HeureFin, JoursSemaine
-- **Priorité**: Normale
-
-```javascript
-// Exemple de logique
-if (diapo.TypeDiapo === 'programme') {
-  const now = new Date();
-  const currentDay = now.getDay(); // 0=Dim, 1=Lun, ...
-  const currentTime = now.toTimeString().slice(0, 8); // "HH:mm:ss"
-  
-  // Vérifier le jour
-  if (!diapo.JoursSemaine || !diapo.JoursSemaine.includes(currentDay)) {
-    return false; // Pas le bon jour
-  }
-  
-  // Vérifier l'heure
-  if (diapo.HeureDebut && diapo.HeureFin) {
-    if (currentTime < diapo.HeureDebut || currentTime > diapo.HeureFin) {
-      return false; // Hors plage horaire
-    }
-  }
-  
-  // ✅ Ajouter à la boucle
-}
-```
-
-### `prioritaire`
-- **Comportement**: **EXCLUSIF** - Quand un diapo prioritaire est actif, la timeline ne contient QUE les médias des diapos prioritaires
-- **Programmation**: Peut respecter les horaires si définis
-- **Priorité**: Élevée (valeur `Priorite` > 0)
-- **Indicateur API**: Le champ `modePrioritaire: true` indique qu'un ou plusieurs diapos prioritaires sont actifs
-
-> ⚠️ **Important**: Quand `modePrioritaire === true`, la `timeline` retournée par l'API ne contient que les médias des diapos prioritaires. Les diapos standards et programmés sont ignorés jusqu'à la fin du/des prioritaire(s).
-
-```javascript
-// Exemple de logique - Tri par priorité
-const sortedDiapos = diapos.sort((a, b) => {
-  // Prioritaires en premier
-  if (a.TypeDiapo === 'prioritaire' && b.TypeDiapo !== 'prioritaire') return -1;
-  if (b.TypeDiapo === 'prioritaire' && a.TypeDiapo !== 'prioritaire') return 1;
-  // Ensuite par niveau de priorité
-  return (b.Priorite || 0) - (a.Priorite || 0);
-});
-
-// Logique d'exclusivité (côté serveur, déjà appliquée dans timeline)
-const prioritaires = sortedDiapos.filter(d => d.type === 'prioritaire');
-const diaposForTimeline = prioritaires.length > 0 ? prioritaires : sortedDiapos;
-```
-
----
-
-## 📅 Programmation Horaire Avancée
-
-### Mode Simple (JoursSemaine + HeureDebut/HeureFin)
+##### Structure d'un arrêt
 
 ```json
 {
-  "TypeDiapo": "programme",
-  "HeureDebut": "09:00:00",
-  "HeureFin": "17:00:00",
-  "JoursSemaine": [1, 2, 3, 4, 5],
-  "PlagesHoraires": null
-}
-```
-
-**Interprétation**: Afficher du lundi au vendredi, de 9h à 17h.
-
-### Mode Avancé (PlagesHoraires)
-
-```json
-{
-  "TypeDiapo": "programme",
-  "HeureDebut": null,
-  "HeureFin": null,
-  "JoursSemaine": null,
-  "PlagesHoraires": {
-    "lundi": [
-      {"debut": "08:00", "fin": "12:00"},
-      {"debut": "14:00", "fin": "18:00"}
-    ],
-    "mardi": [
-      {"debut": "09:00", "fin": "17:00"}
-    ],
-    "mercredi": [],
-    "jeudi": [
-      {"debut": "08:00", "fin": "20:00"}
-    ],
-    "vendredi": [
-      {"debut": "08:00", "fin": "12:00"}
-    ],
-    "samedi": [],
-    "dimanche": []
-  }
-}
-```
-
-**Interprétation**: 
-- Lundi: 8h-12h et 14h-18h
-- Mardi: 9h-17h
-- Mercredi: Pas d'affichage
-- Jeudi: 8h-20h
-- Vendredi: 8h-12h (matin seulement)
-- Weekend: Pas d'affichage
-
----
-
-## 🖼️ Structure d'un Média (ligneMedia)
-
-```json
-{
-  "OrdreLigneMedia": 1,
-  "DureeLigneMedia": 10,
-  "MediaLigneMedia": {
-    "Id": 123,
-    "NomMedia": "Promo Janvier",
-    "TypeMedia": "img",
-    "FichierMedia": "promo_janvier_2025.jpg"
-  }
-}
-```
-
-| Champ | Type | Description |
-|-------|------|-------------|
-| `OrdreLigneMedia` | integer | Position dans la séquence (1, 2, 3, ...) |
-| `DureeLigneMedia` | integer | Durée d'affichage en secondes |
-| `MediaLigneMedia.Id` | integer | ID du média |
-| `MediaLigneMedia.NomMedia` | string | Nom du média |
-| `MediaLigneMedia.TypeMedia` | string | `"img"` ou `"video"` |
-| `MediaLigneMedia.FichierMedia` | string | Nom du fichier (URL relative) |
-
-### URL des médias
-
-```
-https://soek.fr/uploads/see/media/{FichierMedia}
-```
-
-Exemple:
-```
-https://soek.fr/uploads/see/media/promo_janvier_2025.jpg
-```
-
----
-
-## 💻 Exemple d'implémentation complète
-
-### Fonction de filtrage des diapos
-
-```javascript
-/**
- * Filtre les diapos selon les règles de programmation
- * @param {Array} diapos - Liste des diapos de l'API
- * @returns {Array} - Diapos à afficher maintenant
- */
-function filterActiveDiapos(diapos) {
-  const now = new Date();
-  const timestamp = now.getTime();
-  const currentDay = now.getDay(); // 0=Dim, 1=Lun, ...
-  const currentDayName = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'][currentDay];
-  const currentTime = now.toTimeString().slice(0, 5); // "HH:mm"
-  
-  return diapos.filter(diapo => {
-    // 1. Vérifier la période de validité (DateDebut → DateFin)
-    const start = diapo.DateDebutDiapo ? Date.parse(diapo.DateDebutDiapo) : 0;
-    const end = diapo.DateFinDiapo ? Date.parse(diapo.DateFinDiapo) : Number.MAX_SAFE_INTEGER;
-    
-    if (timestamp < start || timestamp > end) {
-      return false; // Hors période de validité
-    }
-    
-    // 2. Si type standard, pas de vérification horaire
-    if (diapo.TypeDiapo === 'standard') {
-      return true;
-    }
-    
-    // 3. Pour type programme ou prioritaire, vérifier la programmation
-    if (diapo.TypeDiapo === 'programme' || diapo.TypeDiapo === 'prioritaire') {
-      
-      // Mode avancé: PlagesHoraires
-      if (diapo.PlagesHoraires && typeof diapo.PlagesHoraires === 'object') {
-        const plagesDuJour = diapo.PlagesHoraires[currentDayName];
-        
-        if (!plagesDuJour || plagesDuJour.length === 0) {
-          return false; // Pas de plage pour aujourd'hui
-        }
-        
-        // Vérifier si l'heure actuelle est dans une des plages
-        return plagesDuJour.some(plage => {
-          return currentTime >= plage.debut && currentTime <= plage.fin;
-        });
-      }
-      
-      // Mode simple: JoursSemaine + HeureDebut/HeureFin
-      if (diapo.JoursSemaine && diapo.JoursSemaine.length > 0) {
-        if (!diapo.JoursSemaine.includes(currentDay)) {
-          return false; // Pas le bon jour
-        }
-      }
-      
-      if (diapo.HeureDebut && diapo.HeureFin) {
-        const heureDebut = diapo.HeureDebut.slice(0, 5); // "HH:mm"
-        const heureFin = diapo.HeureFin.slice(0, 5);
-        
-        if (currentTime < heureDebut || currentTime > heureFin) {
-          return false; // Hors plage horaire
-        }
-      }
-      
-      return true;
-    }
-    
-    return true; // Par défaut, afficher
-  });
-}
-
-/**
- * Trie les diapos par priorité
- * @param {Array} diapos - Liste des diapos filtrés
- * @returns {Array} - Diapos triés (prioritaires en premier)
- */
-function sortDiaposByPriority(diapos) {
-  return diapos.sort((a, b) => {
-    // Prioritaires en premier
-    if (a.TypeDiapo === 'prioritaire' && b.TypeDiapo !== 'prioritaire') return -1;
-    if (b.TypeDiapo === 'prioritaire' && a.TypeDiapo !== 'prioritaire') return 1;
-    
-    // Ensuite par niveau de priorité (décroissant)
-    return (b.Priorite || 0) - (a.Priorite || 0);
-  });
-}
-
-/**
- * Extrait la liste des médias à afficher
- * @param {Array} diapos - Diapos filtrés et triés
- * @returns {Array} - Liste plate des médias [type, fichier, durée]
- */
-function extractMediaList(diapos) {
-  const mediaList = [];
-  
-  for (const diapo of diapos) {
-    if (!diapo.ligneMedia || !Array.isArray(diapo.ligneMedia)) continue;
-    
-    for (const ligne of diapo.ligneMedia) {
-      const media = ligne.MediaLigneMedia;
-      if (!media || !media.FichierMedia) continue;
-      
-      mediaList.push([
-        media.TypeMedia || 'img',
-        encodeURIComponent(media.FichierMedia),
-        ligne.DureeLigneMedia || 10,
-        diapo.id // Optionnel: garder trace du diapo source
-      ]);
-    }
-  }
-  
-  return mediaList;
-}
-```
-
-### Intégration dans listeDiapo.js
-
-```javascript
-// Dans API/listeDiapo.js
-
-function listeDiapo(data) {
-  if (!data || !Array.isArray(data) || data.length === 0) {
-    _log('warn', 'diapo', 'listeDiapo: no data');
-    return [];
-  }
-  
-  // 1. Filtrer les diapos actifs (période + programmation horaire)
-  const activeDiapos = filterActiveDiapos(data);
-  _log('info', 'diapo', 'Active diapos after filter: ' + activeDiapos.length + '/' + data.length);
-  
-  // 2. Trier par priorité
-  const sortedDiapos = sortDiaposByPriority(activeDiapos);
-  
-  // 3. Extraire la liste des médias
-  const mediaList = extractMediaList(sortedDiapos);
-  _log('info', 'diapo', 'Media list: ' + mediaList.length + ' items');
-  
-  return mediaList;
-}
-```
-
----
-
-## 🔧 Gestion de l'orientation et des dimensions
-
-L'API retourne l'orientation, le ratio et les dimensions de l'écran. seedisplay adapte automatiquement l'affichage.
-
-### Adaptation automatique des dimensions (v2.7)
-
-seedisplay utilise la fonction `applyScreenDimensions()` pour adapter l'affichage aux dimensions configurées dans SOEK :
-
-```javascript
-// Exemple de données API
-{
-  "orientation": "landscape",
-  "ratio": "16:9",
-  "dimensions": "1920x1080",
-  "customResolution": null  // ou { "largeur": 2560, "hauteur": 1440 }
-}
-```
-
-**Comportement** :
-1. Si `customResolution` est défini, utilise ces valeurs exactes
-2. Sinon, parse `dimensions` (ex: `"1920x1080"`)
-3. Calcule le scale nécessaire pour rentrer dans l'écran physique (jamais > 100%)
-4. Centre l'affichage avec des barres noires (letterbox/pillarbox) si nécessaire
-
-```javascript
-// Implémentation dans seedisplay (API/listeDiapo.js)
-function applyScreenDimensions(data) {
-  var width, height;
-  
-  // Priorité aux dimensions custom
-  if (data.customResolution && data.customResolution.largeur) {
-    width = data.customResolution.largeur;
-    height = data.customResolution.hauteur;
-  } else if (data.dimensions) {
-    var parts = data.dimensions.split('x');
-    width = parseInt(parts[0], 10);
-    height = parseInt(parts[1], 10);
-  }
-  
-  if (!width || !height) return; // Plein écran par défaut
-  
-  // Calculer le scale (jamais > 1)
-  var screenWidth = window.innerWidth;
-  var screenHeight = window.innerHeight;
-  var scale = Math.min(screenWidth / width, screenHeight / height, 1);
-  
-  // Appliquer aux containers
-  var finalWidth = Math.round(width * scale);
-  var finalHeight = Math.round(height * scale);
-  var offsetX = Math.round((screenWidth - finalWidth) / 2);
-  var offsetY = Math.round((screenHeight - finalHeight) / 2);
-  
-  // mediaContainer, pageDefault, etc.
-  var el = document.getElementById('mediaContainer');
-  el.style.width = finalWidth + 'px';
-  el.style.height = finalHeight + 'px';
-  el.style.left = offsetX + 'px';
-  el.style.top = offsetY + 'px';
-}
-```
-
-### Gestion de l'orientation (legacy)
-
-Pour les anciennes implémentations :
-
-```javascript
-// Adapter l'affichage selon l'orientation
-function applyOrientation(ecranData) {
-  const orientation = ecranData.orientation || 'paysage';
-  const container = document.getElementById('mediaContainer');
-  
-  if (orientation === 'portrait') {
-    container.classList.add('portrait-mode');
-    container.classList.remove('landscape-mode');
-    // Ajuster le CSS pour 9:16
-  } else {
-    container.classList.add('landscape-mode');
-    container.classList.remove('portrait-mode');
-    // CSS par défaut 16:9
-  }
-}
-```
-
-### CSS pour orientation portrait
-
-```css
-/* Mode portrait (9:16) */
-.portrait-mode {
-  width: 100vh !important;
-  height: 100vw !important;
-  transform: rotate(90deg);
-  transform-origin: center center;
-}
-
-.portrait-mode img,
-.portrait-mode video {
-  object-fit: contain;
-  max-width: 100%;
-  max-height: 100%;
-}
-```
-
----
-
-## 💡 Gestion de la luminosité
-
-L'API retourne la luminosité actuelle et les paramètres du mode nuit. L'écran d'affichage peut ajuster son CSS en fonction.
-
-### Implémentation JavaScript
-
-```javascript
-/**
- * Applique la luminosité à l'écran via un filtre CSS
- * @param {Object} ecranData - Données de l'API
- */
-function applyLuminosite(ecranData) {
-  const luminosite = ecranData.luminosite || 100;
-  const container = document.body;
-  
-  // Appliquer un filtre brightness (0-100 → 0-1)
-  const brightness = luminosite / 100;
-  container.style.filter = `brightness(${brightness})`;
-  
-  __log('info', 'config', `Luminosité appliquée: ${luminosite}%`);
-}
-
-/**
- * Gère le mode nuit localement (si l'écran veut gérer lui-même)
- * @param {Object} modeNuit - Configuration du mode nuit
- */
-function handleModeNuit(modeNuit) {
-  if (!modeNuit || !modeNuit.actif) return;
-  
-  const now = new Date();
-  const currentTime = now.toTimeString().slice(0, 5); // "HH:mm"
-  
-  const heureDebut = modeNuit.heureDebut || "22:00";
-  const heureFin = modeNuit.heureFin || "07:00";
-  
-  // Vérifier si on est en mode nuit
-  let isNightMode = false;
-  if (heureDebut > heureFin) {
-    // Cas où la nuit chevauche minuit (ex: 22:00 → 07:00)
-    isNightMode = currentTime >= heureDebut || currentTime < heureFin;
-  } else {
-    // Cas classique
-    isNightMode = currentTime >= heureDebut && currentTime < heureFin;
-  }
-  
-  if (isNightMode) {
-    const luminositeNuit = modeNuit.luminositeNuit || 25;
-    document.body.style.filter = `brightness(${luminositeNuit / 100})`;
-    __log('info', 'config', `Mode nuit actif: ${luminositeNuit}%`);
-  }
-}
-```
-
-### CSS pour transition douce
-
-```css
-/* Transition douce lors du changement de luminosité */
-body {
-  transition: filter 2s ease-in-out;
-}
-
-/* Overlay pour assombrir l'écran (alternative au filter) */
-.luminosity-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, var(--darkness-level, 0));
-  pointer-events: none;
-  z-index: 9999;
-  transition: background 2s ease-in-out;
-}
-```
-
-### Méthode alternative: overlay noir
-
-```javascript
-/**
- * Alternative: utiliser un overlay noir pour réduire la luminosité
- * Plus compatible avec certains navigateurs
- */
-function applyLuminositeOverlay(luminosite) {
-  let overlay = document.getElementById('luminosity-overlay');
-  
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'luminosity-overlay';
-    overlay.className = 'luminosity-overlay';
-    document.body.appendChild(overlay);
-  }
-  
-  // luminosite 100 = overlay transparent, luminosite 0 = overlay noir total
-  const darkness = 1 - (luminosite / 100);
-  overlay.style.setProperty('--darkness-level', darkness);
-}
-```
-
----
-
-## 😴 Gestion du mode Sleep
-
-Quand l'API retourne `status: "sleep"`, l'écran doit réagir selon `typeHorsPlage`:
-
-```javascript
-/**
- * Gère le mode sleep de l'écran
- * @param {Object} data - Réponse de l'API
- */
-function handleSleepMode(data) {
-  __log('info', 'config', 'Écran en mode sleep');
-  
-  // Arrêter la boucle de diaporama
-  stopLoopDiapo();
-  
-  // Masquer le contenu
-  document.getElementById('mediaContainer').style.display = 'none';
-  document.getElementById('pageDefault').style.display = 'none';
-  
-  // Afficher selon le type
-  const sleepContainer = document.getElementById('sleepContainer') || createSleepContainer();
-  sleepContainer.style.display = 'flex';
-  
-  switch (data.typeHorsPlage) {
-    case 'noir':
-      sleepContainer.style.background = '#000';
-      sleepContainer.innerHTML = '';
-      break;
-      
-    case 'logo':
-      sleepContainer.style.background = '#000';
-      sleepContainer.innerHTML = '<img src="assets/logo-see.png" alt="SEE" style="max-width: 200px; opacity: 0.3;">';
-      break;
-      
-    case 'image':
-      if (data.imageHorsPlage) {
-        sleepContainer.style.backgroundImage = `url(${data.imageHorsPlage})`;
-        sleepContainer.style.backgroundSize = 'cover';
-        sleepContainer.style.backgroundPosition = 'center';
-      }
-      break;
-  }
-  
-  // Programmer le prochain check pour le réveil
-  if (data.prochainDemarrage) {
-    __log('info', 'config', `Prochain réveil prévu à ${data.prochainDemarrage}`);
-    scheduleWakeupCheck(data.prochainDemarrage);
-  }
-}
-
-function createSleepContainer() {
-  const container = document.createElement('div');
-  container.id = 'sleepContainer';
-  container.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10000;
-  `;
-  document.body.appendChild(container);
-  return container;
-}
-```
-
----
-
-## �🛠️ Gestion des erreurs
-
-### Codes de réponse HTTP
-
-| Code | Description |
-|------|-------------|
-| 200 | Succès |
-| 404 | Écran non trouvé |
-| 500 | Erreur serveur |
-
-### Exemple de gestion d'erreur
-
-```javascript
-async function fetchDiapoData(ecranId) {
-  try {
-    const url = `https://soek.fr/see/API/diapo/${ecranId}`;
-    const response = await fetch(url, { timeout: 10000 });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    // Vérifier le statut de l'écran
-    if (data.status === 'sleep') {
-      handleSleepMode(data);
-      return null;
-    }
-    
-    return data.diapos || [];
-    
-  } catch (error) {
-    console.error('Erreur API diapo:', error);
-    // Fallback: utiliser le cache local
-    return getCachedDiapos();
-  }
-}
-```
-
----
-
-## 📊 Diagramme de flux
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    GET /see/API/diapo/{id}                     │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                    ┌─────────────────┐
-                    │ Écran trouvé ?  │
-                    └────────┬────────┘
-                             │
-              ┌──────────────┴──────────────┐
-              │                             │
-              ▼                             ▼
-        ┌───────────┐                 ┌───────────┐
-        │  Non 404  │                 │    Oui    │
-        └───────────┘                 └─────┬─────┘
-                                            │
-                                            ▼
-                              ┌─────────────────────────┐
-                              │ Dans plage horaire ?    │
-                              └────────────┬────────────┘
-                                           │
-                    ┌──────────────────────┴─────────────────────┐
-                    │                                            │
-                    ▼                                            ▼
-          ┌──────────────────┐                        ┌──────────────────┐
-          │  status: sleep   │                        │  status: active  │
-          │  diapos: []      │                        │  diapos: [...]   │
-          └──────────────────┘                        └──────────────────┘
-                                                              │
-                                                              ▼
-                                              ┌───────────────────────────────┐
-                                              │ Client filtre les diapos:     │
-                                              │ 1. Période DateDebut/DateFin  │
-                                              │ 2. TypeDiapo + Programmation  │
-                                              │ 3. Tri par priorité           │
-                                              │ 4. Extraction médias          │
-                                              └───────────────────────────────┘
-```
-
----
-
-## 🎨 Templates Dynamiques
-
-L'API peut retourner un tableau `templates` contenant des contenus dynamiques à afficher dans la boucle de diaporama. Ces templates sont rendus côté seedisplay avec des designs prédéfinis.
-
-### Structure du tableau `templates`
-
-```json
-{
-  "status": "active",
-  "timeline": [...],
-  "diapos": [...],
-  "templates": [
+  "arrets": [
     {
-      "id": 1,
-      "type": "anniversaire",
-      "ordre": 1,
-      "duree": 15,
-      "titre": "Joyeux Anniversaire !",
-      "date": "2026-01-17",
-      "personnes": [
-        { "nom": "Marie Martin", "service": "Comptabilité", "photo": "/uploads/see/photos/marie.jpg" }
+      "id": "stop_area:IDFM:71264",
+      "nom": "République",
+      "label": "République (Paris)",
+      "lignesSelectionnees": [
+        {
+          "id": "line:IDFM:C01379",
+          "code": "3",
+          "mode": "Métro",
+          "couleur": "#6EC4E8",
+          "textColor": "#000000"
+        },
+        {
+          "id": "line:IDFM:C01380",
+          "code": "5",
+          "mode": "Métro",
+          "couleur": "#F28E42",
+          "textColor": "#000000"
+        }
       ]
     },
     {
-      "id": 2,
-      "type": "menu",
-      "ordre": 2,
-      "duree": 20,
-      "titre": "Menu du Jour",
-      "date": "2026-01-17",
-      "entrees": ["Salade César", "Soupe du jour"],
-      "plats": ["Bœuf bourguignon", "Poisson grillé"],
-      "desserts": ["Tarte aux pommes", "Mousse au chocolat"]
-    },
+      "id": "stop_area:IDFM:73689",
+      "nom": "La Défense",
+      "label": "La Défense Grande Arche (Puteaux)",
+      "lignesSelectionnees": []
+    }
+  ],
+  "apiKey": "Fg550K..."
+}
+```
+
+##### Comportement du filtrage par lignes
+
+| Cas | Valeur `lignesSelectionnees` | Comportement |
+|-----|------------------------------|--------------|
+| Toutes les lignes | `[]` (tableau vide) | Afficher **tous** les départs de l'arrêt |
+| Lignes spécifiques | `[{id, code, mode, couleur, textColor}, ...]` | Filtrer pour n'afficher que les départs des lignes sélectionnées |
+
+> **Note** : Le filtrage doit être appliqué côté client (SEE Display) en comparant le champ `ligne` des départs retournés par l'API IDFM avec les `code` des `lignesSelectionnees`.
+
+##### API IDFM PRIM — Endpoints utilisés par SEE Display
+
+SEE Display utilise directement l'API IDFM PRIM avec la clé API fournie.
+
+| Endpoint | URL | Description |
+|----------|-----|-------------|
+| **Départs** | `https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/stop_areas/{stopId}/departures?count=N&data_freshness=realtime&disable_geojson=true` | Prochains départs en temps réel |
+
+**Authentification** : Header `apikey: {apiKey}` (clé en minuscules).
+
+**Format de réponse des départs** (Navitia) :
+
+```json
+{
+  "departures": [
     {
-      "id": 3,
-      "type": "annonce",
-      "ordre": 3,
-      "duree": 12,
-      "typeAnnonce": "info",
-      "titre": "Fermeture exceptionnelle",
-      "message": "Les bureaux seront fermés le 20 janvier",
-      "dateDebut": "2026-01-15",
-      "dateFin": "2026-01-19"
+      "display_informations": {
+        "code": "9",
+        "commercial_mode": "Métro",
+        "color": "B5BD00",
+        "text_color": "000000",
+        "direction": "Mairie de Montreuil (Montreuil)",
+        "network": "RATP",
+        "headsign": "Mairie de Montreuil"
+      },
+      "stop_date_time": {
+        "departure_date_time": "20260213T143000"
+      }
     }
   ]
 }
 ```
 
-### Champs communs à tous les templates
-
-| Champ | Type | Requis | Description |
-|-------|------|--------|-------------|
-| `id` | integer | Oui | ID unique du template |
-| `type` | string | Oui | Type: `anniversaire`, `menu`, `annonce` |
-| `ordre` | integer | Non | Position dans la boucle (1, 2, 3...). Les templates sont triés par ordre croissant |
-| `duree` | integer | Non | Durée d'affichage en secondes (défaut: 15) |
-| `titre` | string | Non | Titre principal du template |
-| `couleur` | string | Non | Couleur hex du thème (#E91E63, etc.) |
-| `date` | string | Non | Date spécifique (YYYY-MM-DD) - template affiché uniquement ce jour |
-| `dateDebut` | ISO8601 | Non | Date/heure de début de validité |
-| `dateFin` | ISO8601 | Non | Date/heure de fin de validité |
-| `programmation` | object | Non | Plages horaires et jours d'affichage |
-
-### Template `anniversaire`
-
-Affiche les anniversaires du jour avec photos et noms.
-
-```json
-{
-  "type": "anniversaire",
-  "ordre": 1,
-  "duree": 15,
-  "titre": "Joyeux Anniversaire !",
-  "date": "2026-01-17",
-  "couleur": "#E91E63",
-  "message": "Toute l'équipe vous souhaite une excellente journée !",
-  "personnes": [
-    {
-      "nom": "Marie Martin",
-      "service": "Comptabilité",
-      "photo": "/uploads/see/photos/marie.jpg"
-    },
-    {
-      "nom": "Pierre Dupont",
-      "service": "IT"
-    }
-  ]
-}
-```
-
-| Champ spécifique | Type | Description |
-|------------------|------|-------------|
-| `personnes` | array | Liste des personnes fêtant leur anniversaire |
-| `personnes[].nom` | string | Nom complet de la personne |
-| `personnes[].service` | string | Service/département (optionnel) |
-| `personnes[].photo` | string | URL de la photo (optionnel, affiche initiales si absent) |
-| `message` | string | Message personnalisé (optionnel) |
-
-### Template `menu`
-
-Affiche le menu du jour (cantine, restaurant d'entreprise).
-
-```json
-{
-  "type": "menu",
-  "ordre": 2,
-  "duree": 20,
-  "titre": "Menu du Jour",
-  "date": "2026-01-17",
-  "lieu": "Restaurant d'entreprise",
-  "couleur": "#4CAF50",
-  "entrees": [
-    "Salade César",
-    { "nom": "Soupe du jour", "info": "Potiron" }
-  ],
-  "plats": [
-    { "nom": "Bœuf bourguignon", "allergenes": "Sulfites" },
-    "Poisson grillé sauce citron"
-  ],
-  "accompagnements": ["Riz", "Haricots verts"],
-  "fromages": ["Plateau du jour"],
-  "desserts": ["Tarte aux pommes", "Mousse au chocolat", "Fruit de saison"],
-  "boissons": ["Eau", "Café"],
-  "prix": "8,50 € / 12,00 €",
-  "info": "Service de 11h30 à 14h00"
-}
-```
-
-| Champ spécifique | Type | Description |
-|------------------|------|-------------|
-| `entrees` | array | Liste des entrées |
-| `plats` | array | Liste des plats principaux |
-| `accompagnements` | array | Liste des accompagnements |
-| `fromages` | array | Liste des fromages |
-| `desserts` | array | Liste des desserts |
-| `boissons` | array | Liste des boissons |
-| `prix` | string | Prix du menu (optionnel) |
-| `lieu` | string | Lieu du restaurant (optionnel) |
-| `info` | string | Information additionnelle (optionnel) |
-
-> **Note**: Chaque item peut être une string simple ou un objet avec `nom`, `info` (description), et `allergenes`.
-
-### Template `annonce`
-
-Affiche des annonces, alertes ou communications.
-
-```json
-{
-  "type": "annonce",
-  "ordre": 3,
-  "duree": 12,
-  "typeAnnonce": "info",
-  "titre": "Fermeture exceptionnelle",
-  "sousTitre": "Maintenance des locaux",
-  "message": "Les bureaux seront fermés le lundi 20 janvier pour travaux de maintenance.",
-  "dateDebut": "2026-01-15",
-  "dateFin": "2026-01-19",
-  "lieu": "Bâtiment A",
-  "contact": "accueil@entreprise.fr",
-  "image": "/uploads/see/annonces/maintenance.jpg",
-  "backgroundImage": "/uploads/see/annonces/bg-info.jpg"
-}
-```
-
-| Champ spécifique | Type | Description |
-|------------------|------|-------------|
-| `typeAnnonce` | string | Type visuel: `info`, `alerte`, `urgent`, `succes`, `evenement`, `maintenance`, `communication` |
-| `label` | string | Label personnalisé au lieu du type (optionnel) |
-| `sousTitre` | string | Sous-titre (optionnel) |
-| `message` | string | Corps de l'annonce |
-| `lieu` | string | Lieu concerné (optionnel) |
-| `contact` | string | Contact pour plus d'infos (optionnel) |
-| `image` | string | Image d'illustration dans le contenu (optionnel) |
-| `backgroundImage` | string | Image de fond (optionnel) |
-| `icon` | string | Emoji/icône personnalisé (optionnel) |
-
-#### Types d'annonces et couleurs par défaut
-
-| Type | Couleur | Icône | Utilisation |
-|------|---------|-------|-------------|
-| `info` | #2196F3 (bleu) | ℹ️ | Informations générales |
-| `alerte` | #FF5722 (orange) | ⚠️ | Alertes modérées |
-| `urgent` | #F44336 (rouge) | 🚨 | Messages urgents (animation) |
-| `succes` | #4CAF50 (vert) | ✅ | Confirmations, succès |
-| `evenement` | #9C27B0 (violet) | 📅 | Événements à venir |
-| `maintenance` | #FF9800 (orange) | 🔧 | Travaux, maintenance |
-| `communication` | #00BCD4 (cyan) | 📢 | Communications corporate |
-
-### Programmation des templates
-
-Chaque template peut avoir une `programmation` pour définir quand il s'affiche :
-
-```json
-{
-  "type": "menu",
-  "titre": "Menu du Midi",
-  "programmation": {
-    "heureDebut": "11:00",
-    "heureFin": "14:30",
-    "joursSemaine": [1, 2, 3, 4, 5]
-  },
-  "entrees": [...]
-}
-```
-
-| Champ | Type | Description |
-|-------|------|-------------|
-| `heureDebut` | string | Heure de début d'affichage (HH:mm) |
-| `heureFin` | string | Heure de fin d'affichage (HH:mm) |
-| `joursSemaine` | array | Jours autorisés (0=Dim, 1=Lun, ..., 6=Sam) |
-
-### Ordre d'affichage
-
-Les templates sont insérés dans la boucle de diaporama selon leur `ordre`. Ils sont affichés **avant** les médias de la timeline.
-
-Exemple avec `ordre` :
-1. Template anniversaire (ordre: 1) → 15s
-2. Template menu (ordre: 2) → 20s  
-3. Template annonce (ordre: 3) → 12s
-4. Médias de la timeline → durées variables
-
-### Implémentation seedisplay
-
-```javascript
-// Dans listeDiapo.js - les templates sont parsés et ajoutés à ArrayImg
-if (data.templates && Array.isArray(data.templates)) {
-  data.templates.sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
-  
-  for (const template of data.templates) {
-    if (isTemplateActive(template)) {
-      ArrayImg.push(['template', template, template.duree || 15]);
-    }
-  }
-}
-
-// Dans loopDiapo.js - le type 'template' est géré par TemplateRenderer
-if (mediaType === 'template') {
-  window.templateRenderer.show(templateData, duree);
-}
-```
+| Champ | Description |
+|-------|-------------|
+| `code` | Code court de la ligne (ex: "9", "A", "56") |
+| `commercial_mode` | Mode de transport ("Métro", "Bus", "RER", "Tram", "Train") |
+| `color` | Couleur de la ligne (hex sans #) |
+| `text_color` | Couleur du texte (hex sans #) |
+| `direction` | Destination du véhicule |
+| `departure_date_time` | Heure de départ format `YYYYMMDDTHHmmss` |
 
 ---
 
-## � Diapos Événements (SOEG → SEE)
+## 6. Planning — `GET /see/API/planning/{uuid}`
 
-### Concept
+Retourne les événements du jour pour les salles associées à l'écran.
 
-Les salles SOEG peuvent être liées à des écrans SEE. Lors de la création d'un événement, une diapo prioritaire peut être générée automatiquement pour s'afficher pendant la durée de l'événement.
-
-### Relation Salle ↔ Écran
-
-Une salle peut être associée à un ou plusieurs écrans. Cette association se fait dans l'administration des salles.
-
-### Diapo générée automatiquement
-
-Quand un utilisateur crée un événement avec l'option "Afficher sur l'écran de la salle", une diapo est créée avec :
-
-| Propriété | Valeur |
-|-----------|--------|
-| `TypeDiapo` | `prioritaire` |
-| `Priorite` | `8` (haute) |
-| `DateDebutDiapo` | Début de l'événement |
-| `DateFinDiapo` | Fin de l'événement |
-| `HeureDebut` | Heure début événement |
-| `HeureFin` | Heure fin événement |
-| `JoursSemaine` | Jour de l'événement |
-| `NomDiapo` | `[Event] Nom de l'événement` |
-
-### Modes d'affichage
-
-| Mode | Description |
-|------|-------------|
-| `auto` | Template généré dynamiquement (voir ci-dessous) |
-| `custom` | Média personnalisé uploadé par l'utilisateur |
-
-### Template Auto - Structure JSON
-
-Pour les diapos en mode `auto`, l'API renvoie des données d'événement au lieu d'un média :
-
-```json
-{
-  "id": 8,
-  "nom": "[Event] TEST3 afficage",
-  "actif": true,
-  "dateDebut": "2026-01-01T20:00:00+01:00",
-  "dateFin": "2026-01-01T21:00:00+01:00",
-  "type": "prioritaire",
-  "priorite": 8,
-  "programmation": {
-    "mode": "simple",
-    "heureDebut": "20:00",
-    "heureFin": "21:00",
-    "joursSemaine": [4],
-    "plagesHoraires": []
-  },
-  "isEventTemplate": true,
-  "evenement": {
-    "id": 60009,
-    "nom": "TEST3 afficage",
-    "description": "<p>Description de l'événement</p>",
-    "salle": "Studio Evenement-SOE",
-    "heureDebut": "20:00",
-    "heureFin": "21:00",
-    "date": "2026-01-01",
-    "mode": "auto",
-    "anticipation": 15,
-    "heureDebutAffichage": "19:45"
-  },
-  "medias": [],
-  "totalMedias": 0,
-  "dureeTotale": 0
-}
-```
-
-| Champ | Type | Description |
-|-------|------|-------------|
-| `isEventTemplate` | boolean | `true` si c'est une diapo d'événement |
-| `evenement.id` | integer | ID de l'événement SOEG |
-| `evenement.nom` | string | Nom de l'événement |
-| `evenement.description` | string | Description (HTML) |
-| `evenement.salle` | string | Nom de la salle |
-| `evenement.heureDebut` | string | Heure début (HH:mm) |
-| `evenement.heureFin` | string | Heure fin (HH:mm) |
-| `evenement.date` | string | Date (YYYY-MM-DD) |
-| `evenement.mode` | string | `auto` (template) ou `custom` (média) |
-| `evenement.anticipation` | integer | Minutes avant le début pour commencer l'affichage |
-| `evenement.heureDebutAffichage` | string | Heure de début effective de l'affichage (HH:mm), calculée selon l'anticipation |
-
-### Rendu côté seedisplay
-
-Quand `isEventTemplate === true` et `evenement.mode === 'auto'`, seedisplay doit générer dynamiquement l'affichage :
-
-```html
-<!-- Exemple de rendu HTML pour template événement -->
-<div class="event-template" style="background: linear-gradient(135deg, #0866C6, #1976D2);">
-  <h1 class="event-title">TEST3 afficage</h1>
-  <div class="event-info">
-    <p><i class="icon-location"></i> Studio Evenement-SOE</p>
-    <p><i class="icon-clock"></i> 20:00 - 21:00</p>
-    <p class="event-date">01 janvier 2026</p>
-  </div>
-</div>
-```
-
-### Logique de détection
-
-```javascript
-/**
- * Vérifie si une diapo est un template d'événement
- * @param {Object} diapo - Diapo de l'API
- * @returns {boolean}
- */
-function isEventTemplateDiapo(diapo) {
-  return diapo.isEventTemplate === true && diapo.evenement && diapo.evenement.mode === 'auto';
-}
-
-/**
- * Gère l'affichage d'un template événement
- * @param {Object} diapo - Diapo avec isEventTemplate=true
- */
-function renderEventTemplate(diapo) {
-  const evt = diapo.evenement;
-  const container = document.getElementById('mediaContainer');
-  
-  container.innerHTML = `
-    <div class="event-template">
-      <h1>${evt.nom}</h1>
-      <div class="event-info">
-        <p class="salle">${evt.salle}</p>
-        <p class="horaire">${evt.heureDebut} - ${evt.heureFin}</p>
-        <p class="date">${formatDate(evt.date)}</p>
-      </div>
-    </div>
-  `;
-}
-```
-
-### CSS suggéré
-
-```css
-.event-template {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  height: 100%;
-  color: white;
-  text-align: center;
-  padding: 5%;
-}
-
-.event-title {
-  font-size: 5vw;
-  font-weight: 700;
-  margin-bottom: 2vh;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-}
-
-.event-info {
-  font-size: 2.5vw;
-  opacity: 0.95;
-}
-
-.event-info p {
-  margin: 1vh 0;
-}
-```
-
----
-
-## � API Planning du Jour
-
-### GET `/see/API/planning/{uuid}`
-
-Récupère le planning du jour pour toutes les salles associées à un écran.
-
-> **Usage**: Affichage du programme de la journée sur un écran d'accueil ou de couloir.
-
-#### Paramètres
-
-| Paramètre | Type | Description |
-|-----------|------|-------------|
-| `uuid` | UUID v4 | UUID unique de l'écran |
-
-#### Réponse (JSON)
+### Réponse succès
 
 ```json
 {
   "status": "success",
-  "ecranId": 13,
-  "ecranNom": "Écran Hall Accueil",
-  "date": "2026-01-15",
-  "dateFormatee": "15/01/2026",
+  "ecranId": 1,
+  "ecranNom": "Écran Hall",
+  "date": "2026-02-11",
+  "dateFormatee": "11/02/2026",
   "jourSemaine": "Mercredi",
-  "serverTime": "2026-01-15T09:30:00+01:00",
+  "serverTime": "2026-02-11T14:30:00+01:00",
   "refreshInterval": 60,
   "salles": [
     {
-      "id": 5,
-      "nom": "Salle Einstein",
-      "batiment": "Bâtiment A",
+      "id": 1,
+      "nom": "Salle A",
+      "batiment": "Bâtiment 1",
       "couleur": "#0866C6",
-      "capacite": 20
-    },
-    {
-      "id": 8,
-      "nom": "Salle Curie",
-      "batiment": "Bâtiment A",
-      "couleur": "#28A745",
-      "capacite": 12
+      "capacite": 30
     }
   ],
-  "totalSalles": 2,
+  "totalSalles": 1,
   "evenements": [
     {
-      "id": 456,
-      "nom": "Réunion Direction",
-      "salleId": 5,
-      "salleNom": "Salle Einstein",
+      "id": 5,
+      "nom": "Réunion équipe",
+      "salleId": 1,
+      "salleNom": "Salle A",
       "salleCouleur": "#0866C6",
-      "heureDebut": "09:00",
-      "heureFin": "10:30",
-      "dateDebut": "2026-01-15",
-      "responsable": "Marie Martin",
+      "heureDebut": "14:00",
+      "heureFin": "15:30",
+      "dateDebut": "2026-02-11",
+      "responsable": "Jean Dupont",
       "typeEvent": "Réunion",
       "statut": "en_cours",
       "minutesRestantes": 45,
       "minutesAvantDebut": null
-    },
-    {
-      "id": 457,
-      "nom": "Formation RH",
-      "salleId": 8,
-      "salleNom": "Salle Curie",
-      "salleCouleur": "#28A745",
-      "heureDebut": "14:00",
-      "heureFin": "17:00",
-      "dateDebut": "2026-01-15",
-      "responsable": "Paul Dupont",
-      "typeEvent": "Formation",
-      "statut": "a_venir",
-      "minutesRestantes": null,
-      "minutesAvantDebut": 270
     }
   ],
-  "totalEvenements": 2,
+  "totalEvenements": 3,
   "planningParSalle": [
     {
-      "salle": { "id": 5, "nom": "Salle Einstein", ... },
+      "salle": { "id": 1, "nom": "Salle A", "batiment": "Bâtiment 1", "couleur": "#0866C6", "capacite": 30 },
       "evenements": [ ... ],
-      "eventEnCours": { ... },
-      "prochainEvent": { ... }
+      "prochainEvent": { ... },
+      "eventEnCours": { ... }
     }
   ]
 }
 ```
 
-#### Statuts des événements
-
-| Statut | Description |
-|--------|-------------|
-| `a_venir` | L'événement n'a pas encore commencé |
-| `en_cours` | L'événement est actuellement en cours |
-| `termine` | L'événement est terminé |
-
-#### Cas "Aucune salle associée"
-
-Si l'écran n'a pas de salles associées :
+### Réponse : aucune salle associée
 
 ```json
 {
   "status": "no_salles",
-  "ecranId": 13,
-  "ecranNom": "Écran Test",
+  "ecranId": 1,
+  "ecranNom": "Écran Hall",
   "message": "Aucune salle associée à cet écran",
   "salles": [],
   "evenements": [],
-  "serverTime": "2026-01-15T09:30:00+01:00"
+  "serverTime": "2026-02-11T14:30:00+01:00"
 }
 ```
 
-### Utilisation côté seedisplay
+### Statuts des événements
 
-#### Affichage suggéré
+| Statut | Description |
+|--------|-------------|
+| `a_venir` | L'événement n'a pas encore commencé. `minutesAvantDebut` est renseigné. |
+| `en_cours` | L'événement est en cours. `minutesRestantes` est renseigné. |
+| `termine` | L'événement est terminé. |
 
-L'API fournit les données brutes. seedisplay peut les afficher de différentes façons :
+---
 
-1. **Vue Planning** : Grille horaire avec créneaux (style agenda)
-2. **Vue Liste** : Liste des événements du jour triés par heure
-3. **Vue Multi-Salles** : Colonnes par salle avec événements
+## 7. Heartbeat — `POST /see/API/heartbeat/{ecranUuid}`
 
-#### Exemple de rendu HTML
+Envoyé périodiquement par SEE Display pour signaler son état au serveur.
 
-```html
-<div class="planning-du-jour">
-  <header class="planning-header">
-    <h1>Planning du Mercredi 15/01/2026</h1>
-    <time>09:30</time>
-  </header>
-  
-  <div class="planning-grid">
-    <!-- Colonne par salle -->
-    <div class="salle-column" style="--salle-color: #0866C6;">
-      <h2>Salle Einstein</h2>
-      
-      <div class="event en-cours">
-        <span class="heure">09:00 - 10:30</span>
-        <span class="nom">Réunion Direction</span>
-        <span class="responsable">Marie Martin</span>
-        <span class="countdown">45 min restantes</span>
-      </div>
-      
-      <div class="event a-venir">
-        <span class="heure">11:00 - 12:00</span>
-        <span class="nom">Entretien RH</span>
-      </div>
-    </div>
-    
-    <div class="salle-column" style="--salle-color: #28A745;">
-      <h2>Salle Curie</h2>
-      <!-- ... -->
-    </div>
-  </div>
-</div>
+### Corps de la requête (JSON)
+
+```json
+{
+  "version": "1.9.21",
+  "uptime": "2h 34m",
+  "debug": {
+    "sleepMode": false,
+    "nightMode": true,
+    "screenStatus": "active"
+  },
+  "screenshot": "data:image/jpeg;base64,/9j/4AAQ..."
+}
 ```
 
-#### CSS suggéré
+### Réponses
 
-```css
-.planning-du-jour {
-  font-family: 'Segoe UI', sans-serif;
-  background: linear-gradient(135deg, #1a1a2e, #16213e);
-  color: white;
-  height: 100vh;
-  padding: 2vw;
-}
+| Code | Réponse |
+|------|---------|
+| 200 | `{ "success": true, "message": "Heartbeat received", "serverTime": "..." }` |
+| 400 | `{ "error": "Invalid JSON payload" }` |
+| 401 | `{ "error": "Invalid token" }` |
+| 404 | `{ "error": "Ecran not found" }` |
 
-.planning-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 3vh;
-}
+---
 
-.planning-header h1 {
-  font-size: 4vw;
-  font-weight: 600;
-}
+## 8. Monitoring — `GET /see/API/monitoring/status`
 
-.planning-header time {
-  font-size: 5vw;
-  font-weight: 700;
-}
+> Requiert `ROLE_ADMIN_SEE`
 
-.planning-grid {
-  display: flex;
-  gap: 2vw;
-  height: calc(100vh - 15vh);
-}
-
-.salle-column {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 1vw;
-  padding: 1.5vw;
-  border-top: 0.5vw solid var(--salle-color);
-}
-
-.salle-column h2 {
-  font-size: 2vw;
-  margin-bottom: 2vh;
-  color: var(--salle-color);
-}
-
-.event {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 0.5vw;
-  padding: 1.5vw;
-  margin-bottom: 1.5vh;
-  border-left: 0.3vw solid var(--salle-color);
-}
-
-.event.en-cours {
-  background: rgba(255, 255, 255, 0.15);
-  animation: pulse 2s infinite;
-}
-
-.event .heure {
-  font-size: 1.8vw;
-  font-weight: 600;
-}
-
-.event .nom {
-  font-size: 2vw;
-  display: block;
-  margin: 0.5vh 0;
-}
-
-.event .responsable {
-  font-size: 1.2vw;
-  opacity: 0.7;
-}
-
-.event .countdown {
-  font-size: 1.5vw;
-  color: #ffc107;
-  font-weight: 600;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.85; }
+```json
+{
+  "ecrans": [
+    {
+      "id": 1,
+      "uuid": "abc-def-123",
+      "nom": "Écran Hall",
+      "status": "active",
+      "screenshot": "base64...",
+      "version": "1.9.21",
+      "uptime": "5h 12m",
+      "lastSeen": "14:28:00",
+      "debug": {}
+    }
+  ],
+  "stats": { "online": 5, "offline": 1, "total": 6 },
+  "serverTime": "2026-02-11T14:30:00+01:00"
 }
 ```
 
 ---
 
-## 🔄 Changelog API
+## 9. Monitoring détail écran — `GET /see/API/monitoring/ecran/{uuid}`
 
-### v2.7 (Janvier 2026)
-- ✅ **Adaptation automatique des dimensions** : seedisplay adapte l'affichage aux dimensions reçues de l'API (`dimensions`, `customResolution`)
-- ✅ **Letterbox/Pillarbox** : Barres noires automatiques si le ratio écran ≠ ratio configuré
-- ✅ **Scale intelligent** : Mise à l'échelle proportionnelle (jamais > 100%) avec centrage automatique
-- ✅ **Debug overlay** : Nouvelles infos "Dimensions appliquées" affichant taille finale et % de scale
+> Requiert `ROLE_ADMIN_SEE`
 
-### v2.6 (Janvier 2026)
-- ✅ **Templates dynamiques** : Nouveaux types `anniversaire`, `menu`, `annonce` dans le tableau `templates`
-- ✅ **Ordre et durée** : Champs `ordre` et `duree` sur chaque template pour contrôler l'affichage
-- ✅ **Fond d'écran personnalisé** : Nouveau champ `fondEcran` pour définir un arrière-plan custom
-- ✅ **Masquer page par défaut** : Nouveau champ `masquerPageDefault` pour cacher horloge/logo si pas de médias
-- ✅ **Planning avancé** : Nouveaux champs `slideDuree` et `maxSallesPerPage` pour pagination multi-salles
-- ✅ **Anticipation événements** : Champs `anticipation` et `heureDebutAffichage` pour affichage anticipé des diapos événements
-- ✅ **Documentation complète** : Mise à jour exhaustive de tous les champs API
-
-### v2.5 (Janvier 2026)
-- ⚠️ **BREAKING CHANGE** : Les endpoints API utilisent maintenant l'UUID au lieu de l'ID numérique
-- ✅ **UUID partout** : `/see/API/diapo/{uuid}` et `/see/API/planning/{uuid}` pour une sécurité unifiée
-- ✅ **Configuration seedisplay** : La page écran affiche l'UUID et le token à utiliser
-- ✅ **Protection IDOR complète** : Plus aucune route n'expose d'ID séquentiel
-
-### v2.4 (Janvier 2026)
-- ✅ **Sécurité UUID** : Les routes d'administration utilisent désormais des UUID au lieu des ID séquentiels
-- ✅ **Protection IDOR** : Prévention des attaques par énumération d'URLs sur les écrans et événements
-- ✅ **Routes admin UUID** : `/see/ecran/edit/{uuid}`, `/see/ecran/vue/{uuid}`, `/see/ecran/simulation/{uuid}`
-- ✅ **Lifecycle UUID** : `/see/ecran/{uuid}/check-deactivate`, `/see/ecran/{uuid}/deactivate`, `/see/ecran/{uuid}/reactivate`
-
-### v2.3 (Janvier 2026)
-- ✅ **Configuration Planning** : Nouveaux champs `config.planning` dans API diapo
-- ✅ **Positions planning** : footer, sidebar, fullscreen, overlay configurables depuis back-office
-- ✅ **Entité Ecran** : Champs `planningActif`, `planningPosition`, `planningHauteur`, `planningRefreshInterval`
-- ✅ **Formulaire Écran** : Section "Planning des salles associées" avec configuration complète
-- ✅ **isEventTemplate** : Nouveau champ booléen pour identifier les diapos d'événements
-- ✅ **Objet evenement** : Données complètes de l'événement (nom, salle, horaires, date, mode)
-- ✅ **LEFT JOIN ligneMedia** : Les diapos sans médias (templates auto) sont maintenant incluses
-
-### v2.2 (Janvier 2026)
-- ✅ **API Planning du Jour** : Nouvel endpoint `/see/API/planning/{uuid}`
-- ✅ **Événements par salle** : Planning groupé par salle avec statut temps réel
-- ✅ **Compteurs temps** : `minutesRestantes` et `minutesAvantDebut` pour affichage dynamique
-
-### v2.1 (Janvier 2026)
-- ✅ **Liaison Salle ↔ Écran** : Relation ManyToMany bidirectionnelle entre salles SOEG et écrans SEE
-- ✅ **Diapos Événements** : Génération automatique de diapos prioritaires (priorité 8) pour les événements
-- ✅ **EvenementDisplayService** : Service dédié pour gérer les diapos d'événements
-- ✅ **Mode affichage** : `auto` (template généré par seedisplay) ou `custom` (média personnalisé)
-- ✅ **UI Événement** : Toggle "Afficher sur écran" avec sélection de mode et média
-
-### v2.0 (Janvier 2026)
-- ✅ Ajout `TypeDiapo` (standard, programme, prioritaire)
-- ✅ Ajout `Priorite` (0-10)
-- ✅ Ajout `HeureDebut`, `HeureFin`, `JoursSemaine`
-- ✅ Ajout `PlagesHoraires` (programmation avancée)
-- ✅ Ajout `orientation`, `dimensions`, `ratio` pour l'écran
-- ✅ Gestion du statut `sleep` (hors plage horaire)
-
-### v1.0 (Legacy)
-- `DateDebutDiapo`, `DateFinDiapo`
-- `ligneMedia` avec `TypeMedia`, `FichierMedia`, `DureeLigneMedia`
+```json
+{
+  "id": 1,
+  "uuid": "abc-def-123",
+  "nom": "Écran Hall",
+  "entitee": "Organisation 1",
+  "status": "active",
+  "version": "1.9.21",
+  "uptime": "5h 12m",
+  "lastSeen": "11/02/2026 14:28:00",
+  "screenshot": "base64...",
+  "debug": {},
+  "config": {
+    "orientation": "paysage",
+    "ratio": "16:9",
+    "luminosite": 75,
+    "sonActif": false,
+    "planningActif": true,
+    "modeNuitActif": true,
+    "programmationActive": true
+  }
+}
+```
 
 ---
 
-## 📞 Support
+## 10. Régénération de token — `POST /see/API/ecran/{uuid}/regenerate-token`
 
-En cas de problème avec l'API :
-1. Vérifier que l'UUID de l'écran est correct (visible dans l'interface d'administration)
-2. Vérifier que l'écran est activé dans SOEK
-3. Consulter les logs de la console seedisplay
-4. Contacter l'administrateur SOEK
+> Requiert `ROLE_ADMIN_SEE`
+
+| Code | Réponse |
+|------|---------|
+| 200 | `{ "success": true, "token": "new-token" }` |
+| 500 | `{ "success": false, "error": "Erreur lors de la régénération du token" }` |
 
 ---
 
-*Documentation mise à jour le 21 janvier 2026*
+## 11. APIs internes AJAX
+
+> Requiert `ROLE_ADMINSOE`
+
+| Route | Description | Réponse |
+|-------|-------------|---------|
+| `GET /see/api/users-by-entitee/{id}` | Utilisateurs d'une organisation | `[{ "id": 1, "label": "Nom" }]` |
+| `GET /see/api/dossiers-by-entitee/{id}` | Dossiers médias d'une org | `[{ "id": 1, "nom": "...", "type": "..." }]` |
+| `GET /see/api/ecrans-by-entitee/{id}` | Écrans d'une organisation | `[{ "id": 1, "nom": "..." }]` |
+
+---
+
+## Notes techniques
+
+### Rafraîchissement
+- `refreshInterval` (défaut 300s, min 60, max 600) : intervalle entre chaque appel de SEE Display.
+- En mode auto nuit, les heures solaires changent quotidiennement. Le cache serveur (6h) + le refresh régulier garantissent des heures à jour.
+
+### Calcul de luminosité
+Le champ racine `luminosite` est **pré-calculé côté serveur** en tenant compte du mode nuit (fixe ou auto). Le client (`SleepManager`) fait aussi sa propre vérification toutes les 60 secondes avec `heureDebut`/`heureFin` pour des transitions fluides entre les appels API.
+
+### Mode nuit auto — API externe
+Le serveur utilise [sunrise-sunset.org](https://api.sunrise-sunset.org) (gratuit, pas de clé API) pour récupérer les heures de lever/coucher. Les données sont converties en heure de Paris (`Europe/Paris`) et mises en cache 6h. Une nouvelle date = une nouvelle clé de cache = un nouvel appel automatique.
