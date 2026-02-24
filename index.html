@@ -278,7 +278,7 @@
       width: 100%;
       height: 100%;
       display: none;
-      z-index: 5;
+      z-index: 100;
     }
 
     /* Conteneur pour le planning du jour */
@@ -772,9 +772,10 @@
     </div>
     <div id="divImg1"></div>
     <div id="divImg2"></div>
-    <!-- Conteneur pour les templates dynamiques (événements, planning) -->
-    <div id="templateContainer"></div>
   </div>
+
+  <!-- Conteneur pour les templates dynamiques (événements, planning) -->
+  <div id="templateContainer"></div>
 
   <!-- Conteneur pour le planning du jour (affiché selon config API) -->
   <div id="planningContainer"></div>
@@ -1161,6 +1162,11 @@
     __log('info','setup','Showing setup screen')
     document.getElementById('loadingScreen').style.display = 'none'
     document.getElementById('setupScreen').classList.add('active')
+    // Désactiver fullscreen/kiosk pour pouvoir copier token/uuid depuis d'autres fichiers
+    if (window.api && typeof window.api.enterSetupMode === 'function') {
+      window.api.enterSetupMode()
+      __log('info','setup','Setup mode activated - fullscreen/kiosk disabled')
+    }
     
     // Pré-remplir avec la config existante si disponible
     const cfg = config || window.configSEE || {}
@@ -1274,6 +1280,11 @@
 
       statusDiv.textContent = '✅ Configuration sauvegardée! Redémarrage...'
       
+      // Ré-activer le mode kiosk avant de recharger
+      if (window.api && typeof window.api.leaveSetupMode === 'function') {
+        window.api.leaveSetupMode()
+      }
+      
       // Attendre un peu puis recharger
       setTimeout(() => {
         window.location.reload()
@@ -1331,33 +1342,51 @@
       
       // Appeler la fonction legacy pour appliquer la configuration et déclencher les flux (diapo / meteo)
       if (typeof getConfigSEE === 'function') {
-        __log('info','bootstrap','calling legacy getConfigSEE()')
-        getConfigSEE()
+        try {
+          __log('info','bootstrap','calling legacy getConfigSEE()')
+          getConfigSEE()
+        } catch (legacyErr) {
+          __log('error','bootstrap','getConfigSEE() threw:', legacyErr?.message || legacyErr?.stack || JSON.stringify(legacyErr))
+        }
         configLoaded = true;
         checkLoadingComplete();
         // Démarrer le timer de l'heure pour mise à jour permanente
-        if (typeof startClockTimer === 'function') {
-          startClockTimer();
-          __log('info','bootstrap','clock timer started')
-        }
-        // Démarrer le HeartbeatManager pour envoyer le statut au serveur
-        if (window.HeartbeatManager && config.ecranUuid) {
-          window.heartbeatManager = new HeartbeatManager({ interval: 30000 });
-          window.heartbeatManager.init({
-            ecranUuid: config.ecranUuid,
-            apiToken: config.apiToken,
-            env: config.env || 'beta'
-          });
-          window.heartbeatManager.start();
-          __log('info','bootstrap','HeartbeatManager started (30s interval)')
+        try {
+          if (typeof startClockTimer === 'function') {
+            startClockTimer();
+            __log('info','bootstrap','clock timer started')
+          }
+        } catch (clockErr) {
+          __log('error','bootstrap','startClockTimer threw:', clockErr?.message || clockErr)
         }
       } else {
         __log('warn','bootstrap','legacy getConfigSEE not present')
         configLoaded = true;
         checkLoadingComplete();
       }
+
+      // Démarrer le HeartbeatManager indépendamment (ne doit pas être bloqué par getConfigSEE)
+      try {
+        if (window.HeartbeatManager && config.ecranUuid) {
+          window.heartbeatManager = new HeartbeatManager({ interval: 30000 });
+          window.heartbeatManager.init({
+            ecranUuid: config.ecranUuid,
+            apiToken: config.apiToken,
+            env: config.env || 'beta',
+            screenWidth: config.screenWidth,
+            screenHeight: config.screenHeight,
+            screenOrientation: config.screenOrientation
+          });
+          window.heartbeatManager.start();
+          __log('info','bootstrap','HeartbeatManager started (30s interval)')
+        } else {
+          __log('warn','bootstrap','HeartbeatManager not started: HeartbeatManager=' + !!window.HeartbeatManager + ' ecranUuid=' + !!config.ecranUuid)
+        }
+      } catch (hbErr) {
+        __log('error','bootstrap','HeartbeatManager init failed:', hbErr?.message || hbErr)
+      }
     } catch (e) {
-      __log('error','bootstrap','Error applying config to legacy flow', e)
+      __log('error','bootstrap','Error applying config to legacy flow:', e?.message || e?.stack || JSON.stringify(e))
       configLoaded = true;
       checkLoadingComplete();
     }

@@ -1212,3 +1212,486 @@
     opacity: 0.9;
     max-width: 70%;
 }
+
+/* ============================
+   TEMPLATE TRAFIC (IDFM)
+   Style unifié "planning"
+   ============================ */
+.trafic-template {
+    --trafic-primary: #0866C6;
+    font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #f5f7fa, #e4e8ed);
+    color: #1a1a2e;
+    overflow: hidden;
+}
+
+/* Header - même style que planning */
+.trafic-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5vh 3vw;
+    border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+    flex-shrink: 0;
+}
+
+.trafic-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1.2vw;
+}
+
+.trafic-header-icon {
+    width: 3vw;
+    height: 3vw;
+    color: var(--trafic-primary);
+    flex-shrink: 0;
+}
+
+.trafic-titre {
+    font-size: 2.6vw;
+    font-weight: 600;
+    margin: 0;
+    color: #1a1a2e;
+}
+
+.trafic-header-right {
+    display: flex;
+    align-items: center;
+    gap: 2vw;
+}
+
+.trafic-clock {
+    font-size: 3.8vw;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #1a1a2e;
+}
+
+/* Content area - NO scroll */
+.trafic-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 1vh 2vw;
+    gap: 0;
+    overflow: hidden;
+}
+
+.trafic-content::-webkit-scrollbar {
+    display: none;
+}
+
+/* Each departure row */
+.trafic-departure {
+    display: flex;
+    align-items: center;
+    gap: 1vw;
+    padding: 0.8vh 1.2vw;
+    background: rgba(255, 255, 255, 0.8);
+    margin-bottom: 0.5vh;
+    border-left: 0.3vw solid var(--trafic-primary);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.trafic-dep-imminent {
+    background: rgba(52, 152, 219, 0.12);
+    border-left-width: 0.5vw;
+}
+
+/* Line badge (colored) */
+.trafic-line-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 3vw;
+    height: 3vh;
+    padding: 0 0.6vw;
+    border-radius: 0.5vw;
+    font-size: 1.4vw;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Direction + stop label */
+.trafic-dep-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 0.1vh;
+}
+
+.trafic-direction {
+    font-size: 1.4vw;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #1a1a2e;
+}
+
+.trafic-stop-label {
+    font-size: 0.9vw;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Time column */
+.trafic-dep-time {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    flex-shrink: 0;
+    min-width: 6vw;
+}
+
+.trafic-time {
+    font-size: 1.7vw;
+    font-weight: 700;
+    white-space: nowrap;
+    color: var(--trafic-primary);
+}
+
+.trafic-time-imminent {
+    color: #e53e3e;
+    animation: trafic-pulse 1.5s ease-in-out infinite;
+}
+
+.trafic-hour {
+    font-size: 1vw;
+    color: #999;
+}
+
+/* Loading state */
+.trafic-loading {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3vh;
+    font-size: 2vw;
+    color: #888;
+}
+
+.trafic-spinner {
+    width: 4vw;
+    height: 4vw;
+    border: 0.3vw solid rgba(0, 0, 0, 0.1);
+    border-top-color: var(--trafic-primary);
+    border-radius: 50%;
+    animation: trafic-spin 1s linear infinite;
+}
+
+/* Error/empty states */
+.trafic-empty,
+.trafic-error-row,
+.trafic-no-deps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5vh 2vw;
+    font-size: 2vw;
+    color: #999;
+    font-style: italic;
+}
+
+.trafic-error-row {
+    color: #e53e3e;
+}
+
+@keyframes trafic-spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes trafic-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* ============================
+   TEMPLATE MÉTÉO (Open-Meteo)
+   Style unifié "planning"
+   ============================ */
+.meteo-template {
+    font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #f5f7fa, #e4e8ed);
+    color: #1a1a2e;
+    overflow: hidden;
+}
+
+/* Header - même style que planning / trafic */
+.meteo-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5vh 3vw;
+    color: white;
+    flex-shrink: 0;
+}
+
+.meteo-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1.2vw;
+}
+
+.meteo-header-icon {
+    width: 3vw;
+    height: 3vw;
+    color: white;
+    flex-shrink: 0;
+}
+
+.meteo-titre {
+    font-size: 2.6vw;
+    font-weight: 600;
+    margin: 0;
+    text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.meteo-header-right {
+    display: flex;
+    align-items: center;
+    gap: 2vw;
+}
+
+.meteo-ville {
+    font-size: 2vw;
+    opacity: 0.95;
+    font-weight: 500;
+}
+
+.meteo-clock {
+    font-size: 3.8vw;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Content area */
+.meteo-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 2vh 3vw;
+    gap: 2vh;
+    overflow: hidden;
+}
+
+/* ── Bloc Aujourd'hui ── */
+.meteo-current {
+    display: flex;
+    align-items: center;
+    gap: 3vw;
+    background: rgba(255, 255, 255, 0.85);
+    padding: 2vh 3vw;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    border-left: 0.4vw solid var(--trafic-primary, #0866C6);
+}
+
+.meteo-current-icon {
+    width: 12vw;
+    height: 12vw;
+    object-fit: contain;
+    flex-shrink: 0;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.15));
+}
+
+.meteo-current-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5vh;
+    flex: 1;
+}
+
+.meteo-current-temp {
+    font-size: 8vw;
+    font-weight: 700;
+    line-height: 1;
+    color: #1a1a2e;
+}
+
+.meteo-current-label {
+    font-size: 2.2vw;
+    font-weight: 500;
+    color: #444;
+}
+
+.meteo-current-wind {
+    font-size: 1.6vw;
+    color: #666;
+    margin-top: 0.5vh;
+}
+
+/* Lever / Coucher de soleil */
+.meteo-sun-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1vh;
+    flex-shrink: 0;
+    align-items: flex-end;
+}
+
+.meteo-sun-item {
+    display: flex;
+    align-items: center;
+    gap: 0.8vw;
+    font-size: 1.5vw;
+    color: #555;
+    font-weight: 500;
+}
+
+.meteo-sun-icon {
+    width: 2.5vw;
+    height: 2.5vw;
+    object-fit: contain;
+}
+
+/* ── Bloc Prévisions ── */
+.meteo-forecast {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.meteo-forecast-title {
+    font-size: 1.8vw;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 1vh;
+    padding-left: 0.5vw;
+}
+
+.meteo-forecast-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5vw;
+    flex: 1;
+}
+
+.meteo-forecast-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.85);
+    padding: 1.5vh 1vw;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    border-top: 0.3vw solid var(--trafic-primary, #0866C6);
+    gap: 0.8vh;
+    transition: transform 0.2s ease;
+}
+
+.meteo-forecast-day {
+    font-size: 1.6vw;
+    font-weight: 600;
+    color: #1a1a2e;
+    text-transform: capitalize;
+}
+
+.meteo-forecast-icon {
+    width: 5vw;
+    height: 5vw;
+    object-fit: contain;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.12));
+}
+
+.meteo-forecast-label {
+    font-size: 1.2vw;
+    color: #666;
+    text-align: center;
+    line-height: 1.3;
+}
+
+.meteo-forecast-temps {
+    display: flex;
+    gap: 1vw;
+    font-size: 1.8vw;
+    font-weight: 600;
+}
+
+.meteo-temp-max {
+    color: #e53e3e;
+}
+
+.meteo-temp-min {
+    color: #3182ce;
+}
+
+/* ── Mode portrait ── */
+@media (orientation: portrait) {
+    .meteo-current {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .meteo-current-icon {
+        width: 20vw;
+        height: 20vw;
+    }
+
+    .meteo-current-temp {
+        font-size: 14vw;
+    }
+
+    .meteo-current-label {
+        font-size: 3.5vw;
+    }
+
+    .meteo-current-wind {
+        font-size: 2.5vw;
+    }
+
+    .meteo-sun-info {
+        flex-direction: row;
+        gap: 4vw;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .meteo-sun-item {
+        font-size: 2.5vw;
+    }
+
+    .meteo-sun-icon {
+        width: 4vw;
+        height: 4vw;
+    }
+
+    .meteo-forecast-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .meteo-forecast-day {
+        font-size: 2.5vw;
+    }
+
+    .meteo-forecast-icon {
+        width: 8vw;
+        height: 8vw;
+    }
+
+    .meteo-forecast-label {
+        font-size: 2vw;
+    }
+
+    .meteo-forecast-temps {
+        font-size: 3vw;
+    }
+}

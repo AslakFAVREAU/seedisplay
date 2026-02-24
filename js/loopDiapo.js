@@ -70,9 +70,9 @@ function hideAllMedia() {
 }
 
 /**
- * Affiche un média - version ultra-simple
+ * Affiche un média - version robuste avec vérification de téléchargement
  */
-function showMedia(mediaIndex) {
+async function showMedia(mediaIndex) {
     if (window.DEBUG_MODE) {
         __log('info', 'diapo', 'DEBUG_MODE=true - staying on pageDefault');
         return;
@@ -92,6 +92,18 @@ function showMedia(mediaIndex) {
     // Wrap-around - afficher pageDefault entre chaque cycle (sauf si masquerPageDefault)
     if (mediaIndex >= mediaLoop.length) {
         __log('info', 'diapo', 'wrap-around detected: index=' + mediaIndex + ' length=' + mediaLoop.length);
+        
+        // Vérifier les mises à jour à chaque fin de boucle (non bloquant)
+        try {
+            if (window.api && typeof window.api.checkForUpdates === 'function') {
+                __log('debug', 'diapo', 'loop end: checking for app updates...');
+                window.api.checkForUpdates().then(res => {
+                    if (res && res.updateInfo && res.updateInfo.version) {
+                        __log('info', 'diapo', 'update available: v' + res.updateInfo.version);
+                    }
+                }).catch(() => {});
+            }
+        } catch (e) { /* silently ignore */ }
         
         // Si masquerPageDefault est activé, boucler directement sans pause
         if (window.masquerPageDefault) {
@@ -169,6 +181,23 @@ function showMedia(mediaIndex) {
         const sourceId = 'srcVideo' + player;
         
         __log('debug', 'diapo', 'loading video in ' + divId);
+        
+        // Vérifier que la vidéo existe localement, sinon télécharger
+        try {
+            const relativePath = 'media/' + mediaFile;
+            const exists = window.api && window.api.existsSync ? window.api.existsSync(relativePath) : true;
+            if (!exists) {
+                __log('warn', 'diapo', 'video not cached, downloading: ' + mediaFile);
+                const baseUrl = typeof getMediaBaseUrl === 'function' ? getMediaBaseUrl() : 'https://soek.fr/uploads/see/media/';
+                if (window.api && window.api.saveBinaryWithCache) {
+                    await window.api.saveBinaryWithCache(relativePath, baseUrl + mediaFile);
+                } else if (window.api && window.api.saveBinary) {
+                    await window.api.saveBinary(relativePath, baseUrl + mediaFile);
+                }
+            }
+        } catch (dlErr) {
+            __log('warn', 'diapo', 'video download check failed: ' + dlErr.message);
+        }
         
         try {
             const url = pathMedia + mediaFile.replace("%20", '%2520');
@@ -293,51 +322,89 @@ function showMedia(mediaIndex) {
         
         __log('debug', 'diapo', 'preloading image in ' + divId);
         
-        try {
-            const url = pathMedia + mediaFile.replace("%20", '%2520');
-            const divEl = document.getElementById(divId);
-            
-            if (!divEl) {
-                __log('error', 'diapo', divId + ' NOT FOUND in DOM!');
-                return;
+        // Vérifier que le fichier existe localement, sinon le télécharger d'abord
+        const ensureMediaReady = async (fileName) => {
+            try {
+                const relativePath = 'media/' + fileName;
+                const exists = window.api && window.api.existsSync ? window.api.existsSync(relativePath) : true;
+                if (exists) return true;
+                
+                __log('warn', 'diapo', 'media not cached locally, downloading: ' + fileName);
+                const baseUrl = typeof getMediaBaseUrl === 'function' ? getMediaBaseUrl() : 'https://soek.fr/uploads/see/media/';
+                if (window.api && window.api.saveBinaryWithCache) {
+                    const res = await window.api.saveBinaryWithCache(relativePath, baseUrl + fileName);
+                    return res && res.success;
+                } else if (window.api && window.api.saveBinary) {
+                    await window.api.saveBinary(relativePath, baseUrl + fileName);
+                    return true;
+                }
+                return false;
+            } catch (e) {
+                __log('error', 'diapo', 'ensureMediaReady error: ' + e.message);
+                return false;
             }
-            
-            // Précharger l'image EN ARRIÈRE-PLAN
-            divEl.style.display = 'none';
-            
-            // Créer un Image object pour précharger
-            const img = new Image();
-            img.onload = () => {
-                __log('debug', 'diapo', 'image preloaded, applying background and switching');
+        };
+        
+        // Lancer le check+download en async, mais ne PAS attendre indéfiniment
+        const doShowImage = () => {
+            try {
+                const url = pathMedia + mediaFile.replace("%20", '%2520');
+                const divEl = document.getElementById(divId);
                 
-                // Appliquer le background
-                divEl.style.backgroundImage = "url('" + url + "')";
+                if (!divEl) {
+                    __log('error', 'diapo', divId + ' NOT FOUND in DOM!');
+                    return;
+                }
                 
-                // TRANSITION CUT : cacher l'ancien, afficher le nouveau INSTANTANÉMENT
-                hideAllMediaExcept(divId);
-                divEl.style.display = 'block';
-                currentVisibleDiv = divId;
+                // Créer un Image object pour précharger
+                const img = new Image();
+                let imageHandled = false;
                 
-                __log('info', 'diapo', divId + ' NOW DISPLAYED! (CUT transition)');
-            };
-            
-            img.onerror = () => {
-                __log('error', 'diapo', 'image preload failed, trying direct display');
-                // Fallback : afficher quand même
-                divEl.style.backgroundImage = "url('" + url + "')";
-                hideAllMediaExcept(divId);
-                divEl.style.display = 'block';
-                currentVisibleDiv = divId;
-            };
-            
-            img.src = url;
-            
-            // Toggle pour la prochaine
-            imgShow = (imgShow === 1) ? 2 : 1;
-            
-        } catch(e) {
-            __log('error', 'diapo', 'image error: ' + e.message);
-        }
+                img.onload = () => {
+                    if (imageHandled) return;
+                    imageHandled = true;
+                    __log('debug', 'diapo', 'image preloaded OK, switching');
+                    divEl.style.backgroundImage = "url('" + url + "')";
+                    hideAllMediaExcept(divId);
+                    divEl.style.display = 'block';
+                    currentVisibleDiv = divId;
+                    __log('info', 'diapo', divId + ' NOW DISPLAYED! (CUT transition)');
+                };
+                
+                img.onerror = () => {
+                    if (imageHandled) return;
+                    imageHandled = true;
+                    __log('error', 'diapo', 'image preload failed for ' + mediaFile + ', skipping');
+                    // Passer au suivant au lieu d'afficher un écran noir
+                    setTimeout(() => showMedia(currentMediaIndex + 1), 500);
+                };
+                
+                // Timeout de sécurité : si l'image ne charge pas en 8s, skip
+                setTimeout(() => {
+                    if (!imageHandled) {
+                        imageHandled = true;
+                        __log('error', 'diapo', 'image load timeout for ' + mediaFile + ', skipping');
+                        setTimeout(() => showMedia(currentMediaIndex + 1), 200);
+                    }
+                }, 8000);
+                
+                img.src = url;
+            } catch(e) {
+                __log('error', 'diapo', 'image error: ' + e.message);
+                setTimeout(() => showMedia(currentMediaIndex + 1), 500);
+            }
+        };
+        
+        // Vérifier et télécharger si nécessaire, puis afficher
+        ensureMediaReady(mediaFile).then(ok => {
+            if (!ok) {
+                __log('warn', 'diapo', 'media still not available after download attempt: ' + mediaFile);
+            }
+            doShowImage();
+        }).catch(() => doShowImage());
+        
+        // Toggle pour la prochaine
+        imgShow = (imgShow === 1) ? 2 : 1;
         
         // Programmer le prochain (seulement pour les images)
         __log('debug', 'diapo', 'scheduling next in ' + (delay/1000) + 's');
@@ -357,7 +424,14 @@ function showMedia(mediaIndex) {
             
             // Utiliser le TemplateRenderer global
             if (window.templateRenderer) {
-                window.templateRenderer.show(templateData, delay / 1000);
+                // await la Promise de show() — elle se résout quand le template a fini
+                // (inclut le temps de fetch pour trafic/meteo + la durée d'affichage)
+                window.templateRenderer.show(templateData, delay / 1000).then(() => {
+                    showMedia(currentMediaIndex + 1);
+                }).catch((e) => {
+                    __log('error', 'diapo', 'template show error: ' + (e && e.message));
+                    showMedia(currentMediaIndex + 1);
+                });
             } else {
                 __log('error', 'diapo', 'templateRenderer not available');
                 // Fallback: passer au suivant
@@ -371,15 +445,8 @@ function showMedia(mediaIndex) {
             return;
         }
         
-        // Programmer le prochain après la durée du template
-        __log('debug', 'diapo', 'scheduling next template in ' + (delay/1000) + 's');
-        loopTimeout = setTimeout(() => {
-            // Cacher le template avant de passer au suivant
-            if (window.templateRenderer) {
-                window.templateRenderer.hide();
-            }
-            showMedia(currentMediaIndex + 1);
-        }, delay);
+        // Le passage au suivant est géré par le .then() ci-dessus
+        // (plus besoin de setTimeout dupliqué)
         
     } else if (mediaType === 'planning') {
         // Afficher le planning du jour (mode fullscreen intégré à la boucle)
@@ -547,8 +614,9 @@ function computeMediaSignature(list) {
 
 /**
  * Appliquer une mise à jour de diapos à chaud
+ * Télécharge les nouveaux médias AVANT de relancer la boucle
  */
-function applyDiapoUpdate(newList) {
+async function applyDiapoUpdate(newList) {
     try {
         const nextSignature = computeMediaSignature(newList)
         const hasChanged = nextSignature !== mediaLoopSignature
@@ -579,7 +647,14 @@ function applyDiapoUpdate(newList) {
             return
         }
 
-        __log('info', 'diapo', 'applyDiapoUpdate: media list changed, restarting loop')
+        __log('info', 'diapo', 'applyDiapoUpdate: media list changed (' + newList.length + ' items)')
+
+        // Télécharger les nouveaux médias AVANT de relancer la boucle
+        if (typeof window.downloadAllMedia === 'function') {
+            __log('info', 'diapo', 'applyDiapoUpdate: downloading new media before restart...')
+            await window.downloadAllMedia(newList, 20000)
+        }
+
         mediaLoop = newList
         mediaLoopSignature = nextSignature
 
@@ -588,9 +663,36 @@ function applyDiapoUpdate(newList) {
             return
         }
 
+        // Prefetch les données trafic pour éviter le spinner
+        _prefetchTraficTemplates(newList);
+        
+        __log('info', 'diapo', 'applyDiapoUpdate: restarting loop')
         LoopDiapo()
     } catch (e) {
         __log('error', 'diapo', 'applyDiapoUpdate error: ' + e.message)
+    }
+}
+
+/**
+ * Prefetch les données trafic si la boucle contient un template trafic.
+ * Appelé dès que la liste de médias est chargée, AVANT affichage.
+ */
+function _prefetchTraficTemplates(mediaList) {
+    if (!mediaList || !Array.isArray(mediaList)) return;
+    try {
+        for (const item of mediaList) {
+            if (!item || item[0] !== 'template') continue;
+            const tplData = item[1];
+            if (tplData && tplData.type === 'trafic' && tplData.arrets && tplData.apiKey) {
+                __log('info', 'diapo', 'prefetching trafic departures in background...');
+                if (window.templateRenderer) {
+                    window.templateRenderer.prefetchTrafic(tplData);
+                }
+                break; // Un seul template trafic à la fois
+            }
+        }
+    } catch(e) {
+        __log('debug', 'diapo', 'prefetch trafic error: ' + e.message);
     }
 }
 

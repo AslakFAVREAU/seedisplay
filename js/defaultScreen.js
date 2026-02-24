@@ -184,6 +184,97 @@ if (typeof window !== 'undefined') {
 }
 
 /**
+ * Télécharge tous les médias d'une liste (await-able).
+ * Résout une fois que tous les fichiers sont téléchargés ou que le timeout global est atteint.
+ * @param {Array} mediaList - ArrayDiapo format [[type, file, duration, ...], ...]
+ * @param {number} [timeoutMs=30000] - timeout max global en ms
+ * @returns {Promise<{downloaded: number, skipped: number, failed: number}>}
+ */
+async function downloadAllMedia(mediaList, timeoutMs) {
+    timeoutMs = timeoutMs || 30000
+    const stats = { downloaded: 0, skipped: 0, failed: 0 }
+    if (!mediaList || !Array.isArray(mediaList) || !mediaList.length) return stats
+    if (!window.api) return stats
+
+    const baseUrl = typeof getMediaBaseUrl === 'function' ? getMediaBaseUrl() : 'https://soek.fr/uploads/see/media/'
+
+    // Collecter les noms de fichiers uniques (ignorer templates/planning)
+    const fileSet = new Set()
+    for (const item of mediaList) {
+        if (!item || !Array.isArray(item) || item.length < 2) continue
+        const type = item[0]
+        const file = item[1]
+        if (!file || typeof file !== 'string') continue
+        if (type === 'template' || type === 'planning') continue
+        fileSet.add(file)
+    }
+
+    if (!fileSet.size) return stats
+
+    const files = Array.from(fileSet)
+    __log('info', 'download', 'downloadAllMedia: ' + files.length + ' unique files to check')
+
+    // Télécharger en parallèle (max 3 simultanés) avec timeout global
+    const concurrency = 3
+    let idx = 0
+    let done = false
+
+    const globalTimeout = new Promise(resolve => setTimeout(() => {
+        if (!done) __log('warn', 'download', 'downloadAllMedia: global timeout reached (' + timeoutMs + 'ms)')
+        done = true
+        resolve()
+    }, timeoutMs))
+
+    async function worker() {
+        while (idx < files.length && !done) {
+            const file = files[idx++]
+            const relativePath = 'media/' + file
+            const url = baseUrl + file
+            try {
+                // Vérifier si le fichier existe déjà localement
+                const exists = window.api.existsSync ? window.api.existsSync(relativePath) : false
+                if (exists) {
+                    stats.skipped++
+                    continue
+                }
+                // Télécharger
+                if (window.api.saveBinaryWithCache) {
+                    const res = await window.api.saveBinaryWithCache(relativePath, url)
+                    if (res && res.success) {
+                        stats.downloaded++
+                        __log('debug', 'download', 'OK: ' + file + (res.cached ? ' (cached)' : ' (' + res.size + 'b)'))
+                    } else {
+                        stats.failed++
+                        __log('warn', 'download', 'FAIL: ' + file)
+                    }
+                } else if (window.api.saveBinary) {
+                    await window.api.saveBinary(relativePath, url)
+                    stats.downloaded++
+                } else {
+                    stats.skipped++
+                }
+            } catch (e) {
+                stats.failed++
+                __log('warn', 'download', 'error downloading ' + file + ': ' + (e && e.message))
+            }
+        }
+    }
+
+    const workers = []
+    for (let i = 0; i < concurrency; i++) workers.push(worker())
+
+    await Promise.race([Promise.all(workers), globalTimeout])
+    done = true
+
+    __log('info', 'download', 'downloadAllMedia complete: ' + stats.downloaded + ' new, ' + stats.skipped + ' cached, ' + stats.failed + ' failed')
+    return stats
+}
+
+if (typeof window !== 'undefined') {
+    window.downloadAllMedia = downloadAllMedia
+}
+
+/**
  * Show sleep screen when API returns status "sleep"
  * Uses typeHorsPlage to determine display type:
  * - "noir" (default): black screen
@@ -300,14 +391,25 @@ function showSleepScreen() {
             sleepScreen.style.backgroundPosition = 'center'
         }
     } else {
-        // "noir" or default - black screen with optional wakeup info
-        if (prochainDemarrage) {
-            sleepScreen.innerHTML = `
-                <div style="color: #333; font-size: 1.5em; font-family: Arial, sans-serif;">
-                    Prochain démarrage : ${prochainDemarrage}
-                </div>
-            `
-        }
+        // "noir" or default - black screen with moon icon anti burn-in
+        var wakeupHtml = prochainDemarrage 
+            ? `<div id="sleep-wakeup-text" style="margin-top:12px; color:#666; font-size:0.3em; font-family:Arial,sans-serif;">Prochain démarrage : ${prochainDemarrage}</div>` 
+            : ''
+        sleepScreen.innerHTML = `
+            <div id="sleep-moon-icon" style="
+                position: absolute;
+                opacity: 0;
+                transition: opacity 3s ease-in-out;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                font-size: 5em;
+                pointer-events: none;
+                filter: grayscale(1) brightness(0.25);
+            ">🌙${wakeupHtml}</div>
+        `
+        // Start moon position cycling after layout
+        setTimeout(function() { _startMoonCycle() }, 100)
     }
     
     sleepScreen.style.display = "flex"
@@ -361,6 +463,58 @@ function showSleepScreen() {
 }
 
 /**
+ * Moon icon anti burn-in cycle for sleep screen.
+ * Alternates between positions with smooth 3s fade transitions.
+ */
+var _moonPositions = [
+    { top: '15%', left: '20%' },
+    { top: '70%', left: '75%' },
+    { top: '25%', left: '70%' },
+    { top: '65%', left: '15%' },
+    { top: '45%', left: '50%' },
+    { top: '10%', left: '50%' },
+    { top: '80%', left: '40%' },
+]
+var _moonIndex = 0
+
+function _startMoonCycle() {
+    var moon = document.getElementById('sleep-moon-icon')
+    if (!moon) return
+
+    // Place initial position + fade in
+    var pos = _moonPositions[0]
+    moon.style.top = pos.top
+    moon.style.left = pos.left
+    requestAnimationFrame(function() {
+        moon.style.opacity = '1'
+    })
+
+    // Clear existing timer
+    if (window._moonCycleTimer) clearInterval(window._moonCycleTimer)
+
+    // Cycle every 30 seconds: fade out → move → fade in
+    window._moonCycleTimer = setInterval(function() {
+        var m = document.getElementById('sleep-moon-icon')
+        if (!m) { clearInterval(window._moonCycleTimer); return }
+
+        // Fade out
+        m.style.opacity = '0'
+
+        // After fade-out (3s), move to next position + fade in
+        setTimeout(function() {
+            _moonIndex = (_moonIndex + 1) % _moonPositions.length
+            var p = _moonPositions[_moonIndex]
+            m.style.top = p.top
+            m.style.left = p.left
+            // Fade in
+            requestAnimationFrame(function() {
+                m.style.opacity = '1'
+            })
+        }, 3200) // Slightly longer than the 3s CSS transition
+    }, 30000) // Move every 30s
+}
+
+/**
  * Hide sleep screen (called when exiting sleep mode)
  */
 function hideSleepScreen() {
@@ -379,6 +533,11 @@ function hideSleepScreen() {
     if (window.sleepRefreshTimer) {
         clearInterval(window.sleepRefreshTimer)
         window.sleepRefreshTimer = null
+    }
+    // Clear moon cycle timer
+    if (window._moonCycleTimer) {
+        clearInterval(window._moonCycleTimer)
+        window._moonCycleTimer = null
     }
 }
 
@@ -461,77 +620,36 @@ if (monthGif == 11)
     document.getElementById("divImg2").style.backgroundImage = "url(" + url + ")";
 
 
-    // Avant de demarer la boucle on lance le telechargement des medias
-    setTimeout(function () {
+    // Téléchargement robuste : télécharger TOUS les médias, attendre, puis lancer la boucle
+    setTimeout(async function () {
         if (!ArrayDiapo || !ArrayDiapo.length) {
             __log('warn','default','aucun media dans ArrayDiapo, rien a telecharger')
-        } else {
-        for (downloadIndex = 0; downloadIndex < ArrayDiapo.length; downloadIndex++) {
-                try {
-                    const mediaName = ArrayDiapo[downloadIndex] && ArrayDiapo[downloadIndex][1]
-                    __log('debug','default','checking media', mediaName)
-                if (mediaName) {
-                    const exists = (window && window.api && typeof window.api.existsSync === 'function') ? window.api.existsSync('media/' + mediaName) : false
-                    if (!exists) {
-                        // use preload saveBinary when available
-                        if (window && window.api && typeof window.api.saveBinary === 'function') {
-                            const urlMedia = getMediaBaseUrl() + mediaName
-                            window.api.saveBinary('media/' + mediaName, urlMedia)
-                            __log('info','default','launching download via api.saveBinary for ' + mediaName + ' from ' + getMediaBaseUrl())
-                        } else {
-                            // fallback to renderer download (may not work without nodeIntegration)
-                            download(mediaName)
-                            __log('info','default','launching download fallback for ' + mediaName)
-                        }
-                    }
-                }
-            }
-            catch (err) { __log('error','default', err && err.message) }
+            return
         }
-        }
-    }, 2500)
 
+        __log('info','default','downloading all media before starting loop (' + ArrayDiapo.length + ' items)...')
+        await window.downloadAllMedia(ArrayDiapo)
+        __log('info','default','all media downloads complete, starting loop')
 
-    setTimeout(function () {
-        // Test si on a au moins un élément et si le 0 de la boucle est une video
-        if (ArrayDiapo && ArrayDiapo.length > 0 && ArrayDiapo[0][0] === 'video') {
-            __log('debug','default', playerLoad + ' player chargé dans boucle init')     
-            urlVideo = pathMedia + ArrayDiapo[0][1].replace("%20", '%2520')
-            document.getElementById("srcVideo" + playerLoad).src = urlVideo;
-            document.getElementById("video" + playerLoad).load()
-            playerLoad = 2
-             
-          
-        }
-        else if (ArrayDiapo && ArrayDiapo.length > 0 && ArrayDiapo[0][0] === 'img') {
-            url = pathMedia + ArrayDiapo[0][1].replace("%20", '%2520')
-            urlFinal = "url('" + url + "')"
-            document.getElementById("divImg" + imgLoad).style.backgroundImage = urlFinal;
-            __log('debug','default','on charge le imgLoad '+ imgLoad + ' le imgShow sera '+ imgShow)
-        
+        // Précharger le premier média
+        try {
+            if (ArrayDiapo[0][0] === 'video') {
+                urlVideo = pathMedia + ArrayDiapo[0][1].replace("%20", '%2520')
+                document.getElementById("srcVideo" + playerLoad).src = urlVideo
+                document.getElementById("video" + playerLoad).load()
+                playerLoad = 2
+            } else if (ArrayDiapo[0][0] === 'img') {
+                url = pathMedia + ArrayDiapo[0][1].replace("%20", '%2520')
+                document.getElementById("divImg" + imgLoad).style.backgroundImage = "url('" + url + "')";
                 imgShow = 1
                 imgLoad = 2
-             
-                
-        
             }
-        
-        
+        } catch (e) { __log('error','default','preload first media error: ' + e.message) }
 
-    }, 4000)
-
-
-
-
-    // Au bout de 5 Seconde on passe a la loop
-    setTimeout(function () {
-        document.getElementById("pageDefault").style.display = "none";        
+        // Lancer la boucle
+        document.getElementById("pageDefault").style.display = "none";
         LoopDiapo()
-
-       
-       
-    },
-        10000);
+    }, 2500);
 
 
 

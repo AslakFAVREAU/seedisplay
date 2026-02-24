@@ -682,6 +682,12 @@ function listeDiapoV2(data) {
   if (data.templates && Array.isArray(data.templates) && data.templates.length > 0) {
     _log('info','diapo','listeDiapoV2: processing ' + data.templates.length + ' dynamic templates')
     
+    // Log all received templates for debugging
+    for (var td = 0; td < data.templates.length; td++) {
+      var tdbg = data.templates[td]
+      _log('info','diapo','listeDiapoV2: template[' + td + '] type="' + (tdbg.type || 'NONE') + '" nom="' + (tdbg.nom || '') + '" actif=' + tdbg.actif + ' dataKeys=' + (tdbg.data ? Object.keys(tdbg.data).join(',') : 'NO_DATA'))
+    }
+    
     // Sort templates by ordre
     var sortedTemplates = data.templates.slice().sort(function(a, b) {
       return (a.ordre || 0) - (b.ordre || 0)
@@ -703,6 +709,7 @@ function listeDiapoV2(data) {
       if (templateType === 'anniversaires') templateType = 'anniversaire'
       if (templateType === 'menus') templateType = 'menu'
       if (templateType === 'annonces') templateType = 'annonce'
+      if (templateType === 'trafic') templateType = 'trafic'
       
       // API uses dureeAffichage, fallback to duree
       var templateDuree = template.dureeAffichage || template.duree || 15 // Default 15 seconds
@@ -809,6 +816,26 @@ function listeDiapoV2(data) {
           templateData.typeAnnonce = apiData.typeAnnonce || template.typeAnnonce || 'info'
           templateData.label = apiData.label || template.label
           templateData.contenu = apiData.contenu || template.contenu
+          break
+          
+        case 'trafic':
+          // Look for arrets/apiKey at multiple levels (data, config, template root)
+          templateData.arrets = apiData.arrets || template.arrets || config.arrets || []
+          templateData.apiKey = apiData.apiKey || config.apiKey || template.apiKey || ''
+          
+          _log('info','diapo','listeDiapoV2: trafic template "' + templateData.titre + '" - arrets=' + (templateData.arrets ? templateData.arrets.length : 0) + ', apiKey=' + (templateData.apiKey ? 'yes(' + templateData.apiKey.substring(0,6) + '...)' : 'MISSING'))
+          _log('info','diapo','listeDiapoV2: trafic FULL arrets JSON: ' + JSON.stringify(templateData.arrets, null, 0))
+          _log('info','diapo','listeDiapoV2: trafic raw apiData: ' + JSON.stringify(apiData, null, 0).substring(0, 500))
+          _log('info','diapo','listeDiapoV2: trafic raw config: ' + JSON.stringify(config, null, 0).substring(0, 500))
+          _log('debug','diapo','listeDiapoV2: trafic raw data keys: ' + Object.keys(apiData).join(',') + ' | config keys: ' + Object.keys(config).join(',') + ' | template keys: ' + Object.keys(template).join(','))
+          
+          // Warn but don't skip - show template with error state
+          if (!templateData.arrets || templateData.arrets.length === 0) {
+            _log('warn','diapo','listeDiapoV2: trafic template has no stops configured - will show empty state')
+          }
+          if (!templateData.apiKey) {
+            _log('warn','diapo','listeDiapoV2: trafic template has no API key - will show error state')
+          }
           break
       }
       
@@ -970,6 +997,21 @@ const getDiapoJson = async () => {
       return res
     } catch (error) {
   _log('error','diapo','getDiapoJson: error', error && error.message)
+      
+      // Last-resort fallback: try offline cache if ApiManager didn't already
+      try {
+        if (typeof window !== 'undefined' && window.apiCache) {
+          var cachedData = window.apiCache.get('diapo', true) // Allow expired
+          if (cachedData) {
+            _log('warn','diapo','getDiapoJson: ALL requests failed, using OFFLINE CACHE as last resort')
+            return { data: cachedData, status: 200, offline: true }
+          }
+        }
+      } catch (cacheErr) {
+        _log('error','diapo','getDiapoJson: cache fallback also failed: ' + (cacheErr && cacheErr.message))
+      }
+      
+      return null
     }
   }
 
@@ -1068,69 +1110,98 @@ const getDiapoJson = async () => {
     
     const JsonDiapo = await getDiapoJson()
     _log('debug','diapo','requestJsonDiapo: JsonDiapo=', JsonDiapo ? 'object' : 'null', 'JsonDiapo.data=', JsonDiapo && JsonDiapo.data ? 'present' : 'missing')
-    if (JsonDiapo) {
-      // Sauvegarder dans le cache pour le mode offline
-      if (typeof window !== 'undefined' && window.apiCache && JsonDiapo.data) {
-        window.apiCache.set('diapo', JsonDiapo.data)
-        _log('info','diapo','API response cached for offline mode')
+    
+    // === FAILURE HANDLING: API returned nothing ===
+    if (!JsonDiapo || !JsonDiapo.data) {
+      if (typeof window !== 'undefined') {
+        window.apiConsecutiveErrors = (window.apiConsecutiveErrors || 0) + 1
+        window.lastApiError = Date.now()
+        _log('error','diapo','requestJsonDiapo: API FAILURE #' + window.apiConsecutiveErrors + ' - no data received')
         
-        // Indiquer si on est en mode offline
-        if (JsonDiapo.offline) {
-          _log('warn','diapo','Using CACHED data (offline mode)')
-        }
-      }
-      
-      ArrayDiapo = listeDiapo(JsonDiapo.data)
-
-      // Sync media cache on every refresh to pick up modified files
-      syncMediaCache(ArrayDiapo)
-
-      // Check for sleep mode (API v2)
-      if (typeof window !== 'undefined' && window.screenStatus === 'sleep') {
-        _log('info','diapo','screen is in sleep mode - showing sleep screen')
-        showSleepScreen()
-        return
-      }
-      
-      // If we were sleeping but now active, hide sleep screen
-      if (typeof window !== 'undefined' && typeof hideSleepScreen === 'function') {
-        hideSleepScreen()
-      }
-
-      // Si aucune diapo n'est fournie, afficher l'écran par défaut pour éviter écran vide
-      if (!ArrayDiapo || ArrayDiapo.length === 0) {
-        _log('warn','diapo','no diapo entries returned, falling back to defaultScreen')
-        if (window.masquerPageDefault) {
-          try {
-            if (window.stopLoopDiapo) window.stopLoopDiapo()
-            const container = document.getElementById('mediaContainer')
-            const pageDefault = document.getElementById('pageDefault')
-            if (container) container.style.display = 'none'
-            if (pageDefault) pageDefault.style.display = 'none'
-          } catch (e) {}
-        } else {
+        // Keep existing diapos alive - don't wipe ArrayDiapo
+        if (ArrayDiapo && ArrayDiapo.length > 0) {
+          _log('warn','diapo','requestJsonDiapo: keeping current ' + ArrayDiapo.length + ' diapos alive during API failure')
+        } else if (init === true) {
+          // First load and API is already down: show defaultScreen as fallback
+          _log('warn','diapo','requestJsonDiapo: init with no data, showing defaultScreen')
           defaultScreen()
+          // Start refresh timer so we keep retrying
+          startRefreshTimer()
         }
-        return
       }
+      return
+    }
+    
+    // === SUCCESS: reset consecutive error counter ===
+    if (typeof window !== 'undefined') {
+      if (window.apiConsecutiveErrors > 0) {
+        _log('info','diapo','requestJsonDiapo: API recovered after ' + window.apiConsecutiveErrors + ' consecutive errors')
+      }
+      window.apiConsecutiveErrors = 0
+      window.lastApiError = null
+    }
 
-      // On ne fait l'instantiation de default screen que si on est sur la phase d'init sinon on ne fait que metre a jour le ArrayDiapo
-      if (init == true){   
-        _log('info','diapo','boucle init appelle defaultScreen')
+    // Sauvegarder dans le cache pour le mode offline
+    if (typeof window !== 'undefined' && window.apiCache && JsonDiapo.data) {
+      window.apiCache.set('diapo', JsonDiapo.data)
+      _log('info','diapo','API response cached for offline mode')
+      
+      // Indiquer si on est en mode offline
+      if (JsonDiapo.offline) {
+        _log('warn','diapo','Using CACHED data (offline mode)')
+      }
+    }
+    
+    ArrayDiapo = listeDiapo(JsonDiapo.data)
+
+    // Sync media cache on every refresh to pick up modified files
+    await syncMediaCache(ArrayDiapo)
+
+    // Check for sleep mode (API v2)
+    if (typeof window !== 'undefined' && window.screenStatus === 'sleep') {
+      _log('info','diapo','screen is in sleep mode - showing sleep screen')
+      showSleepScreen()
+      return
+    }
+    
+    // If we were sleeping but now active, hide sleep screen
+    if (typeof window !== 'undefined' && typeof hideSleepScreen === 'function') {
+      hideSleepScreen()
+    }
+
+    // Si aucune diapo n'est fournie, afficher l'écran par défaut pour éviter écran vide
+    if (!ArrayDiapo || ArrayDiapo.length === 0) {
+      _log('warn','diapo','no diapo entries returned, falling back to defaultScreen')
+      if (window.masquerPageDefault) {
+        try {
+          if (window.stopLoopDiapo) window.stopLoopDiapo()
+          const container = document.getElementById('mediaContainer')
+          const pageDefault = document.getElementById('pageDefault')
+          if (container) container.style.display = 'none'
+          if (pageDefault) pageDefault.style.display = 'none'
+        } catch (e) {}
+      } else {
         defaultScreen()
-        // Démarrer le timer de refresh automatique après l'init
-        startRefreshTimer()
       }
+      return
+    }
 
-      // Rafraîchir la boucle même si pageDefault est masquée
-      if (init !== true && typeof window !== 'undefined' && typeof window.applyDiapoUpdate === 'function') {
-        window.applyDiapoUpdate(ArrayDiapo)
-      }
+    // On ne fait l'instantiation de default screen que si on est sur la phase d'init sinon on ne fait que metre a jour le ArrayDiapo
+    if (init == true){   
+      _log('info','diapo','boucle init appelle defaultScreen')
+      defaultScreen()
+      // Démarrer le timer de refresh automatique après l'init
+      startRefreshTimer()
+    }
 
-      // S'assurer que le timer de refresh tourne même si init est déjà passé
-      if (!refreshTimer) {
-        startRefreshTimer()
-      }
+    // Rafraîchir la boucle même si pageDefault est masquée
+    if (init !== true && typeof window !== 'undefined' && typeof window.applyDiapoUpdate === 'function') {
+      window.applyDiapoUpdate(ArrayDiapo)
+    }
+
+    // S'assurer que le timer de refresh tourne même si init est déjà passé
+    if (!refreshTimer) {
+      startRefreshTimer()
     }
   }
   

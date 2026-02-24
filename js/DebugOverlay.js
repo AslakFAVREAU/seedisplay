@@ -579,12 +579,20 @@ class DebugOverlay {
                         <span class="config-value" id="config-server-night-mode">-</span>
                     </div>
                     <div class="config-group config-readonly">
+                        <label>Type</label>
+                        <span class="config-value" id="config-server-night-type">-</span>
+                    </div>
+                    <div class="config-group config-readonly">
                         <label>Horaires</label>
                         <span class="config-value" id="config-server-night-hours">-</span>
                     </div>
                     <div class="config-group config-readonly">
                         <label>Luminosité Nuit</label>
                         <span class="config-value" id="config-server-night-brightness">-</span>
+                    </div>
+                    <div class="config-group config-readonly" id="config-server-night-solaire-group" style="display:none">
+                        <label>Solaire</label>
+                        <span class="config-value" id="config-server-night-solaire">-</span>
                     </div>
                     
                     <div class="config-subsection">⏰ Programmation</div>
@@ -724,6 +732,11 @@ class DebugOverlay {
         document.getElementById('config-server-night-mode').textContent = 
             modeNuit.actif ? '✅ Actif' : '❌ Inactif';
         
+        // Type de mode nuit (fixe / auto)
+        const nightType = modeNuit.type || 'fixe';
+        document.getElementById('config-server-night-type').textContent = 
+            nightType === 'auto' ? '☀️ Auto (solaire)' : '🕐 Fixe';
+        
         document.getElementById('config-server-night-hours').textContent = 
             modeNuit.heureDebut && modeNuit.heureFin 
                 ? `${modeNuit.heureDebut} - ${modeNuit.heureFin}` 
@@ -731,6 +744,21 @@ class DebugOverlay {
         
         document.getElementById('config-server-night-brightness').textContent = 
             modeNuit.luminositeNuit !== undefined ? `${modeNuit.luminositeNuit}%` : '-';
+        
+        // Infos solaires (uniquement en mode auto)
+        const solaireGroup = document.getElementById('config-server-night-solaire-group');
+        const solaireEl = document.getElementById('config-server-night-solaire');
+        if (nightType === 'auto' && modeNuit.solaire) {
+            const s = modeNuit.solaire;
+            solaireGroup.style.display = '';
+            const decalageInfo = (s.decalageDebut || s.decalageFin) 
+                ? ` (décalage: +${s.decalageDebut || 0}/-${s.decalageFin || 0} min)` 
+                : '';
+            solaireEl.textContent = `🌅 ${s.lever || '-'} / 🌇 ${s.coucher || '-'}${decalageInfo}${s.ville ? ' — ' + s.ville : ''}`;
+        } else {
+            solaireGroup.style.display = 'none';
+            solaireEl.textContent = '-';
+        }
         
         // Section Programmation
         const prog = apiResponse.programmation || {};
@@ -1352,14 +1380,13 @@ class DebugOverlay {
         const uptime = Math.floor((Date.now() - this.startTime) / 1000);
         this._setValue('debug-uptime', this._formatDuration(uptime));
         
-        // Statut API
-        if (window.apiManager) {
-            const lastError = window.apiManager.lastError;
-            if (lastError) {
-                this._setValue('debug-api-status', 'Erreur', 'error');
-            } else {
-                this._setValue('debug-api-status', 'OK', 'ok');
-            }
+        // Statut API (avec compteur d'erreurs consécutives)
+        const consecutiveErrors = window.apiConsecutiveErrors || 0;
+        if (consecutiveErrors > 0) {
+            const lastErrAgo = window.lastApiError ? Math.round((Date.now() - window.lastApiError) / 1000) + 's' : '?';
+            this._setValue('debug-api-status', `❌ ${consecutiveErrors} erreur${consecutiveErrors > 1 ? 's' : ''} (il y a ${lastErrAgo})`, 'error');
+        } else if (window.apiManager) {
+            this._setValue('debug-api-status', '✅ OK', 'ok');
         } else {
             this._setValue('debug-api-status', '-');
         }
@@ -1449,8 +1476,15 @@ class DebugOverlay {
             const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
             const debut = apiResponse.modeNuit.heureDebut;
             const fin = apiResponse.modeNuit.heureFin;
+            const nightType = apiResponse.modeNuit.type || 'fixe';
             const isNight = this._isInNightMode(debut, fin, now);
-            this._setValue('debug-night-mode', isNight ? 'Actif' : 'Inactif (' + debut + '-' + fin + ')', isNight ? 'warning' : 'ok');
+            const typeLabel = nightType === 'auto' ? '☀️auto' : 'fixe';
+            const solaireVille = (nightType === 'auto' && apiResponse.modeNuit.solaire?.ville) ? ' — ' + apiResponse.modeNuit.solaire.ville : '';
+            if (isNight) {
+                this._setValue('debug-night-mode', `Actif [${typeLabel}]${solaireVille}`, 'warning');
+            } else {
+                this._setValue('debug-night-mode', `Inactif [${typeLabel}] (${debut}-${fin})${solaireVille}`, 'ok');
+            }
         } else {
             this._setValue('debug-night-mode', 'Désactivé');
         }

@@ -268,9 +268,22 @@ function getScreenDimensionsFromConfig() {
       // IMPORTANT: vérifier isCustomResolution - si false ou absent, on reste en fullscreen
       if (config.isCustomResolution === true && config.screenWidth && config.screenHeight) {
         log.info(`[main] Found CUSTOM dimensions in config: ${config.screenWidth}x${config.screenHeight} (isCustomResolution=true)`)
-        return { width: config.screenWidth, height: config.screenHeight }
+        return {
+          width: config.screenWidth,
+          height: config.screenHeight,
+          orientation: config.screenOrientation || null,
+          ratio: config.screenRatio || null
+        }
       } else if (config.screenWidth && config.screenHeight) {
         log.info(`[main] Found standard dimensions in config: ${config.screenWidth}x${config.screenHeight} but isCustomResolution=${config.isCustomResolution}, using fullscreen`)
+        // Return orientation info even for standard mode (used by capture-screen)
+        return {
+          width: config.screenWidth,
+          height: config.screenHeight,
+          orientation: config.screenOrientation || null,
+          ratio: config.screenRatio || null,
+          isStandard: true  // Flag: don't use custom capture rect
+        }
       }
     }
   } catch (e) {
@@ -288,7 +301,7 @@ function createDefaultWindow() {
   
   // Vérifier si des dimensions custom sont configurées
   const customDims = getScreenDimensionsFromConfig()
-  const useCustomDimensions = customDims !== null
+  const useCustomDimensions = customDims !== null && !customDims.isStandard
   
   log.info(`[main] createDefaultWindow: useCustomDimensions=${useCustomDimensions}`, customDims)
   
@@ -445,7 +458,10 @@ autoUpdater.on('download-progress', (progressObj) => {
   sendStatusToWindow(log_message);
 })
 autoUpdater.on('update-downloaded', (info) => {
-  sendStatusToWindow('Update downloaded');
+  log.info('[auto-update] Update downloaded: v' + (info && info.version));
+  log.info('[auto-update] Restarting app to install update...');
+  // Installer immédiatement : quitter et relancer avec la nouvelle version
+  autoUpdater.quitAndInstall(/* isSilent */ true, /* isForceRunAfter */ true);
 });
 app.on('ready', function() {
   // Create the Menu
@@ -707,7 +723,7 @@ app.on('ready', function() {
 function createWindow () {
   const isProduction = process.env.NODE_ENV === 'production' || !process.defaultApp;
   const customDims = getScreenDimensionsFromConfig()
-  const useCustomDimensions = customDims !== null
+  const useCustomDimensions = customDims !== null && !customDims.isStandard
   
   log.info(`[main] createWindow: isProduction=${isProduction}, useCustomDimensions=${useCustomDimensions}`, customDims)
   
@@ -782,6 +798,37 @@ function createWindow () {
 // Listen for renderer log messages from preload
 ipcMain.on('renderer-log', (event, { level, msg }) => {
   log.log(level || 'info', `[renderer-ipc] ${msg}`)
+})
+
+// Mode setup : désactiver kiosk/fullscreen/alwaysOnTop pour pouvoir naviguer
+ipcMain.on('enter-setup-mode', () => {
+  if (!win) return
+  log.info('[main] Entering setup mode - disabling kiosk/fullscreen/alwaysOnTop')
+  try {
+    win.setKiosk(false)
+    win.setFullScreen(false)
+    win.setAlwaysOnTop(false)
+    // Donner une taille raisonnable pour l'écran de config
+    win.setSize(900, 700)
+    win.center()
+    win.setResizable(true)
+  } catch (e) {
+    log.warn('[main] enter-setup-mode error:', e.message)
+  }
+})
+
+// Re-activer le mode kiosk après config
+ipcMain.on('leave-setup-mode', () => {
+  if (!win) return
+  log.info('[main] Leaving setup mode - re-enabling fullscreen/kiosk')
+  try {
+    win.setResizable(false)
+    win.setAlwaysOnTop(true)
+    win.setFullScreen(true)
+    win.setKiosk(true)
+  } catch (e) {
+    log.warn('[main] leave-setup-mode error:', e.message)
+  }
 })
 
 // Quit app on 'X' shortcut
@@ -859,7 +906,7 @@ ipcMain.handle('resize-window', async (evt, width, height) => {
   }
 })
 
-// Capture screen for heartbeat (720p thumbnail)
+// Capture screen for heartbeat — adapts to orientation and custom resolution
 ipcMain.handle('capture-screen', async (evt, width = 1280, height = 720) => {
   if (!win) {
     log.warn('[main] capture-screen: no window')
@@ -867,16 +914,28 @@ ipcMain.handle('capture-screen', async (evt, width = 1280, height = 720) => {
   }
   
   try {
-    // Capturer la page
-    const image = await win.webContents.capturePage()
+    // Read config for custom dims and orientation
+    const dimInfo = getScreenDimensionsFromConfig()
+    let image
     
-    // Redimensionner en 720p
+    if (dimInfo && !dimInfo.isStandard) {
+      // Custom mode: capture only the content area (top-left rectangle)
+      const captureRect = { x: 0, y: 0, width: dimInfo.width, height: dimInfo.height }
+      image = await win.webContents.capturePage(captureRect)
+      log.debug(`[main] capture-screen: custom mode, capturing rect ${dimInfo.width}x${dimInfo.height}`)
+    } else {
+      // Fullscreen / standard mode: capture the entire page
+      image = await win.webContents.capturePage()
+    }
+    
+    // Resize to requested thumbnail dimensions
+    // The caller (HeartbeatManager) already sends portrait-aware w/h
     const resized = image.resize({ width, height, quality: 'good' })
     
     // Convertir en base64 JPEG (plus léger que PNG)
     const dataUrl = `data:image/jpeg;base64,${resized.toJPEG(80).toString('base64')}`
     
-    log.debug('[main] capture-screen: captured', width, 'x', height)
+    log.debug(`[main] capture-screen: captured ${width}x${height}`, dimInfo && !dimInfo.isStandard ? '(custom mode)' : '(fullscreen)')
     return dataUrl
   } catch (e) {
     log.error('[main] capture-screen failed:', e.message)

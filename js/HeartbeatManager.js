@@ -4,7 +4,7 @@
  * Envoie toutes les 30 secondes:
  * - Infos écran (version, uptime, statut)
  * - Debug info (médias, cache, luminosité, etc.)
- * - Screenshot miniature 720p (1280x720)
+ * - Screenshot miniature adaptatif (1280x720 paysage ou 720x1280 portrait)
  */
 
 class HeartbeatManager {
@@ -17,8 +17,9 @@ class HeartbeatManager {
         this._timer = null;
         this._startTime = Date.now();
         this._lastSent = null;
-        this._screenshotWidth = 1280;  // 720p
+        this._screenshotWidth = 1280;  // default landscape
         this._screenshotHeight = 720;
+        this._isPortrait = false;
         
         this._log = window.logger || {
             info: (tag, ...args) => console.log(`[${tag}]`, ...args),
@@ -36,12 +37,75 @@ class HeartbeatManager {
         this._ecranUuid = config.ecranUuid || config.idEcran || this._ecranUuid;
         this._env = config.env || this._env;
         
+        // Detect portrait mode from init config, window state, or persisted config
+        this._detectOrientation(config);
+        
         if (!this._ecranUuid) {
             this._log.warn('heartbeat', 'No ecranUuid configured, heartbeat disabled');
             return;
         }
         
-        this._log.info('heartbeat', `Initialized for ecran ${this._ecranUuid}, interval=${this._interval}ms`);
+        this._log.info('heartbeat', `Initialized for ecran ${this._ecranUuid}, interval=${this._interval}ms, screenshot=${this._screenshotWidth}x${this._screenshotHeight} (${this._isPortrait ? 'portrait' : 'landscape'})`);
+    }
+
+    /**
+     * Détecte l'orientation de l'écran et ajuste les dimensions du screenshot
+     * Sources (par priorité) :
+     *   1. window.screenDimensions (set par applyScreenDimensions après appel API)
+     *   2. configManager (persisté dans configSEE.json)
+     *   3. Dimensions custom (width < height → portrait)
+     */
+    _detectOrientation(initConfig) {
+        let orientation = null;
+        let w = null;
+        let h = null;
+
+        // 0) Config passed directly at init (highest priority — always available)
+        if (initConfig) {
+            orientation = initConfig.screenOrientation || null;
+            w = initConfig.screenWidth || null;
+            h = initConfig.screenHeight || null;
+        }
+
+        // 1) Live API data (overrides if available)
+        if (window.screenDimensions) {
+            orientation = window.screenDimensions.orientation || orientation;
+            w = window.screenDimensions.width || w;
+            h = window.screenDimensions.height || h;
+        }
+
+        // 2) Persisted config
+        if (!orientation && window.configManager && window.configManager.isLoaded) {
+            try {
+                const cfg = window.configManager.config;
+                orientation = cfg.screenOrientation || null;
+                w = w || cfg.screenWidth;
+                h = h || cfg.screenHeight;
+            } catch (e) {
+                // ConfigManager not ready yet, skip
+            }
+        }
+
+        // If no data found at all, keep existing settings (don't regress)
+        if (!orientation && !w && !h) {
+            this._log.debug('heartbeat', `Orientation: no new data, keeping current (${this._isPortrait ? 'portrait' : 'landscape'} ${this._screenshotWidth}x${this._screenshotHeight})`);
+            return;
+        }
+
+        // Determine portrait: explicit orientation string or width < height
+        const isPortraitByOrientation = orientation && orientation.toLowerCase() === 'portrait';
+        const isPortraitByDimensions = w && h && h > w;
+        this._isPortrait = isPortraitByOrientation || isPortraitByDimensions;
+
+        if (this._isPortrait) {
+            this._screenshotWidth = 720;
+            this._screenshotHeight = 1280;
+        } else {
+            this._screenshotWidth = 1280;
+            this._screenshotHeight = 720;
+        }
+
+        this._log.debug('heartbeat', `Orientation detected: ${this._isPortrait ? 'portrait' : 'landscape'} (orientation=${orientation}, dims=${w}x${h}) → screenshot ${this._screenshotWidth}x${this._screenshotHeight}`);
     }
 
     /**
@@ -56,6 +120,9 @@ class HeartbeatManager {
             this._log.warn('heartbeat', 'Cannot start: no ecranUuid');
             return;
         }
+        
+        // Re-detect orientation in case API data arrived after init
+        this._detectOrientation();
         
         this._log.info('heartbeat', 'Starting heartbeat...');
         
@@ -109,10 +176,14 @@ class HeartbeatManager {
             
             // Mode nuit/sleep
             nightMode: false,
+            nightModeType: null,
             sleepMode: false,
             
             // Planning
             planningActive: false,
+            
+            // API health
+            apiConsecutiveErrors: window.apiConsecutiveErrors || 0,
             
             // Mémoire (si disponible)
             memoryUsage: null
@@ -143,6 +214,11 @@ class HeartbeatManager {
         if (window.sleepManager) {
             debug.sleepMode = window.sleepManager.isSleeping || false;
             debug.nightMode = window.sleepManager.isNightMode || false;
+            // Night mode type (fixe / auto) from API response
+            const modeNuit = window.apiV2Response?.modeNuit;
+            if (modeNuit?.actif) {
+                debug.nightModeType = modeNuit.type || 'fixe';
+            }
         }
         
         // Planning (isVisible est une propriété)

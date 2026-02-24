@@ -129,6 +129,21 @@ contextBridge.exposeInMainWorld('api', {
       return null;
     }
   },
+  // Mode setup : désactiver fullscreen/kiosk pour naviguer entre fenêtres
+  enterSetupMode: () => {
+    try {
+      ipcRenderer.send('enter-setup-mode');
+    } catch (e) {
+      console.error('[preload] enterSetupMode failed:', e.message);
+    }
+  },
+  leaveSetupMode: () => {
+    try {
+      ipcRenderer.send('leave-setup-mode');
+    } catch (e) {
+      console.error('[preload] leaveSetupMode failed:', e.message);
+    }
+  },
   // Window resize (for custom screen dimensions from API)
   resizeWindow: async (width, height) => {
     try {
@@ -198,11 +213,16 @@ contextBridge.exposeInMainWorld('api', {
     return await ipcRenderer.invoke('preload-readBundledFile', relativePath)
   },
   fetchJson: async (url, opts) => {
-    if (hasNode && axios) {
-      const res = await axios.get(url, opts)
-      return res.data
+    try {
+      if (hasNode && axios) {
+        const res = await axios.get(url, opts)
+        return res.data
+      }
+      return await ipcRenderer.invoke('preload-fetchJson', url, opts)
+    } catch (e) {
+      console.error('[preload] fetchJson error:', e.message)
+      return null
     }
-    return await ipcRenderer.invoke('preload-fetchJson', url, opts)
   },
   getEnv: (name) => {
     try { if (hasNode) return process.env[name] || null } catch(e) {}
@@ -405,32 +425,33 @@ contextBridge.exposeInMainWorld('logger', {
 contextBridge.exposeInMainWorld('axios', {
   get: async (url, opts) => {
     console.log('[preload-axios] get called, hasNode=', hasNode, 'axios=', !!axios, 'url=', url)
-    if (hasNode && axios) {
-      const res = await axios.get(url, opts)
-      console.log('[preload-axios] native axios response, res.data?=', !!res.data)
-      return res
-    }
-    // Fallback to ipc fetch: normalize to axios-like response { data }
     try {
+      if (hasNode && axios) {
+        const res = await axios.get(url, opts)
+        console.log('[preload-axios] native axios response, res.data?=', !!res.data)
+        return res
+      }
+      // Fallback to ipc fetch: normalize to axios-like response { data }
       console.log('[preload-axios] using IPC fallback')
       const result = await ipcRenderer.invoke('preload-fetchJson', url, opts || {})
       console.log('[preload-axios] IPC result?=', !!result)
       return { data: result }
     } catch (e) {
-      console.log('[preload-axios] IPC error:', e.message)
+      console.error('[preload-axios] get error:', e.message)
       return { data: null }
     }
   },
   post: async (url, data, opts) => {
-    if (hasNode && axios) {
-      const res = await axios.post(url, data, opts)
-      return res
-    }
-    const req = Object.assign({}, opts || {}, { method: 'POST', data })
     try {
+      if (hasNode && axios) {
+        const res = await axios.post(url, data, opts)
+        return res
+      }
+      const req = Object.assign({}, opts || {}, { method: 'POST', data })
       const result = await ipcRenderer.invoke('preload-fetchJson', url, req)
       return { data: result }
     } catch (e) {
+      console.error('[preload-axios] post error:', e.message)
       return { data: null }
     }
   }
