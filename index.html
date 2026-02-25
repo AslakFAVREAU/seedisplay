@@ -195,6 +195,104 @@
       opacity: 0.7;
     }
 
+    /* Pairing mode styles */
+    .setup-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 25px;
+      border-bottom: 2px solid #ddd;
+    }
+    .setup-tab {
+      flex: 1;
+      padding: 12px 15px;
+      background: none;
+      border: none;
+      font-size: 1rem;
+      color: #999;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.2s;
+    }
+    .setup-tab.active {
+      color: #4a90d9;
+      border-bottom-color: #4a90d9;
+      font-weight: 600;
+    }
+    .setup-tab:hover:not(.active) {
+      color: #666;
+    }
+    .setup-tab-content {
+      display: none;
+    }
+    .setup-tab-content.active {
+      display: block;
+    }
+    .pairing-code-display {
+      font-size: 4rem;
+      font-weight: 700;
+      letter-spacing: 12px;
+      color: #4a90d9;
+      font-family: 'Courier New', monospace;
+      margin: 20px 0;
+      padding: 20px;
+      background: #f0f6ff;
+      border-radius: 12px;
+      border: 2px dashed #4a90d9;
+      user-select: all;
+    }
+    .pairing-instructions {
+      font-size: 0.95rem;
+      color: #666;
+      line-height: 1.6;
+      margin: 15px 0;
+    }
+    .pairing-instructions strong {
+      color: #333;
+    }
+    .pairing-url {
+      font-size: 1.1rem;
+      color: #4a90d9;
+      font-weight: 600;
+      word-break: break-all;
+    }
+    .pairing-status {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+    .pairing-status.waiting {
+      background: #fff3cd;
+      color: #856404;
+    }
+    .pairing-status.success {
+      background: #d4edda;
+      color: #155724;
+    }
+    .pairing-status.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    .pairing-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(133,100,4,0.3);
+      border-radius: 50%;
+      border-top-color: #856404;
+      animation: spin 1s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes pairingPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .pairing-code-display.waiting {
+      animation: pairingPulse 2s ease-in-out infinite;
+    }
+
     /* Hauteur et layout des pages */
     #pagePsaume {
       min-height: 100vh;
@@ -638,28 +736,58 @@
     
     <!-- Formulaire de configuration -->
     <div class="setup-container">
-      <p>Bienvenue! Entrez l'UUID de cet écran pour commencer.</p>
+      <p>Bienvenue! Configurez cet écran pour commencer.</p>
       
-      <div class="setup-input-group">
-        <label for="setupEcranUuid">UUID de l'écran</label>
-        <input type="text" id="setupEcranUuid" placeholder="Ex: 550e8400-e29b-41d4-a716-446655440000" autofocus>
+      <!-- Onglets: Pairing automatique vs Manuel -->
+      <div class="setup-tabs">
+        <button class="setup-tab active" onclick="switchSetupTab('pairing')" id="tabPairing">Code d'appairage</button>
+        <button class="setup-tab" onclick="switchSetupTab('manual')" id="tabManual">Configuration manuelle</button>
       </div>
-      
-      <div class="setup-input-group">
-        <label for="setupEnv">Environnement</label>
-        <select id="setupEnv">
-          <option value="prod">Production (soek.fr)</option>
-          <option value="beta">Beta (beta.soek.fr)</option>
-          <option value="local">Local (localhost:8000)</option>
-        </select>
+
+      <!-- TAB 1: Pairing automatique -->
+      <div class="setup-tab-content active" id="tabContentPairing">
+        <div class="pairing-instructions">
+          Rendez-vous sur votre espace <strong>SOEK</strong> et entrez ce code pour associer cet écran :
+        </div>
+        <div class="pairing-code-display waiting" id="pairingCode">----</div>
+        <div class="pairing-instructions">
+          <div class="setup-input-group" style="margin-top:10px">
+            <label for="setupEnvPairing">Environnement</label>
+            <select id="setupEnvPairing" onchange="restartPairing()">
+              <option value="prod">Production (soek.fr)</option>
+              <option value="beta">Beta (beta.soek.fr)</option>
+              <option value="local">Local (localhost:8000)</option>
+            </select>
+          </div>
+        </div>
+        <div class="pairing-status waiting" id="pairingStatus">
+          <span class="pairing-spinner"></span> En attente d'association...
+        </div>
       </div>
-      
-      <div class="setup-input-group">
-        <label for="setupApiToken">Token API (optionnel)</label>
-        <input type="password" id="setupApiToken" placeholder="Laissez vide si pas de token">
+
+      <!-- TAB 2: Configuration manuelle (ancien formulaire) -->
+      <div class="setup-tab-content" id="tabContentManual">
+        <div class="setup-input-group">
+          <label for="setupEcranUuid">UUID de l'écran</label>
+          <input type="text" id="setupEcranUuid" placeholder="Ex: 550e8400-e29b-41d4-a716-446655440000" autofocus>
+        </div>
+        
+        <div class="setup-input-group">
+          <label for="setupEnv">Environnement</label>
+          <select id="setupEnv">
+            <option value="prod">Production (soek.fr)</option>
+            <option value="beta">Beta (beta.soek.fr)</option>
+            <option value="local">Local (localhost:8000)</option>
+          </select>
+        </div>
+        
+        <div class="setup-input-group">
+          <label for="setupApiToken">Token API (optionnel)</label>
+          <input type="password" id="setupApiToken" placeholder="Laissez vide si pas de token">
+        </div>
+        
+        <button class="setup-btn" id="setupSubmit" onclick="submitSetup()">Valider</button>
       </div>
-      
-      <button class="setup-btn" id="setupSubmit" onclick="submitSetup()">Valider</button>
       
       <div class="setup-error" id="setupError"></div>
       <div class="setup-status" id="setupStatus"></div>
@@ -1187,6 +1315,9 @@
     }
     
     document.getElementById('setupEcranUuid').focus()
+    
+    // Démarrer le pairing automatiquement (onglet par défaut)
+    startPairing()
   }
 
   /**
@@ -1300,6 +1431,258 @@
 
   // Rendre submitSetup accessible globalement pour le onclick
   window.submitSetup = submitSetup
+
+  // ==================== PAIRING SYSTEM ====================
+
+  let pairingCode = null
+  let pairingPollInterval = null
+  let pairingDeviceId = null // ID unique de ce device (persisté)
+
+  /**
+   * Génère un code d'appairage aléatoire de 4 caractères alphanumériques (majuscules + chiffres)
+   * Exclut les caractères ambigus: 0/O, 1/I/L
+   */
+  function generatePairingCode() {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789' // sans 0,O,1,I,L
+    let code = ''
+    for (let i = 0; i < 4; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    return code
+  }
+
+  /**
+   * Génère ou récupère un device ID unique (persisté dans configSEE.json)
+   */
+  async function getOrCreateDeviceId() {
+    try {
+      const config = await window.api.getConfig()
+      if (config && config.deviceId) {
+        return config.deviceId
+      }
+    } catch (e) { /* pas de config */ }
+    
+    // Générer un nouveau deviceId
+    const id = 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 6)
+    
+    // Sauvegarder immédiatement
+    try {
+      const config = await window.api.getConfig().catch(() => ({}))
+      await window.api.writeFile('configSEE.json', JSON.stringify({ ...config, deviceId: id }, null, 2))
+    } catch (e) {
+      __log('warn', 'pairing', 'Could not persist deviceId:', e.message)
+    }
+    
+    return id
+  }
+
+  /**
+   * Retourne l'URL de base selon l'environnement sélectionné dans l'onglet pairing
+   */
+  function getPairingBaseUrl() {
+    const env = document.getElementById('setupEnvPairing').value
+    if (env === 'local') return 'http://localhost:8000'
+    if (env === 'beta') return 'https://beta.soek.fr'
+    return 'https://soek.fr'
+  }
+
+  /**
+   * Démarre le processus de pairing:
+   * 1. Génère un code 4 caractères
+   * 2. Enregistre le code sur le serveur via POST /see/API/pair
+   * 3. Poll GET /see/API/pair/{code}/status toutes les 5s
+   * 4. Quand le serveur renvoie les infos → sauvegarde et redémarre
+   */
+  async function startPairing() {
+    // Stopper un éventuel polling précédent
+    stopPairing()
+    
+    const codeEl = document.getElementById('pairingCode')
+    const statusEl = document.getElementById('pairingStatus')
+    
+    // Générer le code
+    pairingCode = generatePairingCode()
+    codeEl.textContent = pairingCode
+    codeEl.classList.add('waiting')
+    statusEl.className = 'pairing-status waiting'
+    statusEl.innerHTML = '<span class="pairing-spinner"></span> En attente d\'association...'
+    
+    // Récupérer le device ID
+    pairingDeviceId = await getOrCreateDeviceId()
+    
+    const baseUrl = getPairingBaseUrl()
+    
+    __log('info', 'pairing', `Starting pairing: code=${pairingCode}, deviceId=${pairingDeviceId}, server=${baseUrl}`)
+    
+    // Enregistrer le code sur le serveur
+    try {
+      const registerUrl = `${baseUrl}/see/API/pair`
+      const resp = await fetch(registerUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: pairingCode,
+          deviceId: pairingDeviceId,
+          hostname: navigator.userAgent,
+          platform: navigator.platform
+        }),
+        signal: AbortSignal.timeout(10000)
+      })
+      
+      if (!resp.ok) {
+        throw new Error(`Serveur a répondu ${resp.status}`)
+      }
+      
+      const data = await resp.json()
+      __log('info', 'pairing', 'Code registered on server:', data)
+      
+      // Si le serveur renvoie un TTL/expiration, l'afficher
+      if (data.expiresIn) {
+        statusEl.innerHTML = `<span class="pairing-spinner"></span> Code valide ${Math.round(data.expiresIn / 60)} min — en attente d'association...`
+      }
+      
+    } catch (err) {
+      __log('warn', 'pairing', 'Could not register code on server:', err.message)
+      // On continue quand même - le serveur va peut-être accepter le polling sans pré-enregistrement
+      statusEl.innerHTML = '<span class="pairing-spinner"></span> En attente d\'association... (serveur non joignable, nouveau essai auto)'
+    }
+    
+    // Démarrer le polling toutes les 5 secondes
+    pairingPollInterval = setInterval(() => pollPairingStatus(), 5000)
+  }
+
+  /**
+   * Poll le serveur pour vérifier si le code a été associé
+   */
+  async function pollPairingStatus() {
+    if (!pairingCode) return
+    
+    const baseUrl = getPairingBaseUrl()
+    const statusEl = document.getElementById('pairingStatus')
+    const codeEl = document.getElementById('pairingCode')
+    
+    try {
+      const url = `${baseUrl}/see/API/pair/${pairingCode}/status`
+      const resp = await fetch(url, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(8000)
+      })
+      
+      if (resp.status === 404) {
+        // Code expiré → regénérer
+        __log('warn', 'pairing', 'Code expired, regenerating...')
+        startPairing()
+        return
+      }
+      
+      if (!resp.ok) return // Erreur serveur, on réessaie au prochain poll
+      
+      const data = await resp.json()
+      
+      // Pas encore appairé
+      if (data.status === 'pending') {
+        return
+      }
+      
+      // Appairé ! On a reçu les infos
+      if (data.status === 'paired' && data.ecranUuid) {
+        __log('info', 'pairing', 'Pairing successful!', data)
+        
+        // Arrêter le polling
+        stopPairing()
+        
+        // Afficher le succès
+        codeEl.classList.remove('waiting')
+        statusEl.className = 'pairing-status success'
+        statusEl.textContent = `✅ Écran associé: "${data.ecranNom || data.ecranUuid}"`
+        
+        // Sauvegarder la configuration
+        const env = document.getElementById('setupEnvPairing').value
+        const existingConfig = window.configSEE || {}
+        const newConfig = {
+          ...existingConfig,
+          ecranUuid: data.ecranUuid,
+          env: env,
+          apiToken: data.apiToken || '',
+          deviceId: pairingDeviceId,
+          meteo: existingConfig.meteo !== undefined ? existingConfig.meteo : true,
+          meteoLat: existingConfig.meteoLat || 48.8566,
+          meteoLon: existingConfig.meteoLon || 2.3522,
+          meteoUnits: existingConfig.meteoUnits || 'metric',
+          logoSOE: existingConfig.logoSOE !== undefined ? existingConfig.logoSOE : true,
+          weekNo: existingConfig.weekNo !== undefined ? existingConfig.weekNo : true,
+          weekType: existingConfig.weekType !== undefined ? existingConfig.weekType : false,
+          weekDisplay: existingConfig.weekDisplay !== undefined ? existingConfig.weekDisplay : true
+        }
+        
+        try {
+          await window.api.writeFile('configSEE.json', JSON.stringify(newConfig, null, 2))
+          __log('info', 'pairing', 'Config saved successfully')
+        } catch (e) {
+          __log('error', 'pairing', 'Failed to save config:', e.message)
+          statusEl.className = 'pairing-status error'
+          statusEl.textContent = `❌ Erreur sauvegarde: ${e.message}`
+          return
+        }
+        
+        statusEl.textContent += ' — Redémarrage...'
+        
+        // Ré-activer le mode kiosk avant de recharger
+        if (window.api && typeof window.api.leaveSetupMode === 'function') {
+          window.api.leaveSetupMode()
+        }
+        
+        setTimeout(() => window.location.reload(), 1500)
+      }
+      
+    } catch (err) {
+      // Erreur réseau, on réessaie silencieusement
+      __log('debug', 'pairing', 'Poll error (will retry):', err.message)
+    }
+  }
+
+  /**
+   * Arrête le polling de pairing
+   */
+  function stopPairing() {
+    if (pairingPollInterval) {
+      clearInterval(pairingPollInterval)
+      pairingPollInterval = null
+    }
+  }
+
+  /**
+   * Redémarre le pairing (quand on change d'environnement)
+   */
+  function restartPairing() {
+    startPairing()
+  }
+
+  /**
+   * Bascule entre les onglets pairing / manuel
+   */
+  function switchSetupTab(tab) {
+    document.getElementById('tabPairing').classList.toggle('active', tab === 'pairing')
+    document.getElementById('tabManual').classList.toggle('active', tab === 'manual')
+    document.getElementById('tabContentPairing').classList.toggle('active', tab === 'pairing')
+    document.getElementById('tabContentManual').classList.toggle('active', tab === 'manual')
+    
+    // Démarrer/arrêter le pairing selon l'onglet
+    if (tab === 'pairing') {
+      startPairing()
+    } else {
+      stopPairing()
+    }
+    
+    // Clear les erreurs
+    document.getElementById('setupError').textContent = ''
+    document.getElementById('setupStatus').textContent = ''
+  }
+
+  // Rendre les fonctions accessibles globalement
+  window.switchSetupTab = switchSetupTab
+  window.restartPairing = restartPairing
 
   // ==================== END SETUP SCREEN FUNCTIONS ====================
   
