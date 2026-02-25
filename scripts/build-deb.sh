@@ -60,7 +60,7 @@ cp -a "$APP_DIR"/* "$PKG_DIR/opt/seedisplay/"
 
 # Supprimer ce script lui-même du package s'il est dedans
 rm -f "$PKG_DIR/opt/seedisplay/build-deb.sh"
-rm -f "$PKG_DIR/opt/seedisplay/install-debian.sh"
+rm -f "$PKG_DIR/opt/seedisplay/install-see.sh"
 
 # Permissions
 chmod 755 "$PKG_DIR/opt/seedisplay/seedisplay"

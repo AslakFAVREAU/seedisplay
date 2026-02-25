@@ -2,8 +2,8 @@
 # ============================================================
 # SEE Display - Script d'installation pour Debian 12/13 (x64)
 # ============================================================
-# Usage: sudo bash install-debian.sh
-# Ou après chmod +x: sudo ./install-debian.sh
+# Usage: sudo bash install-see.sh
+# Ou après chmod +x: sudo ./install-see.sh
 # ============================================================
 
 set -e
