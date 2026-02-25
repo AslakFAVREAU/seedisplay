@@ -665,7 +665,7 @@ ipcMain.handle('get-app-version', () => {
 // IPC handler pour supprimer les données utilisateur (reset)
 ipcMain.handle('reset-user-data', async () => {
   log.info('[main] Reset user data requested');
-  const basePath = 'C:/SEE/';
+  const basePath = BASE_PATH;
   
   try {
     // Supprimer les fichiers de cache et config

@@ -1310,6 +1310,13 @@
     // Stocker la config pour que showSetupScreen puisse y accéder
     window.configSEE = config || {}
     
+    // Appliquer le basePath cross-platform depuis preload
+    if (config && config._basePath) {
+      pathSEE = config._basePath
+      pathMedia = config._basePath + 'media/'
+      __log('info', 'bootstrap', 'Base path set to:', pathSEE)
+    }
+    
     // Vérifier si c'est le premier démarrage (pas de config ou pas d'ecranUuid)
     if (!config || !config.ecranUuid) {
       __log('info','bootstrap','No ecranUuid found - first run, showing setup screen')

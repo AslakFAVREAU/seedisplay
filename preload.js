@@ -163,22 +163,24 @@ contextBridge.exposeInMainWorld('api', {
       try {
         const raw = fs.readFileSync(configPath, 'utf8')
         const parsed = JSON.parse(raw)
+        parsed._basePath = BASE_PATH  // Injecter le basePath pour le renderer
         console.log('[preload] Config loaded successfully:', JSON.stringify(parsed))
         return parsed
       } catch (e) {
         console.error('[preload] Failed to read config file:', e.message)
         console.log('[preload] Returning defaults')
-        return { meteo: true, meteoApiKey: null, meteoLat: 48.75, meteoLon: 2.3, meteoUnits: 'metric', env: 'prod' }
+        return { _basePath: BASE_PATH, meteo: true, meteoApiKey: null, meteoLat: 48.75, meteoLon: 2.3, meteoUnits: 'metric', env: 'prod' }
       }
     }
     console.log('[preload] Using IPC fallback for config')
     try {
       const res = await ipcRenderer.invoke('preload-getConfig')
+      if (res) res._basePath = BASE_PATH  // Injecter le basePath pour le renderer
       console.log('[preload] IPC getConfig result:', JSON.stringify(res))
-      return res || { meteo: true, meteoApiKey: null, meteoLat: 48.75, meteoLon: 2.3, meteoUnits: 'metric', env: 'prod' }
+      return res || { _basePath: BASE_PATH, meteo: true, meteoApiKey: null, meteoLat: 48.75, meteoLon: 2.3, meteoUnits: 'metric', env: 'prod' }
     } catch (e) {
       console.error('[preload] IPC getConfig failed:', e.message)
-      return { meteo: true, meteoApiKey: null, meteoLat: 48.75, meteoLon: 2.3, meteoUnits: 'metric', env: 'prod' }
+      return { _basePath: BASE_PATH, meteo: true, meteoApiKey: null, meteoLat: 48.75, meteoLon: 2.3, meteoUnits: 'metric', env: 'prod' }
     }
   },
   readFile: async (relativePath) => {
