@@ -200,7 +200,7 @@ async function showMedia(mediaIndex) {
         }
         
         try {
-            const url = pathMedia + mediaFile.replace("%20", '%2520');
+            const url = typeof getMediaUrl === 'function' ? getMediaUrl(mediaFile) : pathMedia + mediaFile;
             const divEl = document.getElementById(divId);
             const sourceEl = document.getElementById(sourceId);
             const videoEl = document.getElementById(videoId);
@@ -348,7 +348,7 @@ async function showMedia(mediaIndex) {
         // Lancer le check+download en async, mais ne PAS attendre indéfiniment
         const doShowImage = () => {
             try {
-                const url = pathMedia + mediaFile.replace("%20", '%2520');
+                const url = typeof getMediaUrl === 'function' ? getMediaUrl(mediaFile) : pathMedia + mediaFile;
                 const divEl = document.getElementById(divId);
                 
                 if (!divEl) {

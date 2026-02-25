@@ -1,4 +1,4 @@
-const { app, Menu, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, Menu, BrowserWindow, ipcMain, screen, protocol, net } = require('electron');
 const log = require('electron-log');
 const updater = require("electron-updater");
 const autoUpdater = updater.autoUpdater;
@@ -54,6 +54,18 @@ function getBasePath() {
 // Global base path - accessible throughout the app
 const BASE_PATH = getBasePath();
 log.info(`[Platform] ${process.platform}/${process.arch}, BASE_PATH=${BASE_PATH}, isRaspberryPi=${IS_RASPBERRY_PI}`);
+
+// Enregistrer le scheme see-media comme privilégié (doit être fait avant app.ready)
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'see-media',
+  privileges: {
+    standard: true,
+    secure: true,
+    supportFetchAPI: true,
+    corsEnabled: true,
+    stream: true
+  }
+}]);
 
 //-------------------------------------------------------------------
 // Auto-updater Configuration
@@ -464,6 +476,24 @@ autoUpdater.on('update-downloaded', (info) => {
   autoUpdater.quitAndInstall(/* isSilent */ true, /* isForceRunAfter */ true);
 });
 app.on('ready', function() {
+  // Enregistrer le protocol handler see-media:// pour servir les fichiers media
+  // depuis BASE_PATH sur toutes les plateformes (nécessaire sur Linux où file:// 
+  // ne peut pas accéder aux fichiers hors du dossier app)
+  try {
+    protocol.handle('see-media', (request) => {
+      // URL: see-media://media/file.jpg → BASE_PATH + media/file.jpg
+      let filePath = decodeURIComponent(request.url.replace('see-media://', ''));
+      // Supprimer le slash initial si présent (see-media:///media/... → media/...)
+      filePath = filePath.replace(/^\/+/, '');
+      const fullPath = path.join(BASE_PATH, filePath);
+      log.debug(`[see-media] ${request.url} → ${fullPath}`);
+      return net.fetch('file://' + fullPath);
+    });
+    log.info('[see-media] Protocol handler registered for BASE_PATH=' + BASE_PATH);
+  } catch (e) {
+    log.error('[see-media] Failed to register protocol handler:', e.message);
+  }
+
   // Create the Menu
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
@@ -549,17 +579,23 @@ app.on('ready', function() {
   }
   
   // Vérifier les mises à jour au démarrage (après 30 secondes pour laisser l'app se charger)
-  setTimeout(() => {
-    log.info('[auto-update] Initial update check...');
-    autoUpdater.checkForUpdatesAndNotify().catch(err => {
-      log.warn('[auto-update] Initial check failed:', err.message);
-    });
-  }, 30000);
-  
-  // Planifier la vérification quotidienne à 2h du matin
-  scheduleUpdateCheck();
-  
-  log.info('[auto-update] Update checks scheduled: startup + daily at 2:00 AM');
+  // Sur Linux, l'auto-update ne fonctionne qu'avec AppImage
+  const canAutoUpdate = !IS_LINUX || !!process.env.APPIMAGE;
+  if (canAutoUpdate) {
+    setTimeout(() => {
+      log.info('[auto-update] Initial update check...');
+      autoUpdater.checkForUpdatesAndNotify().catch(err => {
+        log.warn('[auto-update] Initial check failed:', err.message);
+      });
+    }, 30000);
+    
+    // Planifier la vérification quotidienne à 2h du matin
+    scheduleUpdateCheck();
+    
+    log.info('[auto-update] Update checks scheduled: startup + daily at 2:00 AM');
+  } else {
+    log.info('[auto-update] Auto-update disabled on Linux (not running as AppImage)');
+  }
 });
 
 app.on('window-all-closed', () => {

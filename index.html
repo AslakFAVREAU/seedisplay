@@ -1225,6 +1225,17 @@
     // Ces variables seront mises à jour après chargement de la config
     let pathSEE = "C:/SEE/"
     let pathMedia = "C:/SEE/media/"
+
+    /**
+     * Construit l'URL d'un fichier média pour l'affichage (img.src, video.src, background-image)
+     * Utilise le protocol see-media:// enregistré dans main.js pour accéder aux fichiers
+     * depuis BASE_PATH, ce qui fonctionne sur toutes les plateformes (Windows, Linux, Mac)
+     */
+    function getMediaUrl(mediaFile) {
+      // Encoder le nom de fichier pour l'URL see-media://
+      // Les %20 dans le nom original doivent être préservés (ce sont des espaces encodés du serveur)
+      return 'see-media://media/' + mediaFile
+    }
     
     // Fonction pour récupérer le base path depuis preload (cross-platform)
     async function initBasePath() {
