@@ -24,6 +24,10 @@ class DebugOverlay {
         this.configAutoCloseTimer = null;
         this.debugPinned = false;
         this.configPinned = false;
+        this.mediaListVisible = false;
+        this.mediaPanel = null;
+        this.activeTab = 'files'; // 'files' or 'trame'
+        this.trameRefreshInterval = null;
         
         this._log = window.logger 
             ? (level, tag, msg) => window.logger[level](tag, msg)
@@ -175,6 +179,7 @@ class DebugOverlay {
             
             // Escape ferme tout
             if (e.key === 'Escape') {
+                if (this.mediaListVisible) this.hideMediaList();
                 if (this.configMode) this.hideConfig();
                 if (this.visible) this.hide();
             }
@@ -191,6 +196,11 @@ class DebugOverlay {
             if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.altKey) {
                 window.logger?.info('DebugOverlay', '🔄 Manual API refresh triggered (R)');
                 this._forceApiRefresh();
+            }
+            
+            // L = lister les médias
+            if (e.key.toLowerCase() === 'l' && !e.ctrlKey && !e.altKey) {
+                this.toggleMediaList();
             }
         });
     }
@@ -389,6 +399,385 @@ class DebugOverlay {
     }
     
     /**
+     * Toggle la liste des médias
+     */
+    toggleMediaList() {
+        if (this.mediaListVisible) {
+            this.hideMediaList();
+        } else {
+            this.showMediaList();
+        }
+    }
+    
+    /**
+     * Affiche la modal avec la liste des médias
+     */
+    async showMediaList() {
+        if (!this.mediaPanel) {
+            this._createMediaPanel();
+        }
+        this.mediaPanel.style.display = 'flex';
+        this.mediaListVisible = true;
+        document.body.style.cursor = 'default';
+        this._log('info', 'debug', 'Media list shown');
+        
+        // Charger selon l'onglet actif
+        if (this.activeTab === 'files') {
+            this._loadFilesTab();
+        } else {
+            this._loadTrameTab();
+        }
+        this._startTrameRefresh();
+    }
+    
+    /**
+     * Change d'onglet dans la modal médias
+     */
+    switchTab(tab) {
+        this.activeTab = tab;
+        // Mettre à jour les boutons
+        const tabs = this.mediaPanel.querySelectorAll('.media-tab');
+        tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+        // Afficher/cacher les contenus
+        const filesEl = document.getElementById('tab-files');
+        const trameEl = document.getElementById('tab-trame');
+        if (filesEl) filesEl.style.display = tab === 'files' ? '' : 'none';
+        if (trameEl) trameEl.style.display = tab === 'trame' ? '' : 'none';
+        // Charger les données de l'onglet
+        if (tab === 'files') {
+            this._loadFilesTab();
+        } else {
+            this._loadTrameTab();
+        }
+    }
+    
+    /**
+     * Charge l'onglet Fichiers (liste des médias sur disque)
+     */
+    async _loadFilesTab() {
+        const listEl = document.getElementById('media-list-body');
+        if (listEl) listEl.innerHTML = '<div style="color:#888;padding:20px;text-align:center;">Chargement...</div>';
+        
+        try {
+            let files = [];
+            if (window.api && window.api.listMediaFiles) {
+                files = await window.api.listMediaFiles();
+            }
+            
+            if (!files || files.length === 0) {
+                listEl.innerHTML = '<div style="color:#888;padding:20px;text-align:center;">Aucun média trouvé</div>';
+                document.getElementById('media-list-count').textContent = '0 fichiers';
+                document.getElementById('media-list-total').textContent = '0 Mo';
+                return;
+            }
+            
+            const totalSize = files.reduce((s, f) => s + f.size, 0);
+            document.getElementById('media-list-count').textContent = files.length + ' fichier' + (files.length > 1 ? 's' : '');
+            document.getElementById('media-list-total').textContent = this._formatSize(totalSize);
+            
+            let html = '';
+            for (const f of files) {
+                const ext = f.name.split('.').pop().toLowerCase();
+                const icon = this._getMediaIcon(ext);
+                const date = new Date(f.mtime);
+                const dateStr = date.toLocaleDateString('fr-FR') + ' ' + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                html += `<div class="media-item">
+                    <span class="media-icon">${icon}</span>
+                    <span class="media-name" title="${f.name}">${f.name}</span>
+                    <span class="media-size">${this._formatSize(f.size)}</span>
+                    <span class="media-date">${dateStr}</span>
+                </div>`;
+            }
+            listEl.innerHTML = html;
+        } catch (err) {
+            listEl.innerHTML = `<div style="color:#f44;padding:20px;text-align:center;">Erreur: ${err.message}</div>`;
+            this._log('error', 'debug', 'Failed to list media: ' + err.message);
+        }
+    }
+    
+    /**
+     * Charge l'onglet Trame de lecture (séquence de diffusion en cours)
+     */
+    _loadTrameTab() {
+        const listEl = document.getElementById('trame-list-body');
+        if (!listEl) return;
+        
+        // Récupérer la trame depuis loopDiapo
+        const mediaLoop = (typeof window._getMediaLoop === 'function') ? window._getMediaLoop() : (window.ArrayDiapo || []);
+        const currentIdx = (typeof window._getCurrentMediaIndex === 'function') ? window._getCurrentMediaIndex() : -1;
+        const isOnPageDefault = (typeof window._isOnPageDefault === 'function') ? window._isOnPageDefault() : false;
+        
+        if (!mediaLoop || mediaLoop.length === 0) {
+            listEl.innerHTML = '<div style="color:#888;padding:20px;text-align:center;">Aucune trame de lecture active</div>';
+            document.getElementById('trame-count').textContent = '0 médias';
+            document.getElementById('trame-duration').textContent = '-';
+            return;
+        }
+        
+        // Calculer la durée totale et vérifier les fichiers
+        let totalDuration = 0;
+        let missingCount = 0;
+        const hasExistsSync = window.api && typeof window.api.existsSync === 'function';
+        
+        const items = [];
+        for (let i = 0; i < mediaLoop.length; i++) {
+            const m = mediaLoop[i];
+            const type = m[0] || '?';
+            const rawFile = m[1] || '';
+            const dur = (m[2] && Number(m[2]) > 0) ? Number(m[2]) : 5;
+            const meta = m[3] || {};
+            totalDuration += dur;
+            
+            // Déterminer le nom affiché selon le type
+            let displayName = '?';
+            let fileStatus = 'na';
+            
+            if (type === 'template') {
+                // rawFile est un objet templateData
+                const td = rawFile;
+                const templateType = (td && td.type) ? td.type : '?';
+                const templateTitle = (td && td.titre) ? td.titre : 'Sans titre';
+                displayName = templateTitle + ' (' + templateType + ')';
+            } else if (type === 'planning') {
+                displayName = 'Planning du jour';
+            } else {
+                // Image ou vidéo : décoder le nom de fichier
+                displayName = rawFile ? decodeURIComponent(rawFile) : '?';
+                if (hasExistsSync && rawFile) {
+                    try {
+                        const decoded = decodeURIComponent(rawFile);
+                        const exists = window.api.existsSync('media/' + decoded);
+                        fileStatus = exists ? 'ok' : 'missing';
+                        if (!exists) missingCount++;
+                    } catch (e) {
+                        fileStatus = 'na';
+                    }
+                }
+            }
+            
+            items.push({ type, rawFile, displayName, dur, meta, fileStatus, index: i });
+        }
+        
+        // Ajouter 10s pour la page par défaut (entre les cycles)
+        if (!window.masquerPageDefault) {
+            totalDuration += 10;
+        }
+        
+        // Stats
+        const countText = mediaLoop.length + ' média' + (mediaLoop.length > 1 ? 's' : '');
+        const missingText = missingCount > 0 ? ' — ❌ ' + missingCount + ' manquant' + (missingCount > 1 ? 's' : '') : '';
+        document.getElementById('trame-count').textContent = countText + missingText;
+        document.getElementById('trame-duration').textContent = this._formatTrameDuration(totalDuration);
+        
+        let html = '';
+        
+        // Ligne "Page par défaut" en haut (sauf si masquerPageDefault)
+        if (!window.masquerPageDefault) {
+            html += `<div class="trame-item${isOnPageDefault ? ' trame-current' : ''} trame-pagedefault">
+                <span class="trame-idx">—</span>
+                <span class="trame-status">🏠</span>
+                <span class="trame-type-icon">📺</span>
+                <span class="trame-type">Défaut</span>
+                <span class="trame-name">Page par défaut</span>
+                <span class="trame-dur">10s</span>
+                <span class="trame-diapo">—</span>
+            </div>`;
+        }
+        
+        for (const item of items) {
+            const isCurrent = (!isOnPageDefault && item.index === currentIdx);
+            const typeIcon = this._getTrameTypeIcon(item.type);
+            const typeLabel = this._getTrameTypeLabel(item.type);
+            
+            // Diapo name from meta (varies by type)
+            let diapoName = '-';
+            if (item.type === 'template' || item.type === 'planning') {
+                // meta peut être un objet {templateId, ordre} ou un diapoId number
+                diapoName = (item.meta && item.meta.templateId) ? 'T#' + item.meta.templateId : (typeof item.meta === 'number' ? 'D#' + item.meta : '-');
+            } else {
+                diapoName = (item.meta && item.meta.diapoNom) ? item.meta.diapoNom : '-';
+            }
+            const transition = (item.meta && item.meta.transition) ? item.meta.transition : '';
+            const shortName = item.displayName.split('/').pop();
+            
+            // Indicateur de statut fichier
+            let statusIcon = '';
+            let statusClass = '';
+            if (item.fileStatus === 'missing') {
+                statusIcon = '❌';
+                statusClass = ' trame-missing';
+            } else if (item.fileStatus === 'ok') {
+                statusIcon = '✅';
+            }
+            
+            html += `<div class="trame-item${isCurrent ? ' trame-current' : ''}${statusClass}">
+                <span class="trame-idx">${item.index + 1}</span>
+                <span class="trame-status" title="${item.fileStatus === 'missing' ? 'Fichier absent du disque' : 'OK'}">${statusIcon}</span>
+                <span class="trame-type-icon">${typeIcon}</span>
+                <span class="trame-type">${typeLabel}</span>
+                <span class="trame-name" title="${shortName}">${shortName}</span>
+                <span class="trame-dur">${item.dur}s</span>
+                <span class="trame-diapo" title="${diapoName}${transition ? ' (' + transition + ')' : ''}">${diapoName}</span>
+            </div>`;
+        }
+        listEl.innerHTML = html;
+        
+        // Scroll to current item
+        const currentEl = listEl.querySelector('.trame-current');
+        if (currentEl) {
+            currentEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+    }
+    
+    /**
+     * Icône pour le type de média dans la trame
+     */
+    _getTrameTypeIcon(type) {
+        const icons = { img: '🖼️', video: '🎬', template: '📐', planning: '📅' };
+        return icons[type] || '📎';
+    }
+    
+    /**
+     * Label pour le type de média dans la trame
+     */
+    _getTrameTypeLabel(type) {
+        const labels = { img: 'Image', video: 'Vidéo', template: 'Template', planning: 'Planning' };
+        return labels[type] || type;
+    }
+    
+    /**
+     * Démarre le refresh auto de l'onglet trame (toutes les 1s)
+     */
+    _startTrameRefresh() {
+        this._stopTrameRefresh();
+        this.trameRefreshInterval = setInterval(() => {
+            if (this.mediaListVisible && this.activeTab === 'trame') {
+                this._loadTrameTab();
+            }
+        }, 1000);
+    }
+    
+    /**
+     * Arrête le refresh auto de la trame
+     */
+    _stopTrameRefresh() {
+        if (this.trameRefreshInterval) {
+            clearInterval(this.trameRefreshInterval);
+            this.trameRefreshInterval = null;
+        }
+    }
+    
+    /**
+     * Formate une durée totale de trame (en secondes)
+     */
+    _formatTrameDuration(seconds) {
+        if (seconds < 60) return seconds + 's';
+        const m = Math.floor(seconds / 60);
+        const s = Math.round(seconds % 60);
+        if (m < 60) return m + 'min ' + (s > 0 ? s + 's' : '');
+        const h = Math.floor(m / 60);
+        const rm = m % 60;
+        return h + 'h ' + rm + 'min';
+    }
+    
+    /**
+     * Cache la modal de liste des médias
+     */
+    hideMediaList() {
+        this._stopTrameRefresh();
+        if (this.mediaPanel) {
+            this.mediaPanel.style.display = 'none';
+        }
+        this.mediaListVisible = false;
+        if (!this.configMode && !this.visible) {
+            document.body.style.cursor = 'none';
+        }
+        this._log('info', 'debug', 'Media list hidden');
+    }
+    
+    /**
+     * Crée le panneau de liste des médias (avec onglets Fichiers / Trame)
+     */
+    _createMediaPanel() {
+        this.mediaPanel = document.createElement('div');
+        this.mediaPanel.id = 'media-list-panel';
+        this.mediaPanel.innerHTML = `
+            <div class="media-dialog">
+                <div class="media-header">
+                    <div class="media-tabs">
+                        <button class="media-tab active" data-tab="files" onclick="window.debugOverlay.switchTab('files')">📁 Fichiers</button>
+                        <button class="media-tab" data-tab="trame" onclick="window.debugOverlay.switchTab('trame')">🎬 Trame de lecture</button>
+                    </div>
+                    <span class="media-close" onclick="window.debugOverlay.hideMediaList()">×</span>
+                </div>
+                <!-- TAB: Fichiers -->
+                <div class="media-tab-content" id="tab-files">
+                    <div class="media-stats">
+                        <span id="media-list-count">-</span>
+                        <span class="media-stats-sep">•</span>
+                        <span id="media-list-total">-</span>
+                    </div>
+                    <div class="media-list-header">
+                        <span class="media-col-icon"></span>
+                        <span class="media-col-name">Nom</span>
+                        <span class="media-col-size">Taille</span>
+                        <span class="media-col-date">Modifié</span>
+                    </div>
+                    <div class="media-list-body" id="media-list-body">
+                    </div>
+                </div>
+                <!-- TAB: Trame de lecture -->
+                <div class="media-tab-content" id="tab-trame" style="display:none;">
+                    <div class="media-stats">
+                        <span id="trame-count">-</span>
+                        <span class="media-stats-sep">•</span>
+                        <span>Durée totale: <span id="trame-duration">-</span></span>
+                    </div>
+                    <div class="trame-list-header">
+                        <span class="trame-col-idx">#</span>
+                        <span class="trame-col-status"></span>
+                        <span class="trame-col-icon"></span>
+                        <span class="trame-col-type">Type</span>
+                        <span class="trame-col-name">Fichier</span>
+                        <span class="trame-col-dur">Durée</span>
+                        <span class="trame-col-diapo">Diapo</span>
+                    </div>
+                    <div class="media-list-body" id="trame-list-body">
+                    </div>
+                </div>
+                <div class="media-footer">
+                    Appuyez sur <kbd>L</kbd> ou <kbd>Esc</kbd> pour fermer
+                </div>
+            </div>
+        `;
+        document.body.appendChild(this.mediaPanel);
+    }
+    
+    /**
+     * Retourne une icône selon l'extension du fichier
+     */
+    _getMediaIcon(ext) {
+        const icons = {
+            jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', bmp: '🖼️', webp: '🖼️', svg: '🖼️',
+            mp4: '🎬', avi: '🎬', mkv: '🎬', mov: '🎬', webm: '🎬', wmv: '🎬',
+            mp3: '🎵', wav: '🎵', ogg: '🎵', flac: '🎵',
+            pdf: '📄', html: '📄', htm: '📄',
+        };
+        return icons[ext] || '📎';
+    }
+    
+    /**
+     * Formate une taille en octets en format lisible
+     */
+    _formatSize(bytes) {
+        if (bytes === 0) return '0 o';
+        if (bytes < 1024) return bytes + ' o';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko';
+        if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
+        return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' Go';
+    }
+    
+    /**
      * Crée l'overlay HTML
      */
     _createOverlay() {
@@ -499,7 +888,8 @@ class DebugOverlay {
             </div>
             <div class="debug-footer">
                 <span>Appuyez sur <kbd>D</kbd> pour fermer</span>
-                <span>Appuyez sur <kbd>C</kbd> pour configurer</span>
+                <span><kbd>C</kbd> configurer</span>
+                <span><kbd>L</kbd> médias</span>
             </div>
         `;
         
@@ -1304,6 +1694,303 @@ class DebugOverlay {
                 background: #6c757d;
                 cursor: not-allowed;
                 opacity: 0.7;
+            }
+            
+            /* Media List Panel */
+            #media-list-panel {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.92);
+                display: none;
+                justify-content: center;
+                align-items: center;
+                z-index: 100001;
+            }
+            
+            body.custom-mode #media-list-panel {
+                width: var(--custom-width, 100%);
+                height: var(--custom-height, 100%);
+            }
+            
+            .media-dialog {
+                background: #1a1a1a;
+                border-radius: 12px;
+                width: 700px;
+                max-width: 90vw;
+                max-height: 80vh;
+                display: flex;
+                flex-direction: column;
+                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            
+            body.custom-mode .media-dialog {
+                max-width: calc(var(--custom-width, 100vw) - 40px);
+                max-height: calc(var(--custom-height, 100vh) - 40px);
+            }
+            
+            .media-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 10px 20px;
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 12px 12px 0 0;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            
+            .media-close {
+                cursor: pointer;
+                font-size: 24px;
+                color: #888;
+                padding: 0 5px;
+            }
+            
+            .media-close:hover {
+                color: #fff;
+            }
+            
+            .media-stats {
+                padding: 8px 20px;
+                color: #4fc3f7;
+                font-size: 13px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            }
+            
+            .media-stats-sep {
+                margin: 0 8px;
+                color: #555;
+            }
+            
+            .media-list-header {
+                display: grid;
+                grid-template-columns: 30px 1fr 80px 130px;
+                gap: 8px;
+                padding: 8px 20px;
+                color: #888;
+                font-size: 11px;
+                text-transform: uppercase;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            
+            .media-list-body {
+                overflow-y: auto;
+                max-height: 50vh;
+                padding: 4px 0;
+            }
+            
+            .media-item {
+                display: grid;
+                grid-template-columns: 30px 1fr 80px 130px;
+                gap: 8px;
+                padding: 6px 20px;
+                color: #ddd;
+                font-size: 13px;
+                align-items: center;
+                transition: background 0.15s;
+            }
+            
+            .media-item:hover {
+                background: rgba(255, 255, 255, 0.05);
+            }
+            
+            .media-icon {
+                text-align: center;
+                font-size: 14px;
+            }
+            
+            .media-name {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 12px;
+            }
+            
+            .media-size {
+                text-align: right;
+                color: #aaa;
+                font-size: 12px;
+            }
+            
+            .media-date {
+                text-align: right;
+                color: #888;
+                font-size: 11px;
+            }
+            
+            .media-footer {
+                padding: 10px 20px;
+                text-align: center;
+                color: #666;
+                font-size: 12px;
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            
+            .media-footer kbd {
+                background: rgba(255, 255, 255, 0.1);
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-size: 11px;
+                color: #aaa;
+            }
+            
+            .media-list-body::-webkit-scrollbar {
+                width: 6px;
+            }
+            
+            .media-list-body::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            
+            .media-list-body::-webkit-scrollbar-thumb {
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 3px;
+            }
+            
+            /* Tabs */
+            .media-tabs {
+                display: flex;
+                gap: 4px;
+            }
+            
+            .media-tab {
+                background: transparent;
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                color: #888;
+                padding: 6px 14px;
+                border-radius: 6px 6px 0 0;
+                cursor: pointer;
+                font-size: 13px;
+                transition: all 0.2s;
+            }
+            
+            .media-tab:hover {
+                color: #ccc;
+                background: rgba(255, 255, 255, 0.05);
+            }
+            
+            .media-tab.active {
+                background: rgba(79, 195, 247, 0.15);
+                color: #4fc3f7;
+                border-color: rgba(79, 195, 247, 0.3);
+                border-bottom-color: transparent;
+            }
+            
+            .media-tab-content {
+                display: flex;
+                flex-direction: column;
+                flex: 1;
+                min-height: 0;
+            }
+            
+            /* Trame de lecture */
+            .trame-list-header {
+                display: grid;
+                grid-template-columns: 32px 24px 26px 60px 1fr 50px 120px;
+                gap: 6px;
+                padding: 8px 20px;
+                color: #888;
+                font-size: 11px;
+                text-transform: uppercase;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            
+            .trame-item {
+                display: grid;
+                grid-template-columns: 32px 24px 26px 60px 1fr 50px 120px;
+                gap: 6px;
+                padding: 6px 20px;
+                color: #ddd;
+                font-size: 13px;
+                align-items: center;
+                transition: background 0.15s;
+                border-left: 3px solid transparent;
+            }
+            
+            .trame-item:hover {
+                background: rgba(255, 255, 255, 0.05);
+            }
+            
+            .trame-item.trame-current {
+                background: rgba(76, 175, 80, 0.15);
+                border-left-color: #4caf50;
+            }
+            
+            .trame-item.trame-missing {
+                background: rgba(244, 67, 54, 0.1);
+            }
+            
+            .trame-item.trame-missing .trame-name {
+                color: #f44336;
+                text-decoration: line-through;
+            }
+            
+            .trame-status {
+                text-align: center;
+                font-size: 12px;
+            }
+            
+            .trame-pagedefault {
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            }
+            
+            .trame-pagedefault .trame-name {
+                color: #90caf9;
+                font-style: italic;
+            }
+            
+            .trame-idx {
+                text-align: center;
+                color: #666;
+                font-size: 11px;
+                font-family: 'Consolas', 'Courier New', monospace;
+            }
+            
+            .trame-current .trame-idx {
+                color: #4caf50;
+                font-weight: bold;
+            }
+            
+            .trame-type-icon {
+                text-align: center;
+                font-size: 14px;
+            }
+            
+            .trame-type {
+                font-size: 11px;
+                color: #aaa;
+                text-transform: uppercase;
+            }
+            
+            .trame-item.trame-current .trame-type {
+                color: #81c784;
+            }
+            
+            .trame-name {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 12px;
+            }
+            
+            .trame-dur {
+                text-align: right;
+                color: #ffb74d;
+                font-size: 12px;
+                font-family: 'Consolas', 'Courier New', monospace;
+            }
+            
+            .trame-diapo {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                color: #888;
+                font-size: 11px;
             }
         `;
         

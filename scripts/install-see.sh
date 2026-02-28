@@ -45,6 +45,7 @@ apt-get install -y -qq \
   libsecret-1-0 \
   libgbm1 \
   libasound2 \
+  fonts-noto-color-emoji \
   2>/dev/null || true
 
 echo "✅ Dépendances installées"

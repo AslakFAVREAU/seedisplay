@@ -1,6 +1,6 @@
 {
   "name": "seedisplay",
-  "version": "1.10.9",
+  "version": "1.12.0",
   "description": "SEE Display Application",
   "main": "main.js",
   "scripts": {
@@ -160,7 +160,7 @@
       "artifactName": "seedisplay-${version}-${arch}.deb"
     },
     "appImage": {
-      "artifactName": "SEE-Display-${version}-${arch}.AppImage"
+      "artifactName": "SEE-Display-${arch}.AppImage"
     }
   }
 }

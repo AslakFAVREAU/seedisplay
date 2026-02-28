@@ -217,6 +217,11 @@ contextBridge.exposeInMainWorld('api', {
   fetchJson: async (url, opts) => {
     try {
       if (hasNode && axios) {
+        // Support POST/PUT/etc. via opts.method
+        if (opts && opts.method && opts.method.toUpperCase() !== 'GET') {
+          const res = await axios.request({ ...opts, url })
+          return res.data
+        }
         const res = await axios.get(url, opts)
         return res.data
       }
@@ -261,6 +266,22 @@ contextBridge.exposeInMainWorld('api', {
     return await ipcRenderer.invoke('preload-saveBinary', relativePath, url)
   },
   // Media cache management APIs
+  listMediaFiles: async () => {
+    if (hasNode) {
+      try {
+        const mediaDir = safeJoin(BASE_PATH, 'media')
+        if (!fs.existsSync(mediaDir)) return []
+        const files = fs.readdirSync(mediaDir).map(f => {
+          try {
+            const st = fs.statSync(path.join(mediaDir, f))
+            return { name: f, size: st.size, mtime: st.mtimeMs, isDir: st.isDirectory() }
+          } catch(e) { return { name: f, size: 0, mtime: 0, isDir: false } }
+        }).filter(f => !f.isDir).sort((a, b) => b.mtime - a.mtime)
+        return files
+      } catch(e) { return [] }
+    }
+    return await ipcRenderer.invoke('preload-listMediaFiles')
+  },
   getMediaCacheInfo: async () => {
     if (hasNode) {
       try {

@@ -1026,7 +1026,8 @@ const getDiapoJson = async () => {
       const filename = item[1]
       if (!filename || typeof filename !== 'string') return null
       if (type === 'template' || type === 'planning') return null
-      return filename
+      // Decode URI-encoded filename so disk path uses real characters (spaces etc)
+      try { return decodeURIComponent(filename) } catch(e) { return filename }
     } catch (e) { return null }
   }
 

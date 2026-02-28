@@ -228,7 +228,10 @@ async function downloadAllMedia(mediaList, timeoutMs) {
     async function worker() {
         while (idx < files.length && !done) {
             const file = files[idx++]
-            const relativePath = 'media/' + file
+            // Decode URI-encoded filename for disk path
+            let decodedFile
+            try { decodedFile = decodeURIComponent(file) } catch(e) { decodedFile = file }
+            const relativePath = 'media/' + decodedFile
             const url = baseUrl + file
             try {
                 // Vérifier si le fichier existe déjà localement

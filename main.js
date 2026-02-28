@@ -68,7 +68,7 @@ protocol.registerSchemesAsPrivileged([{
 }]);
 
 //-------------------------------------------------------------------
-// Auto-updater Configuration
+// Auto-updater Configuration (AppImage only)
 // Supports two channels hosted on SOEK server:
 //   - STABLE: https://soek.fr/updates/seedisplay
 //   - BETA:   https://soek.fr/updates/seedisplay/beta
@@ -151,13 +151,14 @@ function configureUpdateServer() {
   
   log.info(`[configureUpdateServer] Selected URL for env "${env}": ${url}`);
   
-  // Configuration avec useMultipleRangeRequest: false pour éviter les problèmes de téléchargement
-  // Ne PAS spécifier de channel pour que electron-updater cherche "latest.yml" par défaut
+  // Configuration: désactiver le téléchargement différentiel (pas de blockmap)
+  // Télécharge toujours l'AppImage complète (~122 Mo) — plus fiable
   autoUpdater.setFeedURL({
     provider: 'generic',
     url: url,
     useMultipleRangeRequest: false
   });
+  autoUpdater.disableDifferentialDownload = true;
   
   // Désactiver explicitement la vérification de channel dans le yml
   autoUpdater.channel = 'latest';
@@ -265,7 +266,9 @@ let win;
 
 function sendStatusToWindow(text) {
   log.info(text);
-  win.webContents.send('message', text);
+  if (win && win.webContents && !win.isDestroyed()) {
+    win.webContents.send('message', text);
+  }
 }
 
 /**
@@ -451,30 +454,7 @@ function createDefaultWindow() {
   
   return win;
 }
-autoUpdater.on('checking-for-update', () => {
-  sendStatusToWindow('Checking for update...');
-})
-autoUpdater.on('update-available', (info) => {
-  sendStatusToWindow('Update available.');
-})
-autoUpdater.on('update-not-available', (info) => {
-  sendStatusToWindow('Update not available.');
-})
-autoUpdater.on('error', (err) => {
-  sendStatusToWindow('Error in auto-updater. ' + err);
-})
-autoUpdater.on('download-progress', (progressObj) => {
-  let log_message = "Download speed: " + progressObj.bytesPerSecond;
-  log_message = log_message + ' - Downloaded ' + progressObj.percent + '%';
-  log_message = log_message + ' (' + progressObj.transferred + "/" + progressObj.total + ')';
-  sendStatusToWindow(log_message);
-})
-autoUpdater.on('update-downloaded', (info) => {
-  log.info('[auto-update] Update downloaded: v' + (info && info.version));
-  log.info('[auto-update] Restarting app to install update...');
-  // Installer immédiatement : quitter et relancer avec la nouvelle version
-  autoUpdater.quitAndInstall(/* isSilent */ true, /* isForceRunAfter */ true);
-});
+
 app.on('ready', function() {
   // Enregistrer le protocol handler see-media:// pour servir les fichiers media
   // depuis BASE_PATH sur toutes les plateformes (nécessaire sur Linux où file:// 
@@ -578,9 +558,26 @@ app.on('ready', function() {
     }, msUntil2am);
   }
   
-  // Vérifier les mises à jour au démarrage (après 30 secondes pour laisser l'app se charger)
-  // Sur Linux, l'auto-update ne fonctionne qu'avec AppImage
-  const canAutoUpdate = !IS_LINUX || !!process.env.APPIMAGE;
+  // Auto-update : AppImage uniquement
+  // Vérifier que $APPIMAGE est défini (= lancé en tant qu'AppImage)
+  let canAutoUpdate = !!process.env.APPIMAGE;
+  
+  // Vérifier les permissions d'écriture sur le fichier AppImage
+  if (canAutoUpdate) {
+    try {
+      const appImagePath = process.env.APPIMAGE;
+      const appImageDir = path.dirname(appImagePath);
+      fs.accessSync(appImagePath, fs.constants.W_OK);
+      fs.accessSync(appImageDir, fs.constants.W_OK);
+      log.info(`[auto-update] AppImage writable: ${appImagePath}`);
+    } catch (permErr) {
+      log.error(`[auto-update] EACCES: AppImage or directory not writable: ${process.env.APPIMAGE}`);
+      log.error(`[auto-update] Fix with: chmod u+rwx "${process.env.APPIMAGE}" && chmod u+rwx "${path.dirname(process.env.APPIMAGE)}"`);
+      log.info('[auto-update] Auto-update disabled due to permission issue');
+      canAutoUpdate = false;
+    }
+  }
+  
   if (canAutoUpdate) {
     setTimeout(() => {
       log.info('[auto-update] Initial update check...');
@@ -594,7 +591,7 @@ app.on('ready', function() {
     
     log.info('[auto-update] Update checks scheduled: startup + daily at 2:00 AM');
   } else {
-    log.info('[auto-update] Auto-update disabled on Linux (not running as AppImage)');
+    log.info('[auto-update] Auto-update disabled (not running as AppImage, $APPIMAGE not set)');
   }
 });
 
@@ -614,68 +611,65 @@ app.on('will-quit', () => {
 });
 
 
-
-
-//
-// CHOOSE one of the following options for Auto updates
-//
-
 //-------------------------------------------------------------------
-// Auto updates - Configuration améliorée
-//
-// Configuration sécurisée et user-friendly des mises à jour automatiques
+// Auto updates - Configuration unique et centralisée
 //-------------------------------------------------------------------
 
 // Configuration de l'updater pour le développement (optionnel)
 if (process.env.NODE_ENV === 'development') {
-  // Force les updates en développement si la variable d'environnement est définie
   if (process.env.ENABLE_DEV_UPDATES === 'true') {
     autoUpdater.forceDevUpdateConfig = true;
     log.info('Development updates enabled');
   }
 }
 
-// Gestion des erreurs d'update
-autoUpdater.on('error', (error) => {
-  log.error('Update error:', error);
-  // Pas de notification - log seulement
-});
-
-// Auto-update silencieuse et immédiate
-autoUpdater.on('update-downloaded', (info) => {
-  log.info('Update downloaded, installing immediately');
-  log.info('New version: ' + info.version);
-  
-  // Redémarrage immédiat et silencieux - pas de notification
-  autoUpdater.quitAndInstall(false, true);
-});
-
 // Track update status for renderer
 let updateStatus = { checking: false, available: false, downloading: false, progress: 0, error: null, version: null };
 
 autoUpdater.on('checking-for-update', () => {
+  sendStatusToWindow('Checking for update...');
   updateStatus = { ...updateStatus, checking: true, error: null };
-  if (win) win.webContents.send('update-status', updateStatus);
+  if (win && !win.isDestroyed()) win.webContents.send('update-status', updateStatus);
 });
 
 autoUpdater.on('update-available', (info) => {
+  sendStatusToWindow('Update available: v' + (info && info.version));
   updateStatus = { ...updateStatus, checking: false, available: true, version: info.version };
-  if (win) win.webContents.send('update-status', updateStatus);
+  if (win && !win.isDestroyed()) win.webContents.send('update-status', updateStatus);
 });
 
 autoUpdater.on('update-not-available', (info) => {
+  sendStatusToWindow('Update not available.');
   updateStatus = { ...updateStatus, checking: false, available: false };
-  if (win) win.webContents.send('update-status', updateStatus);
+  if (win && !win.isDestroyed()) win.webContents.send('update-status', updateStatus);
 });
 
 autoUpdater.on('download-progress', (progressObj) => {
+  let log_message = "Download speed: " + progressObj.bytesPerSecond;
+  log_message += ' - Downloaded ' + progressObj.percent + '%';
+  log_message += ' (' + progressObj.transferred + "/" + progressObj.total + ')';
+  sendStatusToWindow(log_message);
   updateStatus = { ...updateStatus, downloading: true, progress: Math.round(progressObj.percent) };
-  if (win) win.webContents.send('update-status', updateStatus);
+  if (win && !win.isDestroyed()) win.webContents.send('update-status', updateStatus);
 });
 
 autoUpdater.on('error', (err) => {
+  log.error('[auto-update] Error:', err.message);
+  log.error('[auto-update] Error stack:', err.stack);
+  if (err.statusCode) log.error('[auto-update] HTTP status:', err.statusCode);
+  if (err.url) log.error('[auto-update] URL:', err.url);
+  log.error('[auto-update] Full error object:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
   updateStatus = { ...updateStatus, checking: false, downloading: false, error: err.message };
-  if (win) win.webContents.send('update-status', updateStatus);
+  if (win && !win.isDestroyed()) win.webContents.send('update-status', updateStatus);
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  log.info('[auto-update] Update downloaded: v' + (info && info.version));
+  log.info('[auto-update] Restarting app to install update...');
+  // Petit délai pour laisser les logs s'écrire avant le restart
+  setTimeout(() => {
+    autoUpdater.quitAndInstall(false, true);
+  }, 1000);
 });
 
 // IPC handler for manual update check from renderer
@@ -1110,6 +1104,20 @@ ipcMain.handle('preload-saveBinaryWithCache', async (evt, relative, url, cacheOp
   }
 })
 
+ipcMain.handle('preload-listMediaFiles', async () => {
+  try {
+    const mediaDir = path.join(BASE_PATH, 'media')
+    if (!fs.existsSync(mediaDir)) return []
+    const files = fs.readdirSync(mediaDir).map(f => {
+      try {
+        const st = fs.statSync(path.join(mediaDir, f))
+        return { name: f, size: st.size, mtime: st.mtimeMs, isDir: st.isDirectory() }
+      } catch(e) { return { name: f, size: 0, mtime: 0, isDir: false } }
+    }).filter(f => !f.isDir).sort((a, b) => b.mtime - a.mtime)
+    return files
+  } catch(e) { return [] }
+})
+
 ipcMain.handle('preload-getMediaCacheInfo', async () => {
   try {
     const mediaDir = path.join(BASE_PATH, 'media')
@@ -1137,10 +1145,11 @@ ipcMain.handle('preload-pruneMedia', async () => {
   } catch(e) { return false }
 })
 
-// Cette méthode sera appelée quant Electron aura fini
-// de s'initialiser et prêt à créer des fenêtres de navigation.
-// Certaines APIs peuvent être utilisées uniquement quant cet événement est émit.
-app.whenReady().then(createWindow)
+// NOTE: createWindow n'est plus appelée ici.
+// La fenêtre principale est déjà créée par createDefaultWindow()
+// dans app.on('ready'). L'ancien appel ci-dessous créait une 2e fenêtre
+// qui lançait startPairing en double (→ erreur 500 sur le serveur).
+// app.whenReady().then(createWindow)  // SUPPRIMÉ - doublon
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

@@ -1448,6 +1448,7 @@
   let pairingCode = null
   let pairingPollInterval = null
   let pairingDeviceId = null // ID unique de ce device (persisté)
+  let pairingLastStart = 0   // Timestamp du dernier startPairing (anti-boucle)
 
   /**
    * Génère un code d'appairage aléatoire de 4 caractères alphanumériques (majuscules + chiffres)
@@ -1505,6 +1506,20 @@
    * 4. Quand le serveur renvoie les infos → sauvegarde et redémarre
    */
   async function startPairing() {
+    // Ne pas lancer si le pairing est déjà actif avec un code
+    if (pairingPollInterval && pairingCode) {
+      __log('debug', 'pairing', 'Pairing already active with code ' + pairingCode)
+      return
+    }
+
+    // Anti-boucle: minimum 30 secondes entre deux startPairing
+    const now = Date.now()
+    if (now - pairingLastStart < 30000) {
+      __log('warn', 'pairing', 'Throttled: startPairing called too fast, waiting...')
+      return
+    }
+    pairingLastStart = now
+
     // Stopper un éventuel polling précédent
     stopPairing()
     
@@ -1525,40 +1540,54 @@
     
     __log('info', 'pairing', `Starting pairing: code=${pairingCode}, deviceId=${pairingDeviceId}, server=${baseUrl}`)
     
-    // Enregistrer le code sur le serveur
-    try {
-      const registerUrl = `${baseUrl}/see/API/pair`
-      const resp = await fetch(registerUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: pairingCode,
-          deviceId: pairingDeviceId,
-          hostname: navigator.userAgent,
-          platform: navigator.platform
-        }),
-        signal: AbortSignal.timeout(10000)
-      })
-      
-      if (!resp.ok) {
-        throw new Error(`Serveur a répondu ${resp.status}`)
+    // Enregistrer le code sur le serveur (via main process pour éviter CORS)
+    let registered = false
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const registerUrl = `${baseUrl}/see/API/pair`
+        const data = await window.api.fetchJson(registerUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          data: {
+            code: pairingCode,
+            deviceId: pairingDeviceId,
+            hostname: navigator.userAgent,
+            platform: navigator.platform,
+            ttl: 600 // 10 minutes en secondes
+          }
+        })
+        
+        if (!data) {
+          throw new Error('Pas de réponse du serveur')
+        }
+        
+        __log('info', 'pairing', `Code registered on server (attempt ${attempt}):`, data)
+        registered = true
+        
+        // Si le serveur renvoie un TTL/expiration, l'afficher
+        if (data.expiresIn) {
+          statusEl.innerHTML = `<span class="pairing-spinner"></span> Code valide ${Math.round(data.expiresIn / 60)} min — en attente d'association...`
+        }
+        
+        break // Succès, on sort de la boucle
+        
+      } catch (err) {
+        __log('warn', 'pairing', `Registration attempt ${attempt}/3 failed:`, err.message)
+        if (attempt < 3) {
+          // Attendre avant de réessayer (2s, 5s)
+          await new Promise(r => setTimeout(r, attempt * 2500))
+          // Regénérer un nouveau code au cas où le précédent cause un conflit
+          pairingCode = generatePairingCode()
+          codeEl.textContent = pairingCode
+        }
       }
-      
-      const data = await resp.json()
-      __log('info', 'pairing', 'Code registered on server:', data)
-      
-      // Si le serveur renvoie un TTL/expiration, l'afficher
-      if (data.expiresIn) {
-        statusEl.innerHTML = `<span class="pairing-spinner"></span> Code valide ${Math.round(data.expiresIn / 60)} min — en attente d'association...`
-      }
-      
-    } catch (err) {
-      __log('warn', 'pairing', 'Could not register code on server:', err.message)
-      // On continue quand même - le serveur va peut-être accepter le polling sans pré-enregistrement
+    }
+    
+    if (!registered) {
       statusEl.innerHTML = '<span class="pairing-spinner"></span> En attente d\'association... (serveur non joignable, nouveau essai auto)'
     }
     
-    // Démarrer le polling toutes les 5 secondes
+    // Démarrer le polling toutes les 5 secondes (même si non enregistré, le poll réessaiera)
     pairingPollInterval = setInterval(() => pollPairingStatus(), 5000)
   }
 
@@ -1574,22 +1603,20 @@
     
     try {
       const url = `${baseUrl}/see/API/pair/${pairingCode}/status`
-      const resp = await fetch(url, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(8000)
-      })
+      const data = await window.api.fetchJson(url)
       
-      if (resp.status === 404) {
-        // Code expiré → regénérer
-        __log('warn', 'pairing', 'Code expired, regenerating...')
-        startPairing()
+      if (!data) {
+        // Null = erreur réseau ou 404 → regénérer après un délai
+        __log('warn', 'pairing', 'Code expired or server error, regenerating in 30s...')
+        stopPairing()
+        const statusEl2 = document.getElementById('pairingStatus')
+        statusEl2.innerHTML = '⏳ Code expiré, nouveau code dans 30s...'
+        setTimeout(() => {
+          pairingLastStart = 0 // Reset le throttle pour permettre le restart
+          startPairing()
+        }, 30000)
         return
       }
-      
-      if (!resp.ok) return // Erreur serveur, on réessaie au prochain poll
-      
-      const data = await resp.json()
       
       // Pas encore appairé
       if (data.status === 'pending') {

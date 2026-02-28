@@ -22,6 +22,17 @@ let currentVisibleDiv = null; // Track quel div est actuellement visible
 let pauseLoop = false; // NEW: Flag pour rester sur pageDefault en mode édition
 let mediaLoopSignature = '';
 
+// Expose pour DebugOverlay (trame de lecture)
+window._getMediaLoop = () => mediaLoop;
+window._getCurrentMediaIndex = () => currentMediaIndex;
+window._isOnPageDefault = () => {
+    // On est sur pageDefault si l'index dépasse la boucle ou si pageDefault est visible
+    try {
+        const pd = document.getElementById('pageDefault');
+        return pd && pd.style.display !== 'none';
+    } catch(e) { return false; }
+};
+
 // DEBUG: Variable globale accessible de la console
 // Lire DEBUG_MODE depuis preload API si disponible
 window.DEBUG_MODE = false; // Change à true pour bloquer sur pageDefault
@@ -121,12 +132,12 @@ async function showMedia(mediaIndex) {
         document.getElementById('mediaContainer').style.display = 'none';
         document.getElementById('pageDefault').style.display = 'flex';
         
-        // Redémarrer après 5 secondes
+        // Redémarrer après 10 secondes
         loopTimeout = setTimeout(() => {
             document.getElementById('pageDefault').style.display = 'none';
             document.getElementById('mediaContainer').style.display = 'block';
             showMedia(0);
-        }, 5000);
+        }, 10000);
         
         return;
     }
@@ -184,10 +195,11 @@ async function showMedia(mediaIndex) {
         
         // Vérifier que la vidéo existe localement, sinon télécharger
         try {
-            const relativePath = 'media/' + mediaFile;
+            const decodedVideoFile = decodeURIComponent(mediaFile);
+            const relativePath = 'media/' + decodedVideoFile;
             const exists = window.api && window.api.existsSync ? window.api.existsSync(relativePath) : true;
             if (!exists) {
-                __log('warn', 'diapo', 'video not cached, downloading: ' + mediaFile);
+                __log('warn', 'diapo', 'video not cached, downloading: ' + decodedVideoFile);
                 const baseUrl = typeof getMediaBaseUrl === 'function' ? getMediaBaseUrl() : 'https://soek.fr/uploads/see/media/';
                 if (window.api && window.api.saveBinaryWithCache) {
                     await window.api.saveBinaryWithCache(relativePath, baseUrl + mediaFile);
@@ -325,11 +337,13 @@ async function showMedia(mediaIndex) {
         // Vérifier que le fichier existe localement, sinon le télécharger d'abord
         const ensureMediaReady = async (fileName) => {
             try {
-                const relativePath = 'media/' + fileName;
+                // Decode URI-encoded filename for disk path
+                const decodedFile = decodeURIComponent(fileName);
+                const relativePath = 'media/' + decodedFile;
                 const exists = window.api && window.api.existsSync ? window.api.existsSync(relativePath) : true;
                 if (exists) return true;
                 
-                __log('warn', 'diapo', 'media not cached locally, downloading: ' + fileName);
+                __log('warn', 'diapo', 'media not cached locally, downloading: ' + decodedFile);
                 const baseUrl = typeof getMediaBaseUrl === 'function' ? getMediaBaseUrl() : 'https://soek.fr/uploads/see/media/';
                 if (window.api && window.api.saveBinaryWithCache) {
                     const res = await window.api.saveBinaryWithCache(relativePath, baseUrl + fileName);
@@ -375,6 +389,8 @@ async function showMedia(mediaIndex) {
                     if (imageHandled) return;
                     imageHandled = true;
                     __log('error', 'diapo', 'image preload failed for ' + mediaFile + ', skipping');
+                    // Annuler le timer de défilement normal
+                    if (loopTimeout) { clearTimeout(loopTimeout); loopTimeout = null; }
                     // Passer au suivant au lieu d'afficher un écran noir
                     setTimeout(() => showMedia(currentMediaIndex + 1), 500);
                 };
@@ -384,6 +400,7 @@ async function showMedia(mediaIndex) {
                     if (!imageHandled) {
                         imageHandled = true;
                         __log('error', 'diapo', 'image load timeout for ' + mediaFile + ', skipping');
+                        if (loopTimeout) { clearTimeout(loopTimeout); loopTimeout = null; }
                         setTimeout(() => showMedia(currentMediaIndex + 1), 200);
                     }
                 }, 8000);
