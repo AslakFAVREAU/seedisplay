@@ -1119,6 +1119,22 @@ const getDiapoJson = async () => {
         window.lastApiError = Date.now()
         _log('error','diapo','requestJsonDiapo: API FAILURE #' + window.apiConsecutiveErrors + ' - no data received')
         
+        // Après 3 échecs consécutifs, redémarrer l'app
+        if (window.apiConsecutiveErrors >= 3) {
+          _log('error','diapo','requestJsonDiapo: 3 consecutive API failures - RESTARTING APP')
+          try {
+            if (window.api && typeof window.api.restartApp === 'function') {
+              window.api.restartApp()
+            } else {
+              window.location.reload()
+            }
+          } catch (e) {
+            _log('error','diapo','requestJsonDiapo: restart failed: ' + e.message)
+            window.location.reload()
+          }
+          return
+        }
+        
         // Keep existing diapos alive - don't wipe ArrayDiapo
         if (ArrayDiapo && ArrayDiapo.length > 0) {
           _log('warn','diapo','requestJsonDiapo: keeping current ' + ArrayDiapo.length + ' diapos alive during API failure')

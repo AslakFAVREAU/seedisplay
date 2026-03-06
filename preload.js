@@ -144,6 +144,16 @@ contextBridge.exposeInMainWorld('api', {
       console.error('[preload] leaveSetupMode failed:', e.message);
     }
   },
+  // Restart complet de l'app (relaunch process) - utilisé après première association
+  restartApp: () => {
+    try {
+      ipcRenderer.send('restart-app');
+    } catch (e) {
+      console.error('[preload] restartApp failed:', e.message);
+      // Fallback: simple reload
+      window.location.reload();
+    }
+  },
   // Window resize (for custom screen dimensions from API)
   resizeWindow: async (width, height) => {
     try {

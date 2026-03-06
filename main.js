@@ -69,9 +69,24 @@ protocol.registerSchemesAsPrivileged([{
 
 //-------------------------------------------------------------------
 // Auto-updater Configuration (AppImage only)
-// Supports two channels hosted on SOEK server:
-//   - STABLE: https://soek.fr/updates/seedisplay
-//   - BETA:   https://soek.fr/updates/seedisplay/beta
+//
+// Deux axes indépendants dans configSEE.json :
+//   1. "env"           → serveur API + base des updates
+//      - "prod"  → soek.fr
+//      - "beta"  → beta.soek.fr
+//      - "local" → localhost:8000
+//
+//   2. "updateChannel" → canal de mise à jour (dans chaque env)
+//      - "stable" (défaut) → /updates/seedisplay
+//      - "beta"            → /updates/seedisplay/beta
+//
+// Exemples d'URLs finales :
+//   prod  + stable → https://soek.fr/updates/seedisplay
+//   prod  + beta   → https://soek.fr/updates/seedisplay/beta
+//   beta  + stable → https://beta.soek.fr/updates/seedisplay
+//   beta  + beta   → https://beta.soek.fr/updates/seedisplay/beta
+//   local + stable → http://localhost:8000/updates/seedisplay
+//   local + beta   → http://localhost:8000/updates/seedisplay/beta
 //-------------------------------------------------------------------
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
@@ -82,7 +97,7 @@ autoUpdater.logger.transports.file.level = 'info';
 
 /**
  * Détermine le canal de mise à jour (stable ou beta)
- * Lit la config pour voir si l'utilisateur veut les beta
+ * Lit configSEE.json → "updateChannel": "beta" | "stable"
  */
 function getUpdateChannel() {
   const configPath = path.join(BASE_PATH, 'configSEE.json');
@@ -101,7 +116,8 @@ function getUpdateChannel() {
 }
 
 /**
- * Détermine l'environnement (beta, prod, localhost) depuis la config
+ * Détermine l'environnement (prod, beta, local) depuis la config
+ * Lit configSEE.json → "env": "prod" | "beta" | "local"
  */
 function getEnvironment() {
   const configPath = path.join(BASE_PATH, 'configSEE.json');
@@ -127,10 +143,10 @@ function getEnvironment() {
 }
 
 /**
- * Configure l'URL du serveur de mise à jour selon l'environnement
- * - beta → https://beta.soek.fr/updates/seedisplay
- * - prod/soek → https://soek.fr/updates/seedisplay
- * - localhost → http://localhost:3000/updates/seedisplay (pour tests)
+ * Configure l'URL du serveur de mise à jour selon l'environnement ET le canal.
+ *
+ * env  → choisit le serveur (soek.fr / beta.soek.fr / localhost)
+ * canal → ajoute /beta au chemin si updateChannel === 'beta'
  */
 function configureUpdateServer() {
   const env = getEnvironment();
@@ -138,18 +154,21 @@ function configureUpdateServer() {
   
   log.info(`[configureUpdateServer] env=${env}, channel=${channel}`);
   
-  // Mapping environnement → URL de mise à jour
-  const updateUrls = {
-    beta: 'https://beta.soek.fr/updates/seedisplay',
-    prod: 'https://soek.fr/updates/seedisplay',
-    soek: 'https://soek.fr/updates/seedisplay',
-    localhost: 'http://localhost:8000/updates/seedisplay',
-    local: 'http://localhost:8000/updates/seedisplay'
+  // 1. Base URL selon l'environnement (quel serveur)
+  const envBaseUrls = {
+    prod:      'https://soek.fr/updates/seedisplay',
+    soek:      'https://soek.fr/updates/seedisplay',
+    beta:      'https://beta.soek.fr/updates/seedisplay',
+    local:     'http://localhost:8000/updates/seedisplay',
+    localhost: 'http://localhost:8000/updates/seedisplay'
   };
   
-  const url = updateUrls[env] || updateUrls.prod;
+  const baseUrl = envBaseUrls[env] || envBaseUrls.prod;
   
-  log.info(`[configureUpdateServer] Selected URL for env "${env}": ${url}`);
+  // 2. Ajouter /beta si le canal est beta
+  const url = channel === 'beta' ? `${baseUrl}/beta` : baseUrl;
+  
+  log.info(`[configureUpdateServer] URL=${url} (env=${env}, channel=${channel})`);
   
   // Configuration: désactiver le téléchargement différentiel (pas de blockmap)
   // Télécharge toujours l'AppImage complète (~122 Mo) — plus fiable
@@ -163,12 +182,31 @@ function configureUpdateServer() {
   // Désactiver explicitement la vérification de channel dans le yml
   autoUpdater.channel = 'latest';
   
-  log.info(`Auto-updater configured for ENV=${env.toUpperCase()}: ${url}`);
+  log.info(`Auto-updater configured: ENV=${env.toUpperCase()}, CHANNEL=${channel.toUpperCase()}, URL=${url}`);
   return env;
 }
 
 // Initialize update server
 const updateChannel = configureUpdateServer();
+
+// Migration: écrire updateChannel dans configSEE.json si absent
+// Les boîtiers existants en prod n'ont pas ce champ → on l'ajoute avec 'stable'
+(function ensureUpdateChannelInConfig() {
+  const configPath = path.join(BASE_PATH, 'configSEE.json');
+  try {
+    if (fs.existsSync(configPath)) {
+      const raw = fs.readFileSync(configPath, 'utf8');
+      const config = JSON.parse(raw);
+      if (!config.updateChannel) {
+        config.updateChannel = 'stable';
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+        log.info('[main] Config migrated: added updateChannel=stable');
+      }
+    }
+  } catch (e) {
+    log.warn('[main] Could not migrate updateChannel in config:', e.message);
+  }
+})();
 
 // Export pour être utilisé par ApiManager (headers)
 module.exports = { getUpdateChannel };
@@ -223,7 +261,11 @@ if (IS_LINUX) {
 // Smooth scrolling et rendering
 app.commandLine.appendSwitch('enable-smooth-scrolling');
 app.commandLine.appendSwitch('enable-accelerated-2d-canvas');
-app.commandLine.appendSwitch('disable-frame-rate-limit');
+
+// Performance: empêcher le throttling du renderer (kiosk = toujours au premier plan)
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 log.info('Hardware acceleration enabled for smooth video playback');
 
@@ -314,23 +356,37 @@ function createDefaultWindow() {
   // Load app icon from build directory
   const appIcon = path.join(__dirname, 'build', 'icon.ico');
   
+  // Vérifier si une config existe avec ecranUuid (sinon → mode setup)
+  let hasValidConfig = false;
+  try {
+    const cfgPath = path.join(BASE_PATH, 'configSEE.json');
+    if (fs.existsSync(cfgPath)) {
+      const cfgRaw = fs.readFileSync(cfgPath, 'utf8');
+      const cfgData = JSON.parse(cfgRaw);
+      hasValidConfig = !!cfgData.ecranUuid;
+    }
+  } catch (e) {
+    log.warn('[main] Could not read config to check setup mode:', e.message);
+  }
+  
   // Vérifier si des dimensions custom sont configurées
   const customDims = getScreenDimensionsFromConfig()
   const useCustomDimensions = customDims !== null && !customDims.isStandard
   
-  log.info(`[main] createDefaultWindow: useCustomDimensions=${useCustomDimensions}`, customDims)
+  log.info(`[main] createDefaultWindow: hasValidConfig=${hasValidConfig}, useCustomDimensions=${useCustomDimensions}`, customDims)
   
-  // Options de base - TOUJOURS fullscreen, le contenu sera positionné via CSS
+  // Si pas de config → démarrer en plein écran SANS kiosk (setup screen lisible)
+  // Si config valide → démarrer en fullscreen/kiosk comme d'habitude
   const windowOptions = {
     title: 'SEE Display',
     icon: appIcon,
     show: false,
     frame: false,
     autoHideMenuBar: true,
-    backgroundColor: '#000000',  // Fond noir toujours
+    backgroundColor: hasValidConfig ? '#000000' : '#e8e8e8',
     fullscreen: true,
-    kiosk: true,
-    alwaysOnTop: true,
+    kiosk: hasValidConfig,
+    alwaysOnTop: hasValidConfig,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -443,9 +499,15 @@ function createDefaultWindow() {
   // Afficher la fenêtre une fois prête
   win.once('ready-to-show', () => {
     win.show();
-    win.setFullScreen(true);
-    win.focus();
-    log.info('[main] ready-to-show: fullscreen mode');
+    if (hasValidConfig) {
+      win.setFullScreen(true);
+      win.focus();
+      log.info('[main] ready-to-show: fullscreen mode');
+    } else {
+      win.setFullScreen(true);
+      win.focus();
+      log.info('[main] ready-to-show: setup mode (fullscreen, no kiosk)');
+    }
   });
   
   win.on('closed', () => {
@@ -830,18 +892,15 @@ ipcMain.on('renderer-log', (event, { level, msg }) => {
   log.log(level || 'info', `[renderer-ipc] ${msg}`)
 })
 
-// Mode setup : désactiver kiosk/fullscreen/alwaysOnTop pour pouvoir naviguer
+// Mode setup : désactiver kiosk/alwaysOnTop, garder fullscreen pour occuper tout l'écran
 ipcMain.on('enter-setup-mode', () => {
   if (!win) return
-  log.info('[main] Entering setup mode - disabling kiosk/fullscreen/alwaysOnTop')
+  log.info('[main] Entering setup mode - disabling kiosk/alwaysOnTop, keeping fullscreen')
   try {
     win.setKiosk(false)
-    win.setFullScreen(false)
     win.setAlwaysOnTop(false)
-    // Donner une taille raisonnable pour l'écran de config
-    win.setSize(900, 700)
-    win.center()
-    win.setResizable(true)
+    // Garder fullscreen pour que l'écran de setup occupe tout l'affichage
+    win.setFullScreen(true)
   } catch (e) {
     log.warn('[main] enter-setup-mode error:', e.message)
   }
@@ -852,13 +911,33 @@ ipcMain.on('leave-setup-mode', () => {
   if (!win) return
   log.info('[main] Leaving setup mode - re-enabling fullscreen/kiosk')
   try {
+    // Récupérer la taille de l'écran pour forcer le redimensionnement
+    const display = screen.getPrimaryDisplay()
+    const { width, height } = display.size
+    log.info(`[main] leave-setup-mode: display size ${width}x${height}`)
+
+    // Remettre en taille écran avant fullscreen (évite les problèmes de resize)
+    win.setMinimumSize(1, 1)
+    win.setResizable(true)
+    win.setPosition(0, 0)
+    win.setSize(width, height)
+
+    // Puis activer fullscreen/kiosk
     win.setResizable(false)
     win.setAlwaysOnTop(true)
     win.setFullScreen(true)
     win.setKiosk(true)
+    log.info('[main] leave-setup-mode: fullscreen/kiosk re-enabled')
   } catch (e) {
     log.warn('[main] leave-setup-mode error:', e.message)
   }
+})
+
+// Restart complet de l'app (utilisé après première association)
+ipcMain.on('restart-app', () => {
+  log.info('[main] Restart requested - relaunching app')
+  app.relaunch()
+  app.exit(0)
 })
 
 // Quit app on 'X' shortcut
@@ -1190,6 +1269,20 @@ ipcMain.handle('preload-getSystemInfo', async () => {
       log.warn('[main] Could not fetch public IP:', e.message)
     }
     
+    // Get screen resolution and refresh rate
+    let screenInfo = { width: 0, height: 0, refreshRate: 0, scaleFactor: 1 }
+    try {
+      const primaryDisplay = screen.getPrimaryDisplay()
+      screenInfo = {
+        width: primaryDisplay.size.width,
+        height: primaryDisplay.size.height,
+        refreshRate: primaryDisplay.displayFrequency || 0,
+        scaleFactor: primaryDisplay.scaleFactor || 1
+      }
+    } catch (e) {
+      log.warn('[main] Could not get screen info:', e.message)
+    }
+
     return {
       memory: {
         heapUsedMB,
@@ -1200,7 +1293,8 @@ ipcMain.handle('preload-getSystemInfo', async () => {
       localIP,
       publicIP,
       platform: os.platform(),
-      hostname: os.hostname()
+      hostname: os.hostname(),
+      screen: screenInfo
     }
   } catch (e) {
     log.error('[main] getSystemInfo error:', e)

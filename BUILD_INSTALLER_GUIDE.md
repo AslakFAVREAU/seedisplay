@@ -1,328 +1,123 @@
-# 📦 Configuration Build - Installateur + Portable
+# 📦 Guide de Build - SEE Display
 
-## ✅ Formats de Distribution Configurés
-
-Votre application génère maintenant **2 types de fichiers .exe**:
-
-### 1️⃣ Installateur NSIS (Installation Permanente)
-```
-SEE-Display-Setup-1.9.1.exe
-```
-
-**Caractéristiques:**
-- ✅ Installation dans `Program Files`
-- ✅ Raccourci Bureau automatique
-- ✅ Raccourci Menu Démarrer
-- ✅ Désinstallation propre via Panneau de configuration
-- ✅ Auto-update intégré
-- ✅ Choix du répertoire d'installation
-- ✅ Lance l'app après installation
-
-**Usage:**
-- Double-clic sur le `.exe`
-- Suivre l'assistant d'installation
-- Choisir le dossier d'installation (optionnel)
-- L'application s'installe de façon permanente
-
-### 2️⃣ Version Portable (Exécution Sans Installation)
-```
-SEE-Display-Portable-1.9.1.exe
-```
-
-**Caractéristiques:**
-- ✅ Aucune installation requise
-- ✅ Exécution depuis n'importe quel dossier
-- ✅ Parfait pour clés USB
-- ✅ Pas d'entrée dans le registre Windows
-- ✅ Auto-update disponible
-
-**Usage:**
-- Double-clic sur le `.exe`
-- L'application démarre immédiatement
-- Aucune trace dans le système
+> **Dernière mise à jour :** 4 Mars 2026 — v1.12.6  
+> **Plateforme cible unique :** Linux x86_64 (AppImage)
 
 ---
 
-## 🏗️ Configuration Détaillée
+## 🤖 Commande Copilot rapide
 
-### Structure des Targets
-```json
-{
-  "win": {
-    "target": [
-      {
-        "target": "nsis",      // ← Installateur
-        "arch": ["x64"]
-      },
-      {
-        "target": "portable",  // ← Version portable
-        "arch": ["x64"]
-      }
-    ]
-  }
-}
-```
+Quand l'utilisateur dit **"build appimage"**, l'agent doit :
 
-### Configuration NSIS (Installateur)
+1. **Demander la version** souhaitée (ex: `1.12.7`)
+2. **Mettre à jour** `"version"` dans `package.json`
+3. **Lancer le build** via WSL :
+   ```powershell
+   wsl -d Ubuntu -- bash -c "cd /mnt/c/Programation/seedisplay && npx electron-builder --linux AppImage --x64"
+   ```
+4. **Vérifier** le fichier généré dans `dist/v<version>/`
+5. **Afficher** le résultat (nom + taille)
 
-| Option | Valeur | Description |
-|--------|--------|-------------|
-| `oneClick` | `false` | Assistant complet (pas d'installation en un clic) |
-| `allowToChangeInstallationDirectory` | `true` | Utilisateur peut choisir le dossier |
-| `allowElevation` | `true` | Demande les droits admin si nécessaire |
-| `createDesktopShortcut` | `true` | Crée un raccourci sur le bureau |
-| `createStartMenuShortcut` | `true` | Crée un raccourci dans le menu Démarrer |
-| `shortcutName` | `"SEE Display"` | Nom des raccourcis |
-| `runAfterFinish` | `true` | Lance l'app après installation |
-| `deleteAppDataOnUninstall` | `false` | Garde les données utilisateur lors de la désinstallation |
-| `artifactName` | `"SEE-Display-Setup-${version}.exe"` | Nom du fichier installateur |
-
-### Configuration Portable
-
-| Option | Valeur | Description |
-|--------|--------|-------------|
-| `artifactName` | `"SEE-Display-Portable-${version}.exe"` | Nom du fichier portable |
+> Ne PAS lancer `npm run build:linux` sur Windows natif (échoue sans `mksquashfs`).  
+> Toujours passer par **WSL Ubuntu**.
 
 ---
 
-## 🚀 Build de l'Application
+## ⚠️ Build actuel
 
-### Commande Complète
-```bash
-npm run dist
-```
+Depuis la v1.12.1, **seul le format AppImage Linux x64 est buildé**.  
+Les builds Windows (NSIS, Portable) et Linux ARM64 (deb, tar.gz, AppImage) ne sont plus générés.
 
-Cette commande va:
-1. ✅ Bump la version (patch: 1.9.1 → 1.9.2)
-2. ✅ Générer **l'installateur NSIS**
-3. ✅ Générer **la version portable**
-4. ✅ Créer les fichiers `latest.yml` pour l'auto-update
-5. ✅ Commit le changement de version
-
-### Résultat Attendu
-```
-dist/v1.9.2/
-├── SEE-Display-Setup-1.9.2.exe        (Installateur ~90 MB)
-├── SEE-Display-Portable-1.9.2.exe     (Portable ~90 MB)
-├── latest.yml                          (Config auto-update)
-└── win-unpacked/                       (Version non packagée)
-```
+| Format | Arch | Statut |
+|--------|------|--------|
+| **AppImage** | **x64** | ✅ **Seul build actif** |
+| ~~NSIS (.exe)~~ | ~~x64~~ | ❌ Retiré |
+| ~~Portable (.exe)~~ | ~~x64~~ | ❌ Retiré |
+| ~~deb~~ | ~~x64 / arm64~~ | ❌ Retiré |
+| ~~tar.gz~~ | ~~x64 / arm64~~ | ❌ Retiré |
+| ~~AppImage~~ | ~~arm64~~ | ❌ Retiré |
 
 ---
 
-## 📊 Comparaison des Formats
+## 🚀 Comment builder
 
-| Critère | Installateur NSIS | Portable |
-|---------|------------------|----------|
-| **Installation** | Oui (Program Files) | Non |
-| **Taille** | ~90 MB | ~87 MB |
-| **Raccourcis** | Oui (Bureau + Menu) | Non |
-| **Désinstallation** | Panneau de configuration | Supprimer le fichier |
-| **Auto-update** | Oui | Oui |
-| **Droits admin** | Recommandé | Non requis |
-| **Clé USB** | Non recommandé | ✅ Parfait |
-| **Déploiement entreprise** | ✅ Idéal | Possible |
-| **Registre Windows** | Oui | Non |
-| **Multiple installations** | Non (écrase) | ✅ Oui |
+### Prérequis
 
----
+- **Node.js** et **npm** installés
+- **WSL Ubuntu** si on build depuis Windows (mksquashfs nécessaire)
+- Dépendances installées : `npm install`
 
-## 🎯 Cas d'Usage Recommandés
+### Commande de build
 
-### Utilisez l'**Installateur NSIS** pour:
-- ✅ Déploiement sur postes de travail fixes
-- ✅ Installation permanente
-- ✅ Utilisateurs non techniques (double-clic et c'est parti)
-- ✅ Intégration avec le système Windows
-- ✅ Déploiement via GPO (Group Policy)
-- ✅ Mise à jour automatique fiable
-
-### Utilisez la **Version Portable** pour:
-- ✅ Clés USB / disques externes
-- ✅ Démonstrations / tests
-- ✅ Exécution sans droits admin
-- ✅ Installations multiples (différentes versions)
-- ✅ Environnements restreints (pas d'installation permise)
-- ✅ Déploiement temporaire
-
----
-
-## 🔧 Build Complète - Étape par Étape
-
-### 1️⃣ Préparer l'Environnement
+**Depuis Linux ou WSL :**
 ```bash
-# Vérifier que les icônes sont générées
-npm run icons
-
-# Vérifier que les tests passent
-npm test
+cd /chemin/vers/seedisplay
+npx electron-builder --linux AppImage --x64
 ```
 
-### 2️⃣ Lancer la Build
-```bash
-npm run dist
+**Depuis Windows via WSL :**
+```powershell
+wsl -d Ubuntu -- bash -c "cd /mnt/c/Programation/seedisplay && npx electron-builder --linux AppImage --x64"
 ```
 
-**Attendez quelques minutes...**
+> ⚠️ `npm run build:linux` fonctionne aussi mais **doit être exécuté dans un environnement Linux** (WSL ou natif). Le build AppImage échoue sur Windows natif car `mksquashfs` n'est pas disponible.
 
-### 3️⃣ Vérifier les Résultats
-```bash
-# Lister les fichiers générés
-Get-ChildItem dist/v1.9.2/*.exe
+### Résultat attendu
+
 ```
-
-**Sortie attendue:**
-```
-SEE-Display-Setup-1.9.2.exe        (~90 MB)
-SEE-Display-Portable-1.9.2.exe     (~87 MB)
-```
-
-### 4️⃣ Tester les Deux Versions
-
-**Tester l'installateur:**
-```bash
-# Double-clic sur SEE-Display-Setup-1.9.2.exe
-# → Suivre l'assistant
-# → Vérifier les raccourcis créés
-# → Lancer l'app depuis le Menu Démarrer
-```
-
-**Tester la version portable:**
-```bash
-# Double-clic sur SEE-Display-Portable-1.9.2.exe
-# → L'app démarre immédiatement
-# → Aucune installation
-```
-
----
-
-## 📤 Publication sur GitHub
-
-### Commande Complète
-```bash
-npm run publish
-```
-
-Cette commande va:
-1. ✅ Builder les deux versions
-2. ✅ Uploader sur GitHub Releases:
-   - `SEE-Display-Setup-1.9.2.exe`
-   - `SEE-Display-Portable-1.9.2.exe`
-   - `latest.yml`
-3. ✅ Créer la release v1.9.2
-4. ✅ Activer l'auto-update pour tous les utilisateurs
-
----
-
-## 🛠️ Personnalisation Avancée
-
-### Modifier le Nom de l'Installateur
-```json
-{
-  "nsis": {
-    "artifactName": "MonApp-Installer-${version}.exe"
-  }
-}
-```
-
-### Ajouter un Logo dans l'Installateur
-```json
-{
-  "nsis": {
-    "installerIcon": "build/installer-icon.ico",
-    "uninstallerIcon": "build/uninstaller-icon.ico"
-  }
-}
-```
-
-### Changer le Dossier d'Installation Par Défaut
-```json
-{
-  "nsis": {
-    "perMachine": true,
-    "installerDirectory": "C:\\MonDossier"
-  }
-}
-```
-
-### Ajouter un MSI (Alternative à NSIS)
-```json
-{
-  "win": {
-    "target": [
-      { "target": "nsis", "arch": ["x64"] },
-      { "target": "msi", "arch": ["x64"] },
-      { "target": "portable", "arch": ["x64"] }
-    ]
-  }
-}
+dist/v1.12.x/
+├── SEE-Display-x86_64.AppImage      (~128 Mo)
+├── latest-linux.yml                  (Manifest auto-update)
+├── builder-effective-config.yaml
+├── builder-debug.yml
+└── linux-unpacked/                   (Version non packagée)
 ```
 
 ---
 
 ## 📋 Checklist de Release
 
-Avant chaque publication:
+1. [ ] Bumper la version dans `package.json`
+2. [ ] `npm test` — tous les tests passent
+3. [ ] Builder via WSL : `npx electron-builder --linux AppImage --x64`
+4. [ ] Vérifier `dist/v<version>/SEE-Display-x86_64.AppImage` (~128 Mo)
+5. [ ] Vérifier `dist/v<version>/latest-linux.yml` (version + sha512 corrects)
+6. [ ] Publier sur GitHub Releases avec l'AppImage + `latest-linux.yml`
 
-- [ ] **Icônes générées** - `npm run icons`
-- [ ] **Tests passent** - `npm test` (132/132)
-- [ ] **Version bumpée** - Automatique avec `npm run dist`
-- [ ] **Build réussie** - `npm run dist`
-- [ ] **Fichiers vérifiés**:
-  - [ ] `SEE-Display-Setup-${version}.exe` existe
-  - [ ] `SEE-Display-Portable-${version}.exe` existe
-  - [ ] Taille des fichiers correcte (~90 MB)
-- [ ] **Tests manuels**:
-  - [ ] Installateur fonctionne
-  - [ ] Version portable fonctionne
-  - [ ] Raccourcis créés correctement
-  - [ ] Auto-update activé
-- [ ] **Publication** - `npm run publish`
-- [ ] **GitHub Release créée** - Vérifier sur GitHub
-- [ ] **Documentation mise à jour**
+---
+
+## 🔧 Configuration package.json (section build > linux)
+
+```json
+{
+  "linux": {
+    "icon": "build/icon.png",
+    "target": [
+      {
+        "target": "AppImage",
+        "arch": ["x64"]
+      }
+    ],
+    "category": "Utility"
+  },
+  "appImage": {
+    "artifactName": "SEE-Display-${arch}.AppImage"
+  }
+}
+```
 
 ---
 
 ## 🔍 Dépannage
 
-### Problème: Un seul .exe généré
-**Cause:** Configuration target incorrecte
-**Solution:** Vérifier que `win.target` contient bien `nsis` ET `portable`
+### `mksquashfs: file does not exist`
+**Cause :** Build lancé sur Windows natif.  
+**Solution :** Builder via WSL (`wsl -d Ubuntu -- bash -c "..."`) ou depuis une machine Linux.
 
-### Problème: Installateur ne démarre pas
-**Cause:** Droits insuffisants
-**Solution:** Clic droit → "Exécuter en tant qu'administrateur"
+### L'AppImage ne se lance pas
+**Cause :** Pas les permissions d'exécution.  
+**Solution :** `chmod +x SEE-Display-x86_64.AppImage`
 
-### Problème: Icône manquante
-**Cause:** Chemin icon.ico incorrect
-**Solution:** 
-```bash
-npm run icons  # Régénérer les icônes
-npm run dist   # Rebuild
-```
-
-### Problème: Build très lente
-**Cause:** Plusieurs targets simultanés
-**Solution:** Build un seul target à la fois:
-```bash
-# Installateur uniquement
-electron-builder --win nsis
-
-# Portable uniquement
-electron-builder --win portable
-```
-
----
-
-## 📚 Ressources
-
-- [Electron Builder - Windows Targets](https://www.electron.build/configuration/win)
-- [NSIS Configuration](https://www.electron.build/configuration/nsis)
-- [Portable Configuration](https://www.electron.build/configuration/portable)
-
----
-
-**Date:** October 17, 2025  
-**Version:** 1.9.1  
-**Status:** ✅ Configuration complète (NSIS + Portable)  
-**Commande:** `npm run dist`
+### Build trop lente
+**Cause :** Rebuild des dépendances natives.  
+**Solution :** Les builds suivantes sont plus rapides grâce au cache electron-builder.

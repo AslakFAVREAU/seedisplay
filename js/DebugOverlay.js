@@ -26,7 +26,7 @@ class DebugOverlay {
         this.configPinned = false;
         this.mediaListVisible = false;
         this.mediaPanel = null;
-        this.activeTab = 'files'; // 'files' or 'trame'
+        this.activeTab = 'trame'; // 'files', 'trame' or 'diapos'
         this.trameRefreshInterval = null;
         
         this._log = window.logger 
@@ -424,6 +424,8 @@ class DebugOverlay {
         // Charger selon l'onglet actif
         if (this.activeTab === 'files') {
             this._loadFilesTab();
+        } else if (this.activeTab === 'diapos') {
+            this._loadDiaposTab();
         } else {
             this._loadTrameTab();
         }
@@ -441,11 +443,15 @@ class DebugOverlay {
         // Afficher/cacher les contenus
         const filesEl = document.getElementById('tab-files');
         const trameEl = document.getElementById('tab-trame');
+        const diaposEl = document.getElementById('tab-diapos');
         if (filesEl) filesEl.style.display = tab === 'files' ? '' : 'none';
         if (trameEl) trameEl.style.display = tab === 'trame' ? '' : 'none';
+        if (diaposEl) diaposEl.style.display = tab === 'diapos' ? '' : 'none';
         // Charger les données de l'onglet
         if (tab === 'files') {
             this._loadFilesTab();
+        } else if (tab === 'diapos') {
+            this._loadDiaposTab();
         } else {
             this._loadTrameTab();
         }
@@ -646,6 +652,117 @@ class DebugOverlay {
     }
     
     /**
+     * Charge l'onglet Diapos API (metadata des diapos depuis la réponse API)
+     */
+    _loadDiaposTab() {
+        const listEl = document.getElementById('diapos-list-body');
+        const countEl = document.getElementById('diapos-count');
+        const statusEl = document.getElementById('diapos-status');
+        
+        if (!listEl) return;
+        
+        // Récupérer la réponse API stockée
+        const apiResponse = window.apiV2Response;
+        if (!apiResponse) {
+            listEl.innerHTML = '<div style="color:#888;padding:20px;text-align:center;">Aucune réponse API disponible</div>';
+            if (countEl) countEl.textContent = '0 diapos';
+            if (statusEl) statusEl.textContent = '—';
+            return;
+        }
+        
+        // Status écran
+        if (statusEl) {
+            const status = apiResponse.status || '—';
+            const statusIcons = { active: '🟢 Active', sleep: '😴 Sleep', offline: '🔴 Offline' };
+            statusEl.textContent = statusIcons[status] || status;
+        }
+        
+        const diapos = apiResponse.diapos;
+        if (!diapos || !Array.isArray(diapos) || diapos.length === 0) {
+            listEl.innerHTML = '<div style="color:#888;padding:20px;text-align:center;">Aucune diapo dans la réponse API</div>';
+            if (countEl) countEl.textContent = '0 diapos';
+            return;
+        }
+        
+        // Compter les médias par diapo depuis la timeline
+        const mediaCountByDiapo = {};
+        if (apiResponse.timeline && Array.isArray(apiResponse.timeline)) {
+            for (const item of apiResponse.timeline) {
+                if (item && item.diapoId != null) {
+                    mediaCountByDiapo[item.diapoId] = (mediaCountByDiapo[item.diapoId] || 0) + 1;
+                }
+            }
+        }
+        
+        // Compter les actives
+        const actives = diapos.filter(d => d && d.actif).length;
+        if (countEl) countEl.textContent = `${diapos.length} diapos (${actives} actives)`;
+        
+        let html = '';
+        for (let i = 0; i < diapos.length; i++) {
+            const d = diapos[i];
+            if (!d) continue;
+            
+            const isActive = d.actif;
+            const statusIcon = isActive ? '✅' : '⏸️';
+            
+            // Type icon
+            let typeIcon = '📄';
+            if (d.isEventTemplate) typeIcon = '🎪';
+            else if (d.templateData) typeIcon = '📐';
+            else if (d.type === 'prioritaire' || d.diapoType === 'prioritaire') typeIcon = '⚡';
+            
+            // ID
+            const diapoId = d.id || d._id || '—';
+            
+            // Nom
+            const nom = d.nom || d.name || 'Sans nom';
+            
+            // Nombre de médias : d'abord depuis la timeline, puis champs directs
+            let mediaInfo = '—';
+            const tlCount = mediaCountByDiapo[diapoId];
+            if (tlCount !== undefined) {
+                mediaInfo = tlCount + ' média' + (tlCount > 1 ? 's' : '');
+            } else if (d.ligneMedia && Array.isArray(d.ligneMedia)) {
+                mediaInfo = d.ligneMedia.length + ' média' + (d.ligneMedia.length > 1 ? 's' : '');
+            } else if (d.mediaCount !== undefined) {
+                mediaInfo = d.mediaCount + ' média' + (d.mediaCount > 1 ? 's' : '');
+            } else if (d.nbMedias !== undefined) {
+                mediaInfo = d.nbMedias + ' média' + (d.nbMedias > 1 ? 's' : '');
+            }
+            
+            // Dates
+            let dateInfo = '—';
+            const debut = d.DateDebutDiapo || d.dateDebut || d.startDate || '';
+            const fin = d.DateFinDiapo || d.dateFin || d.endDate || '';
+            if (debut || fin) {
+                const fmtDate = (str) => {
+                    if (!str) return '…';
+                    try {
+                        const dt = new Date(str);
+                        return dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+                    } catch (e) { return str.substring(0, 10); }
+                };
+                dateInfo = fmtDate(debut) + ' → ' + fmtDate(fin);
+            }
+            
+            const rowClass = isActive ? '' : ' trame-missing';
+            
+            html += `<div class="trame-item${rowClass}">
+                <span class="trame-idx">${i + 1}</span>
+                <span class="trame-status" title="${isActive ? 'Active' : 'Inactive'}">${statusIcon}</span>
+                <span class="trame-type-icon">${typeIcon}</span>
+                <span class="trame-type" title="ID: ${diapoId}">${diapoId}</span>
+                <span class="trame-name" title="${nom}">${nom}</span>
+                <span class="trame-dur">${mediaInfo}</span>
+                <span class="trame-diapo" title="${dateInfo}">${dateInfo}</span>
+            </div>`;
+        }
+        
+        listEl.innerHTML = html;
+    }
+    
+    /**
      * Démarre le refresh auto de l'onglet trame (toutes les 1s)
      */
     _startTrameRefresh() {
@@ -705,13 +822,14 @@ class DebugOverlay {
             <div class="media-dialog">
                 <div class="media-header">
                     <div class="media-tabs">
-                        <button class="media-tab active" data-tab="files" onclick="window.debugOverlay.switchTab('files')">📁 Fichiers</button>
-                        <button class="media-tab" data-tab="trame" onclick="window.debugOverlay.switchTab('trame')">🎬 Trame de lecture</button>
+                        <button class="media-tab" data-tab="files" onclick="window.debugOverlay.switchTab('files')">📁 Fichiers</button>
+                        <button class="media-tab active" data-tab="trame" onclick="window.debugOverlay.switchTab('trame')">🎬 Trame de lecture</button>
+                        <button class="media-tab" data-tab="diapos" onclick="window.debugOverlay.switchTab('diapos')">🗂️ Diapos API</button>
                     </div>
                     <span class="media-close" onclick="window.debugOverlay.hideMediaList()">×</span>
                 </div>
                 <!-- TAB: Fichiers -->
-                <div class="media-tab-content" id="tab-files">
+                <div class="media-tab-content" id="tab-files" style="display:none;">
                     <div class="media-stats">
                         <span id="media-list-count">-</span>
                         <span class="media-stats-sep">•</span>
@@ -727,7 +845,7 @@ class DebugOverlay {
                     </div>
                 </div>
                 <!-- TAB: Trame de lecture -->
-                <div class="media-tab-content" id="tab-trame" style="display:none;">
+                <div class="media-tab-content" id="tab-trame">
                     <div class="media-stats">
                         <span id="trame-count">-</span>
                         <span class="media-stats-sep">•</span>
@@ -743,6 +861,25 @@ class DebugOverlay {
                         <span class="trame-col-diapo">Diapo</span>
                     </div>
                     <div class="media-list-body" id="trame-list-body">
+                    </div>
+                </div>
+                <!-- TAB: Diapos API -->
+                <div class="media-tab-content" id="tab-diapos" style="display:none;">
+                    <div class="media-stats">
+                        <span id="diapos-count">-</span>
+                        <span class="media-stats-sep">•</span>
+                        <span>Status écran: <span id="diapos-status">-</span></span>
+                    </div>
+                    <div class="trame-list-header">
+                        <span class="trame-col-idx">#</span>
+                        <span class="trame-col-status"></span>
+                        <span class="trame-col-icon"></span>
+                        <span class="trame-col-type">ID</span>
+                        <span class="trame-col-name">Nom</span>
+                        <span class="trame-col-dur">Médias</span>
+                        <span class="trame-col-diapo">Dates</span>
+                    </div>
+                    <div class="media-list-body" id="diapos-list-body">
                     </div>
                 </div>
                 <div class="media-footer">
@@ -803,6 +940,10 @@ class DebugOverlay {
                 <div class="debug-section">
                     <div class="debug-label">Environnement</div>
                     <div class="debug-value" id="debug-env">-</div>
+                </div>
+                <div class="debug-section">
+                    <div class="debug-label">Canal MAJ</div>
+                    <div class="debug-value" id="debug-update-channel">-</div>
                 </div>
                 <div class="debug-section">
                     <div class="debug-label">Heure Locale</div>
@@ -885,6 +1026,14 @@ class DebugOverlay {
                     <div class="debug-label">Hostname</div>
                     <div class="debug-value" id="debug-hostname">-</div>
                 </div>
+                <div class="debug-section">
+                    <div class="debug-label">Résolution</div>
+                    <div class="debug-value" id="debug-resolution">-</div>
+                </div>
+                <div class="debug-section">
+                    <div class="debug-label">Fréquence</div>
+                    <div class="debug-value" id="debug-refresh-rate">-</div>
+                </div>
             </div>
             <div class="debug-footer">
                 <span>Appuyez sur <kbd>D</kbd> pour fermer</span>
@@ -924,6 +1073,13 @@ class DebugOverlay {
                             <option value="prod">Production (soek.fr)</option>
                             <option value="beta">Beta (beta.soek.fr)</option>
                             <option value="local">Local (localhost:8000)</option>
+                        </select>
+                    </div>
+                    <div class="config-group">
+                        <label for="config-update-channel">Canal de mise à jour</label>
+                        <select id="config-update-channel">
+                            <option value="stable">Stable</option>
+                            <option value="beta">Beta</option>
                         </select>
                     </div>
                     <div class="config-group">
@@ -1067,6 +1223,7 @@ class DebugOverlay {
         // Champs locaux éditables
         document.getElementById('config-id-ecran').value = config.ecranUuid || '';
         document.getElementById('config-env').value = config.env || 'prod';
+        document.getElementById('config-update-channel').value = config.updateChannel || 'stable';
         document.getElementById('config-api-token').value = config.apiToken || '';
         
         // === Infos serveur (lecture seule) ===
@@ -1242,6 +1399,7 @@ class DebugOverlay {
             ...existingConfig, // Garder toutes les propriétés existantes (screenWidth, screenHeight, etc.)
             ecranUuid: document.getElementById('config-id-ecran').value.trim() || '',
             env: document.getElementById('config-env').value,
+            updateChannel: document.getElementById('config-update-channel').value,
             apiToken: document.getElementById('config-api-token').value.trim() || ''
         };
         
@@ -1983,6 +2141,7 @@ class DebugOverlay {
                 color: #ffb74d;
                 font-size: 12px;
                 font-family: 'Consolas', 'Courier New', monospace;
+                white-space: nowrap;
             }
             
             .trame-diapo {
@@ -2037,7 +2196,11 @@ class DebugOverlay {
         
         // Environnement
         const env = config.env || 'prod';
-        this._setValue('debug-env', env === 'local' ? 'Local' : 'Production', env === 'local' ? 'warning' : 'ok');
+        this._setValue('debug-env', env === 'local' ? 'Local' : env === 'beta' ? 'Beta' : 'Production', env === 'local' ? 'warning' : 'ok');
+        
+        // Canal de mise à jour
+        const channel = config.updateChannel || 'stable';
+        this._setValue('debug-update-channel', channel === 'beta' ? '⚠️ Beta' : 'Stable', channel === 'beta' ? 'warning' : 'ok');
         
         // Heure locale
         this._setValue('debug-local-time', new Date().toLocaleTimeString('fr-FR'));
@@ -2212,6 +2375,18 @@ class DebugOverlay {
                     
                     if (info.hostname) {
                         this._setValue('debug-hostname', info.hostname);
+                    }
+                    
+                    // Résolution et fréquence écran
+                    if (info.screen) {
+                        const s = info.screen;
+                        const res = s.width + ' × ' + s.height + (s.scaleFactor && s.scaleFactor !== 1 ? ' (@' + s.scaleFactor + 'x)' : '');
+                        this._setValue('debug-resolution', res);
+                        if (s.refreshRate && s.refreshRate > 0) {
+                            this._setValue('debug-refresh-rate', s.refreshRate + ' Hz');
+                        } else {
+                            this._setValue('debug-refresh-rate', 'N/A');
+                        }
                     }
                 }
             } catch (e) {

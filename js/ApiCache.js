@@ -149,6 +149,13 @@ class ApiCache {
         this._saveCache();
         this._log('info', 'api-cache', 'Cache cleared');
     }
+
+    /**
+     * Retourne le nombre d'entrées dans le cache
+     */
+    getEntryCount() {
+        return Object.keys(this.cache).length;
+    }
 }
 
 // Export global pour le navigateur

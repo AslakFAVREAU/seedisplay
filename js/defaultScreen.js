@@ -649,8 +649,7 @@ if (monthGif == 11)
             }
         } catch (e) { __log('error','default','preload first media error: ' + e.message) }
 
-        // Lancer la boucle
-        document.getElementById("pageDefault").style.display = "none";
+        // Lancer la boucle (pageDefault sera caché par showMedia quand le 1er média est prêt)
         LoopDiapo()
     }, 2500);
 

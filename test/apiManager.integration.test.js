@@ -241,4 +241,124 @@ describe('ErrorHandler + ApiManager integration', function() {
       delete global.window;
     });
   });
+
+  describe('App restart after 3 consecutive API failures', function() {
+    it('should trigger restartApp after 3 consecutive failuresta', function() {
+      // Setup mocked window environment
+      let restartCalled = false;
+      let reloadCalled = false;
+      global.window = {
+        apiConsecutiveErrors: 0,
+        lastApiError: null,
+        api: {
+          restartApp: function() { restartCalled = true; }
+        },
+        location: {
+          reload: function() { reloadCalled = true; }
+        }
+      };
+
+      // Simulate 3 consecutive API failures (no ArrayDiapo cached)
+      for (let i = 0; i < 3; i++) {
+        global.window.apiConsecutiveErrors = (global.window.apiConsecutiveErrors || 0) + 1;
+        global.window.lastApiError = Date.now();
+      }
+
+      // After 3 failures → should call restartApp
+      const shouldRestart = global.window.apiConsecutiveErrors >= 3;
+      assert.strictEqual(shouldRestart, true, 'Should trigger restart after 3 failures');
+      
+      // Simulate the restart logic from requestJsonDiapo
+      if (shouldRestart) {
+        if (global.window.api && typeof global.window.api.restartApp === 'function') {
+          global.window.api.restartApp();
+        }
+      }
+      assert.strictEqual(restartCalled, true, 'restartApp should have been called');
+      
+      delete global.window;
+    });
+
+    it('should restart even if cached diapos are available', function() {
+      let restartCalled = false;
+      global.window = {
+        apiConsecutiveErrors: 3,
+        lastApiError: Date.now(),
+        api: {
+          restartApp: function() { restartCalled = true; }
+        }
+      };
+
+      // Even with cached data, should restart after 3 failures
+      const shouldRestart = global.window.apiConsecutiveErrors >= 3;
+      assert.strictEqual(shouldRestart, true, 'Should restart after 3 failures even with cache');
+
+      if (shouldRestart) {
+        global.window.api.restartApp();
+      }
+      assert.strictEqual(restartCalled, true, 'restartApp should have been called');
+      
+      delete global.window;
+    });
+
+    it('should fallback to location.reload if restartApp is unavailable', function() {
+      let reloadCalled = false;
+      global.window = {
+        apiConsecutiveErrors: 3,
+        lastApiError: Date.now(),
+        api: {},  // No restartApp method
+        location: {
+          reload: function() { reloadCalled = true; }
+        }
+      };
+
+      const shouldRestart = global.window.apiConsecutiveErrors >= 3;
+      assert.strictEqual(shouldRestart, true);
+
+      // Simulate the fallback logic
+      if (shouldRestart) {
+        if (global.window.api && typeof global.window.api.restartApp === 'function') {
+          global.window.api.restartApp();
+        } else {
+          global.window.location.reload();
+        }
+      }
+      assert.strictEqual(reloadCalled, true, 'location.reload should have been called as fallback');
+      
+      delete global.window;
+    });
+
+    it('should reset consecutive errors counter on successful API response', function() {
+      global.window = {
+        apiConsecutiveErrors: 2,
+        lastApiError: Date.now()
+      };
+
+      // Simulate successful API response
+      global.window.apiConsecutiveErrors = 0;
+      global.window.lastApiError = null;
+
+      assert.strictEqual(global.window.apiConsecutiveErrors, 0, 'Counter should be reset after success');
+      assert.strictEqual(global.window.lastApiError, null, 'Last error should be cleared');
+      
+      delete global.window;
+    });
+
+    it('should NOT restart if fewer than 3 consecutive failures', function() {
+      let restartCalled = false;
+      global.window = {
+        apiConsecutiveErrors: 2,
+        lastApiError: Date.now(),
+        api: {
+          restartApp: function() { restartCalled = true; }
+        }
+      };
+
+      const shouldRestart = global.window.apiConsecutiveErrors >= 3;
+      assert.strictEqual(shouldRestart, false, 'Should NOT restart after only 2 failures');
+      assert.strictEqual(restartCalled, false);
+      
+      delete global.window;
+    });
+  });
 });

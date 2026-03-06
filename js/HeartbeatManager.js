@@ -13,6 +13,7 @@ class HeartbeatManager {
         this._apiToken = options.apiToken || null;
         this._ecranUuid = options.ecranUuid || null;
         this._env = options.env || 'beta';
+        this._updateChannel = options.updateChannel || 'stable';
         this._enabled = true;
         this._timer = null;
         this._startTime = Date.now();
@@ -36,6 +37,7 @@ class HeartbeatManager {
         this._apiToken = config.apiToken || this._apiToken;
         this._ecranUuid = config.ecranUuid || config.idEcran || this._ecranUuid;
         this._env = config.env || this._env;
+        this._updateChannel = config.updateChannel || this._updateChannel || 'stable';
         
         // Detect portrait mode from init config, window state, or persisted config
         this._detectOrientation(config);
@@ -282,12 +284,33 @@ class HeartbeatManager {
             // Capturer le screenshot
             const screenshot = await this._captureScreenshot();
             
+            // Récupérer infos système (IP locale, résolution, fréquence)
+            let localIp = null;
+            let screenResolution = null;
+            let screenRefreshRate = null;
+            try {
+                if (window.api && typeof window.api.getSystemInfo === 'function') {
+                    const sysInfo = await window.api.getSystemInfo();
+                    localIp = sysInfo.localIP || null;
+                    if (sysInfo.screen) {
+                        screenResolution = `${sysInfo.screen.width}x${sysInfo.screen.height}`;
+                        screenRefreshRate = sysInfo.screen.refreshRate || null;
+                    }
+                }
+            } catch (e) {
+                this._log.debug('heartbeat', 'Could not get system info:', e.message);
+            }
+            
             // Construire le payload
             const payload = {
                 ecranUuid: this._ecranUuid,
                 version: window.appVersion || (window.api && window.api.getAppVersion ? await window.api.getAppVersion() : 'unknown'),
+                updateChannel: this._updateChannel || 'stable',
                 timestamp: new Date().toISOString(),
                 uptime: Math.round((Date.now() - this._startTime) / 1000),
+                localIp: localIp,
+                screenResolution: screenResolution,
+                screenRefreshRate: screenRefreshRate,
                 debug: debug,
                 screenshot: screenshot  // base64 ou null
             };

@@ -22,6 +22,9 @@ let currentVisibleDiv = null; // Track quel div est actuellement visible
 let pauseLoop = false; // NEW: Flag pour rester sur pageDefault en mode édition
 let mediaLoopSignature = '';
 
+// AbortControllers pour nettoyer les event listeners vidéo sans cloner le DOM
+let videoAbortControllers = { 1: null, 2: null };
+
 // Expose pour DebugOverlay (trame de lecture)
 window._getMediaLoop = () => mediaLoop;
 window._getCurrentMediaIndex = () => currentMediaIndex;
@@ -61,7 +64,13 @@ function hideAllMediaExcept(exceptId) {
         ids.forEach(id => {
             if (id !== exceptId) {
                 const el = document.getElementById(id);
-                if (el) el.style.display = 'none';
+                if (el) {
+                    el.style.display = 'none';
+                    // Libérer la mémoire des images en arrière-plan (utile sur machines à 8 Go)
+                    if (id.startsWith('divImg') && el.style.backgroundImage && el.style.backgroundImage !== "url('default.jpg')") {
+                        el.style.backgroundImage = '';
+                    }
+                }
             }
         });
         // Cacher aussi le template sauf si c'est lui qu'on veut afficher
@@ -78,6 +87,48 @@ function hideAllMediaExcept(exceptId) {
  */
 function hideAllMedia() {
     hideAllMediaExcept(null);
+}
+
+/**
+ * Précharge la prochaine vidéo dans le player inactif
+ * pendant que la vidéo courante est en lecture.
+ * Réduit le temps de transition entre deux vidéos consécutives.
+ */
+function _preloadNextVideo(currentIndex) {
+    try {
+        if (!mediaLoop || mediaLoop.length === 0) return;
+        
+        // Trouver le prochain média
+        const nextIndex = currentIndex + 1;
+        if (nextIndex >= mediaLoop.length) return; // fin de boucle, pas de preload
+        
+        const nextMedia = mediaLoop[nextIndex];
+        if (!nextMedia || !Array.isArray(nextMedia) || nextMedia.length < 2) return;
+        if (nextMedia[0] !== 'video') return; // preload seulement les vidéos
+        
+        const nextFile = nextMedia[1];
+        // Le player inactif est celui qu'on va utiliser (déjà toggleé)
+        const nextPlayer = player; // player a déjà été toggleé
+        const nextVideoId = 'video' + nextPlayer;
+        const nextSourceId = 'srcVideo' + nextPlayer;
+        const nextVideoEl = document.getElementById(nextVideoId);
+        const nextSourceEl = document.getElementById(nextSourceId);
+        
+        if (!nextVideoEl || !nextSourceEl) return;
+        
+        const nextUrl = typeof getMediaUrl === 'function' ? getMediaUrl(nextFile) : pathMedia + nextFile;
+        
+        // Ne précharger que si la source est différente
+        if (nextSourceEl.src && nextSourceEl.src.endsWith(nextFile)) return;
+        
+        __log('debug', 'diapo', 'preloading next video in ' + nextVideoId + ': ' + nextFile);
+        nextVideoEl.preload = 'auto';
+        nextVideoEl.muted = window.sonActif !== true;
+        nextSourceEl.src = nextUrl;
+        nextVideoEl.load();
+    } catch (e) {
+        __log('warn', 'diapo', 'preloadNextVideo error (non-fatal): ' + e.message);
+    }
 }
 
 /**
@@ -134,7 +185,7 @@ async function showMedia(mediaIndex) {
         
         // Redémarrer après 10 secondes
         loopTimeout = setTimeout(() => {
-            document.getElementById('pageDefault').style.display = 'none';
+            // pageDefault sera caché par showMedia() une fois le premier média prêt (évite flash noir)
             document.getElementById('mediaContainer').style.display = 'block';
             showMedia(0);
         }, 10000);
@@ -213,75 +264,77 @@ async function showMedia(mediaIndex) {
         
         try {
             const url = typeof getMediaUrl === 'function' ? getMediaUrl(mediaFile) : pathMedia + mediaFile;
-            const divEl = document.getElementById(divId);
-            const sourceEl = document.getElementById(sourceId);
             const videoEl = document.getElementById(videoId);
+            const sourceEl = document.getElementById(sourceId);
+            const divEl = document.getElementById(divId);
+            
+            // Annuler les listeners précédents via AbortController (plus léger que cloneNode)
+            if (videoAbortControllers[player]) {
+                videoAbortControllers[player].abort();
+            }
+            const ac = new AbortController();
+            videoAbortControllers[player] = ac;
+            const signal = ac.signal;
             
             // S'assurer que loop est désactivé
             videoEl.loop = false;
             videoEl.removeAttribute('loop');
             
-            // Nettoyer les anciens event listeners en clonant
-            const newVideoEl = videoEl.cloneNode(true);
-            videoEl.parentNode.replaceChild(newVideoEl, videoEl);
-            
-            // Récupérer les nouveaux éléments
-            const freshVideoEl = document.getElementById(videoId);
-            const freshSourceEl = document.getElementById(sourceId);
-            const freshDivEl = document.getElementById(divId);
-            
-            // S'assurer que loop est OFF
-            freshVideoEl.loop = false;
-            freshVideoEl.removeAttribute('loop');
-            
             // Gérer le son selon sonActif de l'API
-            freshVideoEl.muted = window.sonActif !== true;
-            __log('info', 'diapo', 'video muted=' + freshVideoEl.muted + ' (sonActif=' + window.sonActif + ')');
+            videoEl.muted = window.sonActif !== true;
+            __log('info', 'diapo', 'video muted=' + videoEl.muted + ' (sonActif=' + window.sonActif + ')');
             
             // Charger la vidéo
-            freshSourceEl.src = url;
-            freshVideoEl.load();
+            sourceEl.src = url;
+            videoEl.load();
             
             __log('info', 'diapo', 'video load() called, waiting for loadeddata event');
             
             // Fonction pour afficher la vidéo quand prête
             const showVideo = () => {
+                if (signal.aborted) return;
                 __log('debug', 'diapo', 'video ready (loadeddata), displaying');
-                hideAllMediaExcept(divId);
-                freshDivEl.style.display = 'block';
+                // Afficher le nouveau div AVANT de cacher les anciens (évite flash noir)
+                divEl.style.display = 'block';
                 currentVisibleDiv = divId;
+                hideAllMediaExcept(divId);
+                // Cacher pageDefault maintenant que le média est prêt
+                try { const pd = document.getElementById('pageDefault'); if (pd && pd.style.display !== 'none') { pd.style.display = 'none'; __log('info', 'diapo', 'pageDefault hidden (first media ready)'); } } catch(e) {}
                 
-                __log('info', 'diapo', 'video display set, duration=' + freshVideoEl.duration + 's, canplay=' + (freshVideoEl.readyState >= 3));
+                __log('info', 'diapo', 'video display set, duration=' + videoEl.duration + 's, canplay=' + (videoEl.readyState >= 3));
                 
-                freshVideoEl.play().catch(e => {
+                videoEl.play().catch(e => {
                     __log('error', 'diapo', 'video play() failed: ' + e.message);
                     setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
                 });
+                
+                // Précharger le prochain média dans le player inactif
+                _preloadNextVideo(mediaIndex);
             };
             
             // Flag pour éviter double exécution
             let videoStarted = false;
             
-            // Écouter plusieurs événements pour robustesse
-            freshVideoEl.addEventListener('loadeddata', () => {
-                if (!videoStarted) {
+            // Écouter plusieurs événements pour robustesse (via AbortController)
+            videoEl.addEventListener('loadeddata', () => {
+                if (!videoStarted && !signal.aborted) {
                     videoStarted = true;
                     showVideo();
                 }
-            }, { once: true });
+            }, { once: true, signal });
             
             // Fallback sur canplaythrough si loadeddata ne se déclenche pas
-            freshVideoEl.addEventListener('canplaythrough', () => {
-                if (!videoStarted) {
+            videoEl.addEventListener('canplaythrough', () => {
+                if (!videoStarted && !signal.aborted) {
                     __log('warn', 'diapo', 'video canplaythrough fallback (loadeddata missed)');
                     videoStarted = true;
                     showVideo();
                 }
-            }, { once: true });
+            }, { once: true, signal });
             
             // TIMEOUT FALLBACK: si la vidéo ne charge pas en 10s, passer au suivant
             const videoTimeout = setTimeout(() => {
-                if (!videoStarted) {
+                if (!videoStarted && !signal.aborted) {
                     __log('error', 'diapo', 'video timeout after 10s, skipping to next');
                     videoStarted = true;
                     showMedia(currentMediaIndex + 1);
@@ -289,31 +342,32 @@ async function showMedia(mediaIndex) {
             }, 10000);
             
             // Annuler le timeout si la vidéo démarre
-            const cancelTimeout = () => clearTimeout(videoTimeout);
-            freshVideoEl.addEventListener('playing', cancelTimeout, { once: true });
+            videoEl.addEventListener('playing', () => clearTimeout(videoTimeout), { once: true, signal });
             
             // Logger le chargement des données
-            freshVideoEl.addEventListener('loadstart', () => {
+            videoEl.addEventListener('loadstart', () => {
                 __log('debug', 'diapo', 'video loadstart event');
-            }, { once: true });
+            }, { once: true, signal });
             
-            freshVideoEl.addEventListener('canplay', () => {
-                __log('debug', 'diapo', 'video canplay event (readyState=' + freshVideoEl.readyState + ')');
-            });
+            videoEl.addEventListener('canplay', () => {
+                __log('debug', 'diapo', 'video canplay event (readyState=' + videoEl.readyState + ')');
+            }, { signal });
             
             // Écouter la fin de la vidéo
-            freshVideoEl.addEventListener('ended', () => {
-                __log('info', 'diapo', 'video ended, next in 200ms');
+            videoEl.addEventListener('ended', () => {
+                if (signal.aborted) return;
+                __log('info', 'diapo', 'video ended, next in 100ms');
                 clearTimeout(videoTimeout);
-                setTimeout(() => showMedia(currentMediaIndex + 1), 200);
-            }, { once: true });
+                setTimeout(() => showMedia(currentMediaIndex + 1), 100);
+            }, { once: true, signal });
             
             // Écouter les erreurs
-            freshVideoEl.addEventListener('error', (e) => {
+            videoEl.addEventListener('error', (e) => {
+                if (signal.aborted) return;
                 __log('error', 'diapo', 'video error: ' + (e.message || 'load failed'));
                 clearTimeout(videoTimeout);
                 setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
-            }, { once: true });
+            }, { once: true, signal });
             
             // Toggle pour la prochaine
             player = (player === 1) ? 2 : 1;
@@ -379,10 +433,19 @@ async function showMedia(mediaIndex) {
                     imageHandled = true;
                     __log('debug', 'diapo', 'image preloaded OK, switching');
                     divEl.style.backgroundImage = "url('" + url + "')";
-                    hideAllMediaExcept(divId);
+                    // Afficher le nouveau div AVANT de cacher les anciens (évite flash noir)
                     divEl.style.display = 'block';
                     currentVisibleDiv = divId;
+                    hideAllMediaExcept(divId);
+                    // Cacher pageDefault maintenant que le média est prêt
+                    try { const pd = document.getElementById('pageDefault'); if (pd && pd.style.display !== 'none') { pd.style.display = 'none'; __log('info', 'diapo', 'pageDefault hidden (first media ready)'); } } catch(e) {}
                     __log('info', 'diapo', divId + ' NOW DISPLAYED! (CUT transition)');
+                    
+                    // Programmer le prochain APRÈS affichage réel (pas avant)
+                    __log('debug', 'diapo', 'scheduling next in ' + (delay/1000) + 's (after display)');
+                    loopTimeout = setTimeout(() => {
+                        showMedia(currentMediaIndex + 1);
+                    }, delay);
                 };
                 
                 img.onerror = () => {
@@ -423,11 +486,7 @@ async function showMedia(mediaIndex) {
         // Toggle pour la prochaine
         imgShow = (imgShow === 1) ? 2 : 1;
         
-        // Programmer le prochain (seulement pour les images)
-        __log('debug', 'diapo', 'scheduling next in ' + (delay/1000) + 's');
-        loopTimeout = setTimeout(() => {
-            showMedia(currentMediaIndex + 1);
-        }, delay);
+        // Le timer est maintenant programmé dans img.onload (après affichage réel)
         
     } else if (mediaType === 'template') {
         // Afficher un template dynamique (événement, planning, etc.)
@@ -438,6 +497,8 @@ async function showMedia(mediaIndex) {
         try {
             // Cacher tous les autres médias
             hideAllMedia();
+            // Cacher pageDefault si encore visible (template a z-index supérieur mais on nettoie)
+            try { const pd = document.getElementById('pageDefault'); if (pd && pd.style.display !== 'none') pd.style.display = 'none'; } catch(e) {}
             
             // Utiliser le TemplateRenderer global
             if (window.templateRenderer) {
@@ -472,6 +533,8 @@ async function showMedia(mediaIndex) {
         try {
             // Cacher tous les autres médias
             hideAllMedia();
+            // Cacher pageDefault si encore visible
+            try { const pd = document.getElementById('pageDefault'); if (pd && pd.style.display !== 'none') pd.style.display = 'none'; } catch(e) {}
             
             // Utiliser le PlanningManager global
             if (window.planningManager) {
@@ -559,9 +622,9 @@ function LoopDiapo() {
     
     // Cacher pageDefault, afficher mediaContainer
     try {
-        const pageDefault = document.getElementById('pageDefault');
-        pageDefault.style.display = 'none';
-        __log('info', 'diapo', 'pageDefault hidden');
+        // pageDefault reste visible en arrière-plan pendant le chargement du premier média
+        // Il sera caché par showMedia() une fois le média prêt (évite flash noir)
+        __log('info', 'diapo', 'pageDefault kept visible until first media ready');
         
         const container = document.getElementById('mediaContainer');
         if (!container) {
@@ -570,7 +633,7 @@ function LoopDiapo() {
         }
         
         container.style.display = 'block';
-        __log('info', 'diapo', 'mediaContainer displayed, computed style: ' + window.getComputedStyle(container).display);
+        __log('info', 'diapo', 'mediaContainer displayed (transparent bg), computed style: ' + window.getComputedStyle(container).display);
         
     } catch(e) {
         __log('error', 'diapo', 'container display error: ' + e.message);
@@ -762,8 +825,7 @@ function resumeLoop() {
     
     // Redémarrer la boucle
     try {
-        const pageDefault = document.getElementById('pageDefault');
-        pageDefault.style.display = 'none';
+        // pageDefault sera caché par showMedia() quand le premier média est prêt
         const container = document.getElementById('mediaContainer');
         if (container) {
             container.style.display = 'block';

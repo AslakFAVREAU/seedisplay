@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v1.12.1 - Patch Release (1 Mars 2026)
+
+### 🔧 Maintenance
+- Rebuild Linux (AppImage x86_64)
+
+---
+
 ## v1.10.1 - Custom Display Mode (9 Février 2026)
 
 ### 🎯 Résumé

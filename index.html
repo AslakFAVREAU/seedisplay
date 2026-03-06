@@ -47,13 +47,14 @@
       height: 100%;
       background-image: url('default.jpg');
       background-size: contain;
-      background-position: center;
+      background-position: center 38%;
       background-repeat: no-repeat;
       background-color: #000;
       z-index: 9999;
       display: flex;
-      align-items: center;
+      align-items: flex-end;
       justify-content: center;
+      padding-bottom: 12%;
       color: white;
       font-size: 24px;
       transition: opacity 0.5s ease-out;
@@ -62,6 +63,49 @@
     #loadingScreen.hidden {
       opacity: 0;
       pointer-events: none;
+    }
+
+    /* Bannière de version au démarrage */
+    #versionBanner {
+      position: fixed;
+      bottom: 18%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.97);
+      color: #222;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      padding: 24px 56px;
+      border-radius: 10px;
+      border: none;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+      z-index: 100000;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity 0.8s ease-out;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #versionBanner .version-label {
+      font-size: 18px;
+      font-weight: 400;
+      color: #888;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+
+    #versionBanner .version-number {
+      font-size: 54px;
+      font-weight: 700;
+      color: #111;
+      letter-spacing: 2px;
+    }
+
+    #versionBanner.fade-out {
+      opacity: 0;
     }
 
     /* Écran de configuration initiale (1er démarrage) */
@@ -339,6 +383,7 @@
     }
 
     /* Conteneur de médias - simple, caché par défaut */
+    /* background transparent pour éviter flash noir lors de la transition pageDefault → premier média */
     #mediaContainer {
       position: absolute;
       top: 0;
@@ -346,7 +391,7 @@
       width: 100%;
       height: 100%;
       z-index: 10;
-      background: black;
+      background: transparent;
       display: none;
     }
 
@@ -358,6 +403,7 @@
       width: 100%;
       height: 100%;
       display: none;
+      background-color: #000;
     }
 
     /* Configuration spécifique des divs d'images */
@@ -656,9 +702,9 @@
       100% { transform: rotate(360deg); }
     }
 
-    /* Transition pour pageDefault */
+    /* Pas de transition sur pageDefault pour éviter les flashs */
     #pageDefault {
-      transition: opacity 0.3s ease-in-out;
+      /* transition retirée volontairement */
     }
 
     /* Mode custom: tailles et padding réduits pour éviter le débordement */
@@ -719,12 +765,11 @@
     </div>
   </div>
 
+  <!-- Bannière de version (affichée 10s au démarrage) -->
+  <div id="versionBanner"></div>
+
   <!-- Écran de chargement avec default.jpg -->
   <div id="loadingScreen">
-    <div style="text-align: top;">
-      <div style="margin-bottom: 20px;">Chargement...</div>
-      <div style="width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 1s ease-in-out infinite; margin: 0 auto;"></div>
-    </div>
   </div>
 
   <!-- Écran de configuration initiale (1er démarrage) -->
@@ -759,6 +804,13 @@
               <option value="local">Local (localhost:8000)</option>
             </select>
           </div>
+          <div class="setup-input-group" style="margin-top:10px">
+            <label for="setupChannelPairing">Canal de mise à jour</label>
+            <select id="setupChannelPairing">
+              <option value="stable">Stable</option>
+              <option value="beta">Beta</option>
+            </select>
+          </div>
         </div>
         <div class="pairing-status waiting" id="pairingStatus">
           <span class="pairing-spinner"></span> En attente d'association...
@@ -778,6 +830,14 @@
             <option value="prod">Production (soek.fr)</option>
             <option value="beta">Beta (beta.soek.fr)</option>
             <option value="local">Local (localhost:8000)</option>
+          </select>
+        </div>
+
+        <div class="setup-input-group">
+          <label for="setupChannel">Canal de mise à jour</label>
+          <select id="setupChannel">
+            <option value="stable">Stable</option>
+            <option value="beta">Beta</option>
           </select>
         </div>
         
@@ -889,12 +949,12 @@
   <!-- Conteneur de médias simple -->
   <div id="mediaContainer">
     <div id="divVideo1">
-      <video class="videoPlayer" id="video1" width="100%" height="100%">
+      <video class="videoPlayer" id="video1" width="100%" height="100%" preload="auto" playsinline disablePictureInPicture disableRemotePlayback>
         <source id="srcVideo1" src="" type="video/mp4" />
       </video>
     </div>
     <div id="divVideo2">
-      <video class="videoPlayer" id="video2" width="100%" height="100%">
+      <video class="videoPlayer" id="video2" width="100%" height="100%" preload="auto" playsinline disablePictureInPicture disableRemotePlayback>
         <source id="srcVideo2" src="" type="video/mp4" />
       </video>
     </div>
@@ -1291,6 +1351,26 @@
     }
   }
 
+  // ==================== VERSION BANNER ====================
+  (async function showVersionBanner() {
+    try {
+      const banner = document.getElementById('versionBanner');
+      if (!banner) return;
+      let version = '';
+      if (window.api && typeof window.api.getAppVersion === 'function') {
+        version = await window.api.getAppVersion();
+      }
+      if (!version) { banner.style.display = 'none'; return; }
+      banner.innerHTML = '<span class="version-label">Version du boîtier</span><span class="version-number">v' + version + '</span>';
+      // Fade-out après 9.2s, puis suppression à 10s
+      setTimeout(() => { banner.classList.add('fade-out'); }, 9200);
+      setTimeout(() => { banner.remove(); }, 10000);
+    } catch (e) {
+      const b = document.getElementById('versionBanner');
+      if (b) b.remove();
+    }
+  })();
+
   // ==================== SETUP SCREEN FUNCTIONS ====================
   
   /**
@@ -1344,6 +1424,7 @@
   async function submitSetup() {
     const ecranUuid = document.getElementById('setupEcranUuid').value.trim()
     const env = document.getElementById('setupEnv').value
+    const updateChannel = document.getElementById('setupChannel').value
     const apiToken = document.getElementById('setupApiToken').value.trim()
     const errorDiv = document.getElementById('setupError')
     const statusDiv = document.getElementById('setupStatus')
@@ -1400,6 +1481,7 @@
         ...existingConfig, // Conserver screenWidth, screenHeight, etc. si existantes
         ecranUuid: ecranUuid,
         env: env,
+        updateChannel: updateChannel, // Canal de mise à jour: stable ou beta
         apiToken: apiToken || '', // Token API optionnel
         // Valeurs par défaut (seront écrasées par l'API)
         meteo: existingConfig.meteo !== undefined ? existingConfig.meteo : true,
@@ -1422,14 +1504,18 @@
 
       statusDiv.textContent = '✅ Configuration sauvegardée! Redémarrage...'
       
-      // Ré-activer le mode kiosk avant de recharger
-      if (window.api && typeof window.api.leaveSetupMode === 'function') {
-        window.api.leaveSetupMode()
-      }
-      
-      // Attendre un peu puis recharger
+      // Redémarrer l'app complètement (relaunch) pour recréer la fenêtre
+      // depuis zéro avec la bonne config (fullscreen/kiosk)
       setTimeout(() => {
-        window.location.reload()
+        if (window.api && typeof window.api.restartApp === 'function') {
+          window.api.restartApp()
+        } else {
+          // Fallback: au moins réactiver le kiosk puis reload
+          if (window.api && typeof window.api.leaveSetupMode === 'function') {
+            window.api.leaveSetupMode()
+          }
+          setTimeout(() => window.location.reload(), 500)
+        }
       }, 1500)
 
     } catch (err) {
@@ -1637,11 +1723,13 @@
         
         // Sauvegarder la configuration
         const env = document.getElementById('setupEnvPairing').value
+        const updateChannel = document.getElementById('setupChannelPairing').value
         const existingConfig = window.configSEE || {}
         const newConfig = {
           ...existingConfig,
           ecranUuid: data.ecranUuid,
           env: env,
+          updateChannel: updateChannel, // Canal de mise à jour: stable ou beta
           apiToken: data.apiToken || '',
           deviceId: pairingDeviceId,
           meteo: existingConfig.meteo !== undefined ? existingConfig.meteo : true,
@@ -1666,12 +1754,18 @@
         
         statusEl.textContent += ' — Redémarrage...'
         
-        // Ré-activer le mode kiosk avant de recharger
-        if (window.api && typeof window.api.leaveSetupMode === 'function') {
-          window.api.leaveSetupMode()
-        }
-        
-        setTimeout(() => window.location.reload(), 1500)
+        // Redémarrer l'app complètement (relaunch) pour recréer la fenêtre
+        // depuis zéro avec la bonne config (fullscreen/kiosk)
+        setTimeout(() => {
+          if (window.api && typeof window.api.restartApp === 'function') {
+            window.api.restartApp()
+          } else {
+            if (window.api && typeof window.api.leaveSetupMode === 'function') {
+              window.api.leaveSetupMode()
+            }
+            setTimeout(() => window.location.reload(), 500)
+          }
+        }, 1500)
       }
       
     } catch (err) {
@@ -1801,6 +1895,7 @@
             ecranUuid: config.ecranUuid,
             apiToken: config.apiToken,
             env: config.env || 'beta',
+            updateChannel: config.updateChannel || 'stable',
             screenWidth: config.screenWidth,
             screenHeight: config.screenHeight,
             screenOrientation: config.screenOrientation
@@ -1885,24 +1980,22 @@
 
     document.getElementById('video1').addEventListener('ended', endVideo1, false);
     function endVideo1(e) {
-  __log('info','video','fin player1')
-      document.getElementById("divVideo1").style.display = "none";
-      //  document.getElementById("video" + player).pause()        
-
+  __log('info','video','fin player1 (legacy handler - no-op, managed by loopDiapo)')
+      // NE PLUS cacher le div ici — c'est loopDiapo.js qui gère les transitions
+      // document.getElementById("divVideo1").style.display = "none";
 
   __log('debug','video','next player is =' + player)
-      LoopDiapo()
+      // LoopDiapo() est déjà appelé par l'event 'ended' dans loopDiapo.js
     }
 
     document.getElementById('video2').addEventListener('ended', endVideo2, false);
     function endVideo2(e) {
-  __log('info','video','fin player2')
-      document.getElementById("divVideo2").style.display = "none";
-      //  document.getElementById("video" + player).pause()        
-
+  __log('info','video','fin player2 (legacy handler - no-op, managed by loopDiapo)')
+      // NE PLUS cacher le div ici — c'est loopDiapo.js qui gère les transitions
+      // document.getElementById("divVideo2").style.display = "none";
 
   __log('debug','video','next player is =' + player)
-      LoopDiapo()
+      // LoopDiapo() est déjà appelé par l'event 'ended' dans loopDiapo.js
     }
 
   </script>

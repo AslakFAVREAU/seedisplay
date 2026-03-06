@@ -8,5 +8,6 @@
   "weekNo": true,
   "weekType": true,
   "logoSOE": true,
-  "env": "prod"
+  "env": "prod",
+  "updateChannel": "stable"
 }
