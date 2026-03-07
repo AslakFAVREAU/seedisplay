@@ -37,20 +37,6 @@ describe('Auto-Update Integration', function () {
         ].join('\n');
         res.writeHead(200, { 'Content-Type': 'text/yaml' });
         res.end(yml);
-      } else if (req.url === '/latest.yml') {
-        // Windows equivalent
-        const yml = [
-          'version: 1.11.7',
-          'files:',
-          '  - url: SEE-Display-Setup-1.11.7.exe',
-          '    sha512: FAKEHASH==',
-          '    size: 80000000',
-          'path: SEE-Display-Setup-1.11.7.exe',
-          'sha512: FAKEHASH==',
-          "releaseDate: '2026-02-28T09:17:31.670Z'"
-        ].join('\n');
-        res.writeHead(200, { 'Content-Type': 'text/yaml' });
-        res.end(yml);
       } else {
         res.writeHead(404);
         res.end('Not found');

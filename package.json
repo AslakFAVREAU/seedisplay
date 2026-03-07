@@ -14,12 +14,9 @@
     "version:minor": "npm version minor --no-git-tag-version",
     "version:major": "npm version major --no-git-tag-version",
     "icons": "node scripts/generate-icons.js",
-    "build": "electron-builder",
-    "build:linux": "electron-builder --linux",
-    "build:linux-arm64": "electron-builder --linux --arm64",
-    "build:pi": "electron-builder --linux deb --arm64",
+    "build": "electron-builder --linux AppImage --x64",
     "dist": "npm run version:patch && npm run build && git add package.json && git commit -m \"chore: bump version to v$(node -p \\\"require('./package.json').version\\\")\"",
-    "publish": "electron-builder --publish=always"
+    "publish": "electron-builder --linux AppImage --x64 --publish=always"
   },
   "keywords": [
     "electron",
@@ -69,42 +66,6 @@
       "!**/{appveyor.yml,.travis.yml,circle.yml}",
       "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
     ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "signAndEditExecutable": false,
-      "verifyUpdateCodeSignature": false,
-      "icon": "build/icon.ico"
-    },
-    "nsis": {
-      "oneClick": true,
-      "allowElevation": true,
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
-      "installerHeaderIcon": "build/icon.ico",
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "SEE Display",
-      "artifactName": "SEE-Display-Setup-${version}.exe",
-      "deleteAppDataOnUninstall": false,
-      "runAfterFinish": true,
-      "include": "build/installer.nsh"
-    },
-    "portable": {
-      "artifactName": "SEE-Display-Portable-${version}.exe"
-    },
     "publish": [
       {
         "provider": "generic",
@@ -112,10 +73,6 @@
       }
     ],
     "compression": "normal",
-    "icon": "build/icon.ico",
-    "mac": {
-      "icon": "build/icon.icns"
-    },
     "linux": {
       "icon": "build/icon.png",
       "target": [
@@ -130,21 +87,7 @@
       "maintainer": "SEE <contact@soek.fr>",
       "vendor": "SEE",
       "synopsis": "Digital Signage Display Application",
-      "description": "SEE Display - Application d'affichage dynamique pour écrans connectés. Compatible Windows, Linux et Raspberry Pi."
-    },
-    "deb": {
-      "depends": [
-        "libgtk-3-0",
-        "libnotify4",
-        "libnss3",
-        "libxss1",
-        "libxtst6",
-        "xdg-utils",
-        "libatspi2.0-0",
-        "libuuid1",
-        "libsecret-1-0"
-      ],
-      "artifactName": "seedisplay-${version}-${arch}.deb"
+      "description": "SEE Display - Application d'affichage dynamique pour écrans connectés."
     },
     "appImage": {
       "artifactName": "SEE-Display-${arch}.AppImage"

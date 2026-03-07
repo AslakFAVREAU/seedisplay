@@ -1,6 +1,6 @@
 # 📦 Guide de Build - SEE Display
 
-> **Dernière mise à jour :** 4 Mars 2026 — v1.12.6  
+> **Dernière mise à jour :** 7 Mars 2026 — v2.0.0  
 > **Plateforme cible unique :** Linux x86_64 (AppImage)
 
 ---
@@ -25,17 +25,11 @@ Quand l'utilisateur dit **"build appimage"**, l'agent doit :
 
 ## ⚠️ Build actuel
 
-Depuis la v1.12.1, **seul le format AppImage Linux x64 est buildé**.  
-Les builds Windows (NSIS, Portable) et Linux ARM64 (deb, tar.gz, AppImage) ne sont plus générés.
+Depuis la v2.0.0, **seul le format AppImage Linux x64 est buildé**.
 
 | Format | Arch | Statut |
 |--------|------|--------|
 | **AppImage** | **x64** | ✅ **Seul build actif** |
-| ~~NSIS (.exe)~~ | ~~x64~~ | ❌ Retiré |
-| ~~Portable (.exe)~~ | ~~x64~~ | ❌ Retiré |
-| ~~deb~~ | ~~x64 / arm64~~ | ❌ Retiré |
-| ~~tar.gz~~ | ~~x64 / arm64~~ | ❌ Retiré |
-| ~~AppImage~~ | ~~arm64~~ | ❌ Retiré |
 
 ---
 

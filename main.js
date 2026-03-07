@@ -7,19 +7,13 @@ const fs = require('fs');
 const os = require('os');
 
 //-------------------------------------------------------------------
-// Cross-platform Base Path Configuration
-// Windows: C:/SEE/
-// Linux/macOS: /opt/seedisplay/data/ or ~/.seedisplay/
+// Base Path Configuration
+// Linux: /opt/seedisplay/data/ or ~/.seedisplay/
 //-------------------------------------------------------------------
-const IS_RASPBERRY_PI = process.platform === 'linux' && process.arch === 'arm64';
 const IS_LINUX = process.platform === 'linux';
-const IS_WINDOWS = process.platform === 'win32';
-const IS_MAC = process.platform === 'darwin';
 
 function getBasePath() {
-  if (IS_WINDOWS) {
-    return 'C:/SEE/';
-  } else if (IS_LINUX) {
+  if (IS_LINUX) {
     // Sur Linux, préférer /opt/seedisplay/data si accessible, sinon ~/.seedisplay
     const optPath = '/opt/seedisplay/data/';
     const homePath = path.join(os.homedir(), '.seedisplay/');
@@ -41,14 +35,11 @@ function getBasePath() {
       fs.mkdirSync(homePath, { recursive: true });
     }
     return homePath;
-  } else if (IS_MAC) {
-    const macPath = path.join(os.homedir(), 'Library/Application Support/SEEDisplay/');
-    if (!fs.existsSync(macPath)) {
-      fs.mkdirSync(macPath, { recursive: true });
-    }
-    return macPath;
   }
-  return 'C:/SEE/'; // Fallback Windows
+  // Fallback
+  const fallback = path.join(os.homedir(), '.seedisplay/');
+  if (!fs.existsSync(fallback)) fs.mkdirSync(fallback, { recursive: true });
+  return fallback;
 }
 
 // Global base path - accessible throughout the app
@@ -57,7 +48,7 @@ const START_OFFLINE = process.argv.includes('--offline');
 if (START_OFFLINE) {
   process.env.SEEDISPLAY_OFFLINE = '1';
 }
-log.info(`[Platform] ${process.platform}/${process.arch}, BASE_PATH=${BASE_PATH}, isRaspberryPi=${IS_RASPBERRY_PI}${START_OFFLINE ? ', START_OFFLINE=true' : ''}`);
+log.info(`[Platform] ${process.platform}/${process.arch}, BASE_PATH=${BASE_PATH}${START_OFFLINE ? ', START_OFFLINE=true' : ''}`);
 if (START_OFFLINE) log.warn('[OFFLINE] App will start with ALL network blocked (--offline flag)');
 
 // Enregistrer le scheme see-media comme privilégié (doit être fait avant app.ready)
@@ -221,40 +212,11 @@ module.exports = { getUpdateChannel };
 // Optimisations pour lecture vidéo fluide et transitions CUT
 //-------------------------------------------------------------------
 
-// Raspberry Pi / Linux ARM64 specific optimizations
-if (IS_RASPBERRY_PI) {
-  log.info('[Raspberry Pi] Applying ARM64 optimizations...');
-  
-  // Limiter l'utilisation mémoire
-  app.commandLine.appendSwitch('js-flags', '--max-old-space-size=512');
-  
-  // Limiter le nombre de processus renderer
-  app.commandLine.appendSwitch('renderer-process-limit', '2');
-  
-  // Désactiver les fonctionnalités non nécessaires
-  app.commandLine.appendSwitch('disable-extensions');
-  app.commandLine.appendSwitch('disable-sync');
-  app.commandLine.appendSwitch('disable-background-networking');
-  app.commandLine.appendSwitch('disable-default-apps');
-  
-  // Mode low-end device
-  app.commandLine.appendSwitch('enable-low-end-device-mode');
-  
-  // GPU optimizations for Pi
-  app.commandLine.appendSwitch('enable-gpu-rasterization');
-  app.commandLine.appendSwitch('ignore-gpu-blocklist');
-  
-  // Disable software rasterizer (use hardware)
-  app.commandLine.appendSwitch('disable-software-rasterizer');
-  
-  log.info('[Raspberry Pi] Optimizations applied');
-} else {
-  // Standard Windows/Linux x64 optimizations
-  app.commandLine.appendSwitch('ignore-gpu-blocklist');
-  app.commandLine.appendSwitch('enable-gpu-rasterization');
-  app.commandLine.appendSwitch('enable-zero-copy');
-  app.commandLine.appendSwitch('disable-software-rasterizer');
-}
+// Linux x64 optimizations
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('disable-software-rasterizer');
 
 // Optimisations pour les codecs vidéo (VAAPI sur Linux)
 if (IS_LINUX) {

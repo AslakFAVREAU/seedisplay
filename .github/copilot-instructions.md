@@ -24,7 +24,7 @@ This file contains focused, repo-specific guidance for AI coding agents working 
     cd "<repo>"; npm test
     ```
   - Start app (dev): `npm start` → runs `electron .`. DevTools open automatically by default.
-  - Build/pack: `npm run dist` (uses `electron-builder`), `npm run publish` to build & publish (Windows target configured).
+  - Build/pack: `npm run build` builds AppImage via electron-builder (must run from WSL on Windows). `npm run publish` to build & publish.
   - When modifying preload API: after edits, run `npm start` and check renderer console / DevTools. Renderer console messages are forwarded to main logs; look for `renderer-log` entries.
 
 - IPC channel quick reference
