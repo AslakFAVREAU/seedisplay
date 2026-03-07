@@ -6,18 +6,37 @@ function addZero(i) {
 }
 var heure
 /**
- * Renvoie l'heure au format 00:00
+ * Renvoie l'heure au format "HH:MM"
  */
 function heure() {
     var x = new Date();
-    var hh, mm, heure;
-    dd = addZero(x.getDate());
-    month = addZero(x.getMonth());
-    yy = x.getFullYear();
-    hh = addZero(x.getHours());
-    mm = addZero(x.getMinutes());
-    heure = hh + '<span class="colon-blink">:</span>' + mm;
-    return heure;
+    var hh = addZero(x.getHours());
+    var mm = addZero(x.getMinutes());
+    return hh + ":" + mm;
+}
+
+/**
+ * Met à jour le DOM de l'horloge (#heure) sans recréer le ":"
+ * pour éviter de relancer l'animation CSS à chaque seconde.
+ */
+function updateHeureElement() {
+    var heureContainer = document.getElementById("heure");
+    if (!heureContainer) return;
+
+    var time = heure(); // "HH:MM"
+    var parts = time.split(":");
+    var hhSpan = document.getElementById("heureHH");
+    var mmSpan = document.getElementById("heureMM");
+
+    // Si la structure n'est pas encore en place (cas de pages anciennes), on la crée.
+    if (!hhSpan || !mmSpan) {
+        heureContainer.innerHTML = '<span id="heureHH"></span><span class="colon-blink">:</span><span id="heureMM"></span>';
+        hhSpan = document.getElementById("heureHH");
+        mmSpan = document.getElementById("heureMM");
+    }
+
+    if (hhSpan) hhSpan.textContent = parts[0] || "";
+    if (mmSpan) mmSpan.textContent = parts[1] || "";
 }
 
 /**
@@ -99,8 +118,7 @@ function startClockTimer() {
     if (clockInterval) clearInterval(clockInterval);
     clockInterval = setInterval(function() {
         try {
-            var heureEl = document.getElementById("heure");
-            if (heureEl) heureEl.innerHTML = heure();
+            if (document.getElementById("heure")) updateHeureElement();
             // Mise à jour de la date toutes les minutes (on vérifie si minute = 0)
             var now = new Date();
             if (now.getSeconds() === 0) {

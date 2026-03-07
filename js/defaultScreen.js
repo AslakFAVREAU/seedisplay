@@ -93,10 +93,22 @@ function syncHorizontalLayout() {
         var pageDefault = document.getElementById('pageDefault')
         if (!pageDefault || !pageDefault.classList.contains('layout-horizontal')) return
 
-        // Sync heure
+        // Sync heure sans recréer le ":" pour conserver l'animation fluide
         var heureEl = document.getElementById('heure')
         var hzHeure = document.getElementById('hzHeure')
-        if (heureEl && hzHeure) hzHeure.innerHTML = heureEl.innerHTML
+        if (heureEl && hzHeure) {
+            var timeText = (heureEl.textContent || '').trim() // ex: "12:34"
+            var parts = timeText.split(':')
+            var hzHH = document.getElementById('hzHeureHH')
+            var hzMM = document.getElementById('hzHeureMM')
+            if (!hzHH || !hzMM) {
+                hzHeure.innerHTML = '<span id="hzHeureHH"></span><span class="colon-blink">:</span><span id="hzHeureMM"></span>'
+                hzHH = document.getElementById('hzHeureHH')
+                hzMM = document.getElementById('hzHeureMM')
+            }
+            if (hzHH) hzHH.textContent = parts[0] || ''
+            if (hzMM) hzMM.textContent = parts[1] || ''
+        }
 
         // Sync date — split into jour name + rest
         var dateEl = document.getElementById('date')
@@ -145,10 +157,31 @@ function syncHorizontalLayout() {
             hzWind.innerHTML = '<svg class="hz-wind-icon" viewBox="0 0 24 24"><path d="M3.5 9h10a3.5 3.5 0 1 0-3.5-3.5M3.5 15h12a3.5 3.5 0 0 1-3.5 3.5M3.5 12h7a2.5 2.5 0 1 1-2.5 2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg> ' + window._meteoWindSpeed + ' km/h'
         }
 
-        // Sync éphéméride
-        var epheEl = document.getElementById('ephe')
+        // Sync éphéméride — utilise window._epheData si disponible
         var hzEphe = document.getElementById('hzEphe')
-        if (epheEl && hzEphe) hzEphe.textContent = epheEl.textContent || ''
+        var hzFeteContainer = document.getElementById('hzFeteContainer')
+        var hzFeteIcon = document.getElementById('hzFeteIcon')
+        var hzFeteName = document.getElementById('hzFeteName')
+        var hzFerieBadge = document.getElementById('hzFerieBadge')
+
+        if (window._epheData) {
+            // Fête du jour
+            if (window._epheData.hasFete && window._epheData.fete && hzFeteContainer) {
+                hzFeteContainer.style.display = 'flex'
+                if (hzFeteIcon) hzFeteIcon.textContent = window._epheData.fete.icon || ''
+                if (hzFeteName) hzFeteName.textContent = window._epheData.fete.name || ''
+                if (hzFerieBadge) hzFerieBadge.style.display = window._epheData.isFerie ? 'inline-block' : 'none'
+            } else if (hzFeteContainer) {
+                hzFeteContainer.style.display = 'none'
+            }
+            // Saint du jour
+            if (hzEphe) hzEphe.textContent = window._epheData.saint || ''
+        } else {
+            // Fallback: copier depuis l'ancien élément #ephe
+            var epheEl = document.getElementById('ephe')
+            if (epheEl && hzEphe) hzEphe.textContent = epheEl.textContent || ''
+            if (hzFeteContainer) hzFeteContainer.style.display = 'none'
+        }
 
         // Sync semaine
         var semaineEl = document.getElementById('semainePaireImpaire')
@@ -749,9 +782,9 @@ if (monthGif == 11)
         ephe()
     }
 
-    /*Affichage et met à jour la date et de la semaine et de l heure sur la page par default*/
+    /*Affichage et met à jour la date et de la semaine et de l'heure sur la page par défaut*/
     document.getElementById("date").innerHTML = dateFr()
-    document.getElementById("heure").innerHTML = heure()
+    if (document.getElementById("heure")) updateHeureElement()
 
     // Affichage semaine paire ou impaire
     returnSemainePaireImpaire = semainePaireImpaire(new Date())
