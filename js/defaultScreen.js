@@ -49,18 +49,171 @@ function ensureFooterVisibility() {
     }
 }
 
+/**
+ * Apply the default layout mode: 'vertical' (default) or 'horizontal' (3 columns)
+ * Reads from window.affichageConfig.defaultLayout or window.configSEE.defaultLayout
+ */
+function applyDefaultLayout() {
+    try {
+        var layout = 'horizontal' // default
+        // Priority: affichageConfig > _defaultLayout (set by processConfig) > configSEE
+        if (window.affichageConfig && window.affichageConfig.defaultLayout) {
+            layout = window.affichageConfig.defaultLayout
+        } else if (window._defaultLayout) {
+            layout = window._defaultLayout
+        } else if (window.configSEE && window.configSEE.defaultLayout) {
+            layout = window.configSEE.defaultLayout
+        }
+        
+        var pageDefault = document.getElementById('pageDefault')
+        if (!pageDefault) return
+        
+        if (layout === 'horizontal') {
+            pageDefault.classList.remove('layout-vertical')
+            pageDefault.classList.add('layout-horizontal')
+            // Immediately sync data to horizontal elements
+            syncHorizontalLayout()
+        } else {
+            pageDefault.classList.remove('layout-horizontal')
+            pageDefault.classList.add('layout-vertical')
+        }
+        
+        __log('info', 'defaultScreen', 'applyDefaultLayout: ' + layout)
+    } catch (e) {
+        __log('warn', 'defaultScreen', 'applyDefaultLayout error: ' + e.message)
+    }
+}
+
+/**
+ * Sync data from vertical layout elements to horizontal layout elements.
+ * Called periodically so horizontal layout stays up-to-date with meteo/ephe/date data.
+ */
+function syncHorizontalLayout() {
+    try {
+        var pageDefault = document.getElementById('pageDefault')
+        if (!pageDefault || !pageDefault.classList.contains('layout-horizontal')) return
+
+        // Sync heure
+        var heureEl = document.getElementById('heure')
+        var hzHeure = document.getElementById('hzHeure')
+        if (heureEl && hzHeure) hzHeure.innerHTML = heureEl.innerHTML
+
+        // Sync date — split into jour name + rest
+        var dateEl = document.getElementById('date')
+        var hzJour = document.getElementById('hzJour')
+        var hzDate = document.getElementById('hzDate')
+        if (dateEl && hzJour && hzDate) {
+            var parts = (dateEl.textContent || '').trim().split(' ')
+            if (parts.length >= 4) {
+                hzJour.textContent = parts[0] // jour name (e.g. "samedi")
+                hzDate.textContent = parts.slice(1).join(' ') // "7 mars 2026"
+            } else {
+                hzJour.textContent = ''
+                hzDate.textContent = dateEl.textContent || ''
+            }
+        }
+
+        // Sync météo aujourd'hui
+        var todayTemp = document.getElementById('todayTemp')
+        var hzTemp = document.getElementById('hzMeteoTemp')
+        if (todayTemp && hzTemp) {
+            var tempText = todayTemp.textContent || '--°'
+            hzTemp.textContent = tempText.replace('°', '°C')
+        }
+        
+        var todayImg = document.getElementById('todayImgMeteo')
+        var hzImg = document.getElementById('hzMeteoImg')
+        if (todayImg && hzImg && todayImg.src !== hzImg.src) {
+            hzImg.src = todayImg.src
+        }
+
+        // Sync weather description (from weathercode mapped name if available)
+        var hzDesc = document.getElementById('hzMeteoDesc')
+        if (hzDesc && hzDesc.textContent === 'Chargement...') {
+            hzDesc.textContent = '' // Clear loading text once meteo loads
+        }
+
+        // Sync min/max temperature
+        var hzMinMax = document.getElementById('hzMeteoMinMax')
+        if (hzMinMax && typeof window._meteoTodayMin !== 'undefined' && typeof window._meteoTodayMax !== 'undefined') {
+            hzMinMax.textContent = '↓ ' + window._meteoTodayMin + '° / ↑ ' + window._meteoTodayMax + '°'
+        }
+
+        // Sync wind speed
+        var hzWind = document.getElementById('hzMeteoWind')
+        if (hzWind && typeof window._meteoWindSpeed !== 'undefined') {
+            hzWind.innerHTML = '<svg class="hz-wind-icon" viewBox="0 0 24 24"><path d="M3.5 9h10a3.5 3.5 0 1 0-3.5-3.5M3.5 15h12a3.5 3.5 0 0 1-3.5 3.5M3.5 12h7a2.5 2.5 0 1 1-2.5 2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg> ' + window._meteoWindSpeed + ' km/h'
+        }
+
+        // Sync éphéméride
+        var epheEl = document.getElementById('ephe')
+        var hzEphe = document.getElementById('hzEphe')
+        if (epheEl && hzEphe) hzEphe.textContent = epheEl.textContent || ''
+
+        // Sync semaine
+        var semaineEl = document.getElementById('semainePaireImpaire')
+        var hzSemaine = document.getElementById('hzSemaine')
+        if (semaineEl && hzSemaine) hzSemaine.textContent = semaineEl.textContent || ''
+
+        // Sync jour de l'année
+        var hzJourNum = document.getElementById('hzJourNum')
+        if (hzJourNum) {
+            var now = new Date()
+            var start = new Date(now.getFullYear(), 0, 0)
+            var diff = now - start
+            var oneDay = 1000 * 60 * 60 * 24
+            var dayOfYear = Math.floor(diff / oneDay)
+            hzJourNum.textContent = 'Jour n°' + dayOfYear
+        }
+
+    } catch (e) {
+        __log('warn', 'defaultScreen', 'syncHorizontalLayout error: ' + e.message)
+    }
+}
+
 if (typeof window !== 'undefined') {
-    window.addEventListener('resize', applyMeteoLayout)
+    window.addEventListener('resize', function() { applyMeteoLayout(); detectPortrait(); })
     document.addEventListener('DOMContentLoaded', () => {
         applyMeteoLayout()
         ensureFooterVisibility()
+        applyDefaultLayout()
+        detectPortrait()
         setTimeout(() => {
             applyMeteoLayout()
             ensureFooterVisibility()
+            applyDefaultLayout()
+            syncHorizontalLayout()
+            detectPortrait()
         }, 1000)
         setInterval(ensureFooterVisibility, 2000)
+        // Sync horizontal layout data every second (same as clock)
+        setInterval(syncHorizontalLayout, 1000)
     })
+    // Re-apply layout if config changes
+    window.applyDefaultLayout = applyDefaultLayout
+    window.syncHorizontalLayout = syncHorizontalLayout
 }
+
+/**
+ * Detect portrait orientation based on custom dims or viewport.
+ * Adds .hz-portrait class to #pageDefault when height > width.
+ */
+function detectPortrait() {
+    try {
+        var w = window.IS_CUSTOM_MODE && window.CUSTOM_WIDTH ? window.CUSTOM_WIDTH : window.innerWidth
+        var h = window.IS_CUSTOM_MODE && window.CUSTOM_HEIGHT ? window.CUSTOM_HEIGHT : window.innerHeight
+        var pageDefault = document.getElementById('pageDefault')
+        if (!pageDefault) return
+        if (h > w) {
+            pageDefault.classList.add('hz-portrait')
+        } else {
+            pageDefault.classList.remove('hz-portrait')
+        }
+    } catch (e) {
+        __log('warn', 'defaultScreen', 'detectPortrait error: ' + e.message)
+    }
+}
+if (typeof window !== 'undefined') window.detectPortrait = detectPortrait
 
 /**
  * Get base URL for media files based on environment

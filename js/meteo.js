@@ -56,7 +56,7 @@ const getMeteo = async () => {
   const lat = (typeof meteoLat !== 'undefined') ? meteoLat : 48.75
   const lon = (typeof meteoLon !== 'undefined') ? meteoLon : 2.3
   // Request current weather plus daily summary (max 4 days)
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&daily=temperature_2m_max,temperature_2m_min,weathercode,sunrise,sunset&current_weather=true&timezone=auto&forecast_days=5`
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&daily=temperature_2m_max,temperature_2m_min,weathercode,sunrise,sunset&current_weather=true&hourly=windspeed_10m&timezone=auto&forecast_days=5`
   
   // Phase 2 Week 2: Use ApiManager if available (with ErrorHandler resilience)
   if (typeof window !== 'undefined' && window.apiManager) {
@@ -99,8 +99,22 @@ const requestJsonMeteo = async () => {
           iconElem.src = mapCodeToIcon(cur.weathercode, true)
           __log('info','meteo','Icône aujourd\'hui mise à jour:', cur.weathercode)
         }
+        // Store wind speed for horizontal layout
+        if (typeof cur.windspeed !== 'undefined') {
+          window._meteoWindSpeed = Math.round(cur.windspeed)
+          __log('info','meteo','Vent actuel:', cur.windspeed, 'km/h')
+        }
       }
     } catch (e) { __log('warn','meteo','current update error', e) }
+
+    // Store today's min/max from daily data for horizontal layout
+    if (data.daily) {
+      const todayMin = data.daily.temperature_2m_min && data.daily.temperature_2m_min[0]
+      const todayMax = data.daily.temperature_2m_max && data.daily.temperature_2m_max[0]
+      if (typeof todayMin !== 'undefined') window._meteoTodayMin = Math.round(todayMin)
+      if (typeof todayMax !== 'undefined') window._meteoTodayMax = Math.round(todayMax)
+      __log('info','meteo','Min/Max aujourd\'hui:', todayMin, '/', todayMax)
+    }
 
     // Daily forecasts: use daily arrays
     if (data.daily) {

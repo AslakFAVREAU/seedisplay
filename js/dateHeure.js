@@ -16,7 +16,7 @@ function heure() {
     yy = x.getFullYear();
     hh = addZero(x.getHours());
     mm = addZero(x.getMinutes());
-    heure = hh + ":" + mm;
+    heure = hh + '<span class="colon-blink">:</span>' + mm;
     return heure;
 }
 
@@ -83,7 +83,9 @@ function dateDigi(){
 
 function dateDayMonth(){
     date = new Date;
-    dateString = date.getDate()+"/"+(date.getMonth()+1);
+    var day = date.getDate();
+    var month = date.getMonth() + 1;
+    dateString = (day < 10 ? '0' : '') + day + '/' + (month < 10 ? '0' : '') + month;
 
     return dateString
 }

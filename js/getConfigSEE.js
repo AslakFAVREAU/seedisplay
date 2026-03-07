@@ -117,6 +117,16 @@ function processConfig(configSEE) {
         if (window._sl) window._sl('processConfig: calling requestJsonDiapo() → API fetch')
         requestJsonDiapo()
 
+        // Apply default layout from config (vertical or horizontal)
+        try {
+            var layoutValue = configSEE.defaultLayout || 'horizontal'
+            window._defaultLayout = layoutValue
+            __log('info','config','processConfig: defaultLayout=' + layoutValue)
+            if (typeof applyDefaultLayout === 'function') {
+                applyDefaultLayout()
+            }
+        } catch (e) { __log('warn','config','Error applying default layout', e) }
+
         // If meteorology display is enabled, trigger the meteo request now that config is loaded
         try {
             // Lancer la récupération météo si showMeteo est activé

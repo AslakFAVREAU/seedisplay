@@ -9,5 +9,6 @@
   "weekType": true,
   "logoSOE": true,
   "env": "prod",
-  "updateChannel": "stable"
+  "updateChannel": "stable",
+  "defaultLayout": "horizontal"
 }

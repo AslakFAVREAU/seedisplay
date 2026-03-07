@@ -9,5 +9,6 @@
   "weekType": true,
   "logoSOE": true,
   "env": "local",
-  "apiToken": "85e6d64a54485474bb52e7f67c7ba233f8d671569d2833860138ba975836007e"
+  "apiToken": "85e6d64a54485474bb52e7f67c7ba233f8d671569d2833860138ba975836007e",
+  "defaultLayout": "horizontal"
 }
