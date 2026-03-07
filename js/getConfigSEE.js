@@ -51,6 +51,7 @@ function getConfigSEE() {
 
 function processConfig(configSEE) {
     try {
+    if (window._sl) window._sl('processConfig: env=' + configSEE.env + ', ecranId=' + (configSEE.ecranUuid || configSEE.idEcran || 'NONE'))
     // Options d'affichage
     // Respecter la configuration, avec possibilité d'override via variable d'environnement METEO_FORCE
     let showMeteoConf = (typeof configSEE.meteo !== 'undefined') ? configSEE.meteo : true
@@ -89,6 +90,7 @@ function processConfig(configSEE) {
         else if (env == 'local') {
             urlAPI = 'http://localhost:8000/see/API/diapo/' + idEcran
         }
+        if (window._sl) window._sl('processConfig: urlAPI=' + urlAPI)
 
         if (weekDisplay == false) {
             document.getElementById('week').style.display = 'none';
@@ -112,6 +114,7 @@ function processConfig(configSEE) {
         if (bottomBarEl) bottomBarEl.style.display = showLogo ? 'flex' : 'none'
 
         // Récupération et parsing de la liste de diapos depuis l'API
+        if (window._sl) window._sl('processConfig: calling requestJsonDiapo() → API fetch')
         requestJsonDiapo()
 
         // If meteorology display is enabled, trigger the meteo request now that config is loaded

@@ -103,18 +103,22 @@ class ApiManager {
    */
   async getDiapoWithErrorHandling(urlAPI) {
     _log('info', 'api-manager', `getDiapoWithErrorHandling: ${urlAPI}`);
+    if (typeof window !== 'undefined' && window._sl) window._sl('ApiManager: getDiapoWithErrorHandling start');
     const startTime = Date.now();
 
     if (!this.errorHandler) {
       _log('warn', 'api-manager', 'ErrorHandler not initialized, falling back to direct call');
+      if (typeof window !== 'undefined' && window._sl) window._sl('ApiManager: no ErrorHandler, using direct axios call');
       try {
         const res = await this._axiosGetWithTimeout(urlAPI, this.apis.diapo.timeout);
+        if (typeof window !== 'undefined' && window._sl) window._sl('ApiManager: direct call SUCCESS (' + (Date.now() - startTime) + 'ms)');
         // Stats tracking
         if (window.statsManager) {
           window.statsManager.logApiRequest(urlAPI, true, Date.now() - startTime);
         }
         return res;
       } catch (error) {
+        if (typeof window !== 'undefined' && window._sl) window._sl('ApiManager: direct call FAILED: ' + error.message);
         _log('error', 'api-manager', 'Direct diapo call failed', error.message);
         if (window.statsManager) {
           window.statsManager.logApiRequest(urlAPI, false, Date.now() - startTime);
@@ -138,6 +142,7 @@ class ApiManager {
       );
 
       _log('info', 'api-manager', 'getDiapoWithErrorHandling: success', result.status);
+      if (typeof window !== 'undefined' && window._sl) window._sl('ApiManager: ErrorHandler SUCCESS (' + (Date.now() - startTime) + 'ms)');
       // Stats tracking
       if (window.statsManager) {
         window.statsManager.logApiRequest(urlAPI, true, Date.now() - startTime);
@@ -146,6 +151,7 @@ class ApiManager {
 
     } catch (error) {
       _log('error', 'api-manager', 'getDiapoWithErrorHandling: all retries failed', error.message);
+      if (typeof window !== 'undefined' && window._sl) window._sl('ApiManager: ALL RETRIES FAILED (' + (Date.now() - startTime) + 'ms): ' + error.message);
       // Stats tracking
       if (window.statsManager) {
         window.statsManager.logApiRequest(urlAPI, false, Date.now() - startTime);
@@ -163,8 +169,11 @@ class ApiManager {
         if (window.apiCache) {
           const cachedData = window.apiCache.get('diapo', true); // Allow expired
           if (cachedData) {
+            if (typeof window !== 'undefined' && window._sl) window._sl('ApiManager: OFFLINE CACHE HIT in ApiManager!');
             _log('warn', 'api-manager', 'OFFLINE MODE: Using cached diapo data');
             return { data: cachedData, status: 200, offline: true };
+          } else {
+            if (typeof window !== 'undefined' && window._sl) window._sl('ApiManager: apiCache.get(diapo) returned null (no cache)');
           }
         }
       } catch (e) {

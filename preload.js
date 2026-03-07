@@ -74,7 +74,9 @@ function getBasePath() {
 }
 
 const BASE_PATH = getBasePath()
-console.log('[preload] Platform:', process.platform, '/', process.arch, ', BASE_PATH:', BASE_PATH)
+const FORCE_OFFLINE = process.env.SEEDISPLAY_OFFLINE === '1'
+console.log('[preload] Platform:', process.platform, '/', process.arch, ', BASE_PATH:', BASE_PATH, FORCE_OFFLINE ? ', FORCE_OFFLINE=true' : '')
+if (FORCE_OFFLINE) console.warn('[preload] OFFLINE MODE: all network requests will be blocked')
 
 function safeJoin(base, p) {
   if (!path) {
@@ -225,6 +227,10 @@ contextBridge.exposeInMainWorld('api', {
     return await ipcRenderer.invoke('preload-readBundledFile', relativePath)
   },
   fetchJson: async (url, opts) => {
+    if (FORCE_OFFLINE) {
+      console.warn('[preload] fetchJson BLOCKED (offline mode):', url)
+      throw new Error('Network disabled (offline mode)')
+    }
     try {
       if (hasNode && axios) {
         // Support POST/PUT/etc. via opts.method
@@ -256,6 +262,10 @@ contextBridge.exposeInMainWorld('api', {
   },
   // Save binary content downloaded from url into relativePath under BASE_PATH
   saveBinary: async (relativePath, url) => {
+    if (FORCE_OFFLINE) {
+      try { ipcRenderer.send('renderer-log', { level: 'warn', msg: 'preload.saveBinary BLOCKED (offline mode): ' + relativePath }) } catch(e) {}
+      return false
+    }
     if (hasNode) {
       try {
         const p = safeJoin(BASE_PATH, relativePath)
@@ -336,6 +346,10 @@ contextBridge.exposeInMainWorld('api', {
   // Phase 2 Week 3: Binary download with MediaCache support
   // Downloads url to relativePath, using ETag validation and LRU disk cache
   saveBinaryWithCache: async (relativePath, url, cacheOptions = {}) => {
+    if (FORCE_OFFLINE) {
+      try { ipcRenderer.send('renderer-log', { level: 'warn', msg: 'preload.saveBinaryWithCache BLOCKED (offline mode): ' + relativePath }) } catch(e) {}
+      return { success: false, error: 'Network disabled (offline mode)' }
+    }
     if (hasNode) {
       try {
         const p = safeJoin(BASE_PATH, relativePath)
@@ -457,35 +471,41 @@ contextBridge.exposeInMainWorld('logger', {
 // Expose a minimal axios-like API for renderer code that expects axios
 contextBridge.exposeInMainWorld('axios', {
   get: async (url, opts) => {
-    console.log('[preload-axios] get called, hasNode=', hasNode, 'axios=', !!axios, 'url=', url)
-    try {
-      if (hasNode && axios) {
-        const res = await axios.get(url, opts)
-        console.log('[preload-axios] native axios response, res.data?=', !!res.data)
-        return res
-      }
-      // Fallback to ipc fetch: normalize to axios-like response { data }
-      console.log('[preload-axios] using IPC fallback')
-      const result = await ipcRenderer.invoke('preload-fetchJson', url, opts || {})
-      console.log('[preload-axios] IPC result?=', !!result)
-      return { data: result }
-    } catch (e) {
-      console.error('[preload-axios] get error:', e.message)
-      return { data: null }
+    if (FORCE_OFFLINE) {
+      console.warn('[preload-axios] GET BLOCKED (offline mode):', url)
+      throw new Error('Network disabled (offline mode)')
     }
+    console.log('[preload-axios] get called, hasNode=', hasNode, 'axios=', !!axios, 'url=', url)
+    if (hasNode && axios) {
+      const res = await axios.get(url, opts)
+      console.log('[preload-axios] native axios response, res.data?=', !!res.data)
+      return res
+    }
+    // Fallback to ipc fetch: normalize to axios-like response { data }
+    console.log('[preload-axios] using IPC fallback')
+    const result = await ipcRenderer.invoke('preload-fetchJson', url, opts || {})
+    console.log('[preload-axios] IPC result?=', !!result)
+    if (result === null || result === undefined) {
+      // IPC handler returned null = network error in main process
+      console.error('[preload-axios] IPC returned null → network error')
+      throw new Error('Network request failed (IPC fallback returned null)')
+    }
+    return { data: result }
   },
   post: async (url, data, opts) => {
-    try {
-      if (hasNode && axios) {
-        const res = await axios.post(url, data, opts)
-        return res
-      }
-      const req = Object.assign({}, opts || {}, { method: 'POST', data })
-      const result = await ipcRenderer.invoke('preload-fetchJson', url, req)
-      return { data: result }
-    } catch (e) {
-      console.error('[preload-axios] post error:', e.message)
-      return { data: null }
+    if (FORCE_OFFLINE) {
+      console.warn('[preload-axios] POST BLOCKED (offline mode):', url)
+      throw new Error('Network disabled (offline mode)')
     }
+    if (hasNode && axios) {
+      const res = await axios.post(url, data, opts)
+      return res
+    }
+    const req = Object.assign({}, opts || {}, { method: 'POST', data })
+    const result = await ipcRenderer.invoke('preload-fetchJson', url, req)
+    if (result === null || result === undefined) {
+      throw new Error('Network request failed (IPC fallback returned null)')
+    }
+    return { data: result }
   }
 })

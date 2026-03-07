@@ -982,35 +982,78 @@ try { module.exports = { listeDiapo, listeDiapoV1, listeDiapoV2 } } catch (e) { 
 
 const getDiapoJson = async () => {
     try {
+  if (typeof window !== 'undefined' && window._sl) window._sl('getDiapoJson: START → fetching ' + urlAPI)
   _log('info','diapo','getDiapoJson: fetching ' + urlAPI)
       
       // Phase 2 Week 2: Use ApiManager if available (with ErrorHandler resilience)
       if (typeof window !== 'undefined' && window.apiManager) {
+        if (window._sl) window._sl('getDiapoJson: using ApiManager.getDiapoWithErrorHandling()')
         const res = await window.apiManager.getDiapoWithErrorHandling(urlAPI)
+        if (window._sl) window._sl('getDiapoJson: API SUCCESS (status=' + (res && res.status) + ', offline=' + (res && res.offline || false) + ', data?=' + !!(res && res.data) + ')')
         _log('info','diapo','getDiapoJson: fetch success via ApiManager ' + (res && res.status))
         return res
       }
       
       // Fallback to direct axios call if ApiManager not available
+      if (window._sl) window._sl('getDiapoJson: no ApiManager, using direct axios.get()')
       const res = await axios.get(urlAPI)
+      if (window._sl) window._sl('getDiapoJson: direct axios SUCCESS (data?=' + !!(res && res.data) + ')')
       _log('info','diapo','getDiapoJson: fetch success (direct axios) ' + (res && res.status))
       return res
     } catch (error) {
+  if (typeof window !== 'undefined' && window._sl) window._sl('getDiapoJson: API FAILED: ' + (error && error.message))
   _log('error','diapo','getDiapoJson: error', error && error.message)
       
       // Last-resort fallback: try offline cache if ApiManager didn't already
       try {
         if (typeof window !== 'undefined' && window.apiCache) {
+          if (window._sl) window._sl('getDiapoJson: trying apiCache.get(diapo, allowExpired=true)... (cache keys: ' + Object.keys(window.apiCache.cache || {}).join(',') + ')')
           var cachedData = window.apiCache.get('diapo', true) // Allow expired
           if (cachedData) {
+            if (window._sl) window._sl('getDiapoJson: CACHE HIT! Using offline cache')
             _log('warn','diapo','getDiapoJson: ALL requests failed, using OFFLINE CACHE as last resort')
             return { data: cachedData, status: 200, offline: true }
+          } else {
+            if (window._sl) window._sl('getDiapoJson: apiCache EMPTY (no diapo entry)')
           }
+        } else {
+          if (window._sl) window._sl('getDiapoJson: no apiCache available!')
         }
       } catch (cacheErr) {
+        if (window._sl) window._sl('getDiapoJson: apiCache error: ' + (cacheErr && cacheErr.message))
         _log('error','diapo','getDiapoJson: cache fallback also failed: ' + (cacheErr && cacheErr.message))
       }
       
+      // Ultra last-resort: read cache file directly from disk
+      try {
+        if (typeof window !== 'undefined' && window.api && window.api.readFile) {
+          if (window._sl) window._sl('getDiapoJson: trying disk file cache_diapo.json...')
+          var raw = await window.api.readFile('cache_diapo.json')
+          if (raw) {
+            var fileCache = JSON.parse(raw)
+            if (fileCache && fileCache.diapo && fileCache.diapo.data) {
+              if (window._sl) window._sl('getDiapoJson: DISK CACHE HIT! Recovered from cache_diapo.json')
+              _log('warn','diapo','getDiapoJson: recovered diapo from disk file cache_diapo.json')
+              // Also restore into apiCache for future use
+              if (window.apiCache) {
+                window.apiCache.cache['diapo'] = fileCache.diapo
+              }
+              return { data: fileCache.diapo.data, status: 200, offline: true }
+            } else {
+              if (window._sl) window._sl('getDiapoJson: disk file exists but no diapo.data inside (keys: ' + Object.keys(fileCache || {}).join(',') + ')')
+            }
+          } else {
+            if (window._sl) window._sl('getDiapoJson: cache_diapo.json NOT FOUND on disk')
+          }
+        } else {
+          if (window._sl) window._sl('getDiapoJson: no window.api.readFile available!')
+        }
+      } catch (fileErr) {
+        if (window._sl) window._sl('getDiapoJson: disk cache read FAILED: ' + (fileErr && fileErr.message))
+        _log('error','diapo','getDiapoJson: disk cache fallback failed: ' + (fileErr && fileErr.message))
+      }
+      
+      if (typeof window !== 'undefined' && window._sl) window._sl('getDiapoJson: ALL FALLBACKS EXHAUSTED → returning null')
       return null
     }
   }
@@ -1106,10 +1149,18 @@ const getDiapoJson = async () => {
     if (typeof window !== 'undefined') {
       window.lastApiPullTime = Date.now()
       window.apiPullCount = (window.apiPullCount || 0) + 1
+      if (window._sl) window._sl('requestJsonDiapo: pull #' + window.apiPullCount + ' (init=' + init + ')')
       _log('info','diapo','requestJsonDiapo: pull #' + window.apiPullCount)
     }
     
     const JsonDiapo = await getDiapoJson()
+    if (typeof window !== 'undefined' && window._sl) {
+      if (JsonDiapo && JsonDiapo.data) {
+        window._sl('requestJsonDiapo: got data (offline=' + (JsonDiapo.offline || false) + ', items=' + (Array.isArray(JsonDiapo.data) ? JsonDiapo.data.length : typeof JsonDiapo.data) + ')')
+      } else {
+        window._sl('requestJsonDiapo: NO DATA returned (JsonDiapo=' + (JsonDiapo ? 'object-no-data' : 'null') + ')')
+      }
+    }
     _log('debug','diapo','requestJsonDiapo: JsonDiapo=', JsonDiapo ? 'object' : 'null', 'JsonDiapo.data=', JsonDiapo && JsonDiapo.data ? 'present' : 'missing')
     
     // === FAILURE HANDLING: API returned nothing ===
@@ -1117,6 +1168,7 @@ const getDiapoJson = async () => {
       if (typeof window !== 'undefined') {
         window.apiConsecutiveErrors = (window.apiConsecutiveErrors || 0) + 1
         window.lastApiError = Date.now()
+        if (window._sl) window._sl('requestJsonDiapo: FAILURE #' + window.apiConsecutiveErrors + ' (no data, init=' + init + ', ArrayDiapo=' + (ArrayDiapo ? ArrayDiapo.length : 'null') + ' items)')
         _log('error','diapo','requestJsonDiapo: API FAILURE #' + window.apiConsecutiveErrors + ' - no data received')
         
         // Après 3 échecs consécutifs, redémarrer l'app
@@ -1137,9 +1189,11 @@ const getDiapoJson = async () => {
         
         // Keep existing diapos alive - don't wipe ArrayDiapo
         if (ArrayDiapo && ArrayDiapo.length > 0) {
+          if (window._sl) window._sl('requestJsonDiapo: keeping ' + ArrayDiapo.length + ' existing diapos alive')
           _log('warn','diapo','requestJsonDiapo: keeping current ' + ArrayDiapo.length + ' diapos alive during API failure')
         } else if (init === true) {
           // First load and API is already down: show defaultScreen as fallback
+          if (window._sl) window._sl('requestJsonDiapo: FIRST LOAD + NO DATA → showing defaultScreen (stuck here until internet returns)')
           _log('warn','diapo','requestJsonDiapo: init with no data, showing defaultScreen')
           defaultScreen()
           // Start refresh timer so we keep retrying
@@ -1161,15 +1215,18 @@ const getDiapoJson = async () => {
     // Sauvegarder dans le cache pour le mode offline
     if (typeof window !== 'undefined' && window.apiCache && JsonDiapo.data) {
       window.apiCache.set('diapo', JsonDiapo.data)
+      if (window._sl) window._sl('requestJsonDiapo: cached API response for offline (offline=' + (JsonDiapo.offline || false) + ')')
       _log('info','diapo','API response cached for offline mode')
       
       // Indiquer si on est en mode offline
       if (JsonDiapo.offline) {
+        if (window._sl) window._sl('requestJsonDiapo: ⚠ using CACHED data (offline mode)')
         _log('warn','diapo','Using CACHED data (offline mode)')
       }
     }
     
     ArrayDiapo = listeDiapo(JsonDiapo.data)
+    if (typeof window !== 'undefined' && window._sl) window._sl('requestJsonDiapo: parsed ' + (ArrayDiapo ? ArrayDiapo.length : 0) + ' diapo items')
 
     // Sync media cache on every refresh to pick up modified files
     await syncMediaCache(ArrayDiapo)

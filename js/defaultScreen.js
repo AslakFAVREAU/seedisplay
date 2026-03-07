@@ -545,6 +545,7 @@ function hideSleepScreen() {
 }
 
 function defaultScreen() {
+    if (window._sl) window._sl('defaultScreen() called (init=' + init + ', ArrayDiapo=' + (typeof ArrayDiapo !== 'undefined' && ArrayDiapo ? ArrayDiapo.length : 'null') + ' items)')
 
     const dateGif = new Date();
 

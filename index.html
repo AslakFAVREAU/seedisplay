@@ -1271,6 +1271,18 @@
     })();
 
 
+  // ====== STARTUP TIMELINE ======
+  // Global startup tracker for debugging offline/slow boot issues
+  window._startupTime = Date.now()
+  window._startupLog = []
+  window._sl = function(msg) {
+    var elapsed = ((Date.now() - window._startupTime) / 1000).toFixed(1)
+    var entry = '[STARTUP T+' + elapsed + 's] ' + msg
+    window._startupLog.push(entry)
+    console.log('%c' + entry, 'color: #00ff88; font-weight: bold')
+  }
+  window._sl('=== SEEDisplay startup begin ===')
+
   // Use the secure preload API instead of requiring node modules in renderer
   // axios/fs/fetch are available via window.api methods exposed in preload.js
     const csv = null // csv-parse not available in renderer; keep null or implement via main if needed
@@ -1329,16 +1341,20 @@
     // End init variable
 
   // Marquer les éphémérides comme chargées après l'exécution
+  window._sl('ephe() starting')
   ephe().then(() => {
+    window._sl('ephe() loaded OK')
     ephemerisLoaded = true;
     checkLoadingComplete();
   }).catch(() => {
+    window._sl('ephe() failed (non-critical)')
     ephemerisLoaded = true;
     checkLoadingComplete();
   })
 
   // Initialize config via the secure preload API and then call existing getConfigSEE logic
   __log('info','bootstrap','inline init script start (preload-aware)')
+  window._sl('bootstrap: starting config load')
   
   // Variables pour suivre l'état du chargement
   let configLoaded = false;
@@ -1819,7 +1835,9 @@
   // ==================== END SETUP SCREEN FUNCTIONS ====================
   
   // Récupération asynchrone de la configuration (préférer config sur disque ou variables d'environnement)
+  window._sl('bootstrap: calling window.api.getConfig()...')
   window.api.getConfig().then((config) => {
+    window._sl('bootstrap: getConfig() returned (ecranUuid=' + (config && config.ecranUuid ? config.ecranUuid.substring(0,8) + '...' : 'NONE') + ', env=' + (config && config.env || '?') + ')')
     __log('info','bootstrap','api.getConfig returned', config)
     
     // Stocker la config pour que showSetupScreen puisse y accéder
@@ -1829,11 +1847,12 @@
     if (config && config._basePath) {
       pathSEE = config._basePath
       pathMedia = config._basePath + 'media/'
-      __log('info', 'bootstrap', 'Base path set to:', pathSEE)
+      window._sl('bootstrap: basePath=' + pathSEE)
     }
     
     // Vérifier si c'est le premier démarrage (pas de config ou pas d'ecranUuid)
     if (!config || !config.ecranUuid) {
+      window._sl('bootstrap: NO ecranUuid → showing setup screen')
       __log('info','bootstrap','No ecranUuid found - first run, showing setup screen')
       showSetupScreen(config)
       return // Ne pas continuer le bootstrap normal
@@ -1865,9 +1884,11 @@
       // Appeler la fonction legacy pour appliquer la configuration et déclencher les flux (diapo / meteo)
       if (typeof getConfigSEE === 'function') {
         try {
+          window._sl('bootstrap: calling getConfigSEE() → processConfig → requestJsonDiapo')
           __log('info','bootstrap','calling legacy getConfigSEE()')
           getConfigSEE()
         } catch (legacyErr) {
+          window._sl('bootstrap: getConfigSEE() THREW: ' + (legacyErr?.message || 'unknown'))
           __log('error','bootstrap','getConfigSEE() threw:', legacyErr?.message || legacyErr?.stack || JSON.stringify(legacyErr))
         }
         configLoaded = true;

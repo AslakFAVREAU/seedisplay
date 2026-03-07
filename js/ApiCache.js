@@ -22,10 +22,14 @@ class ApiCache {
     constructor() {
         this._log = window.__log || console.log;
         this.cacheKey = 'seedisplay_api_cache';
+        this.cacheFile = 'cache_diapo.json'; // Fichier persistant sous BASE_PATH
         this.maxAge = 24 * 60 * 60 * 1000; // 24 heures max
+        this._fileSaveDebounce = null;
         
-        // Charger le cache existant
+        // Charger le cache existant (localStorage d'abord, puis fichier)
         this.cache = this._loadCache();
+        // Charger aussi depuis le fichier disque (async, plus fiable après redémarrage)
+        this._loadFromFile();
     }
     
     /**
@@ -36,23 +40,100 @@ class ApiCache {
             const stored = localStorage.getItem(this.cacheKey);
             if (stored) {
                 const parsed = JSON.parse(stored);
-                this._log('debug', 'api-cache', 'Loaded cache with ' + Object.keys(parsed).length + ' entries');
+                this._log('debug', 'api-cache', 'Loaded cache from localStorage with ' + Object.keys(parsed).length + ' entries');
                 return parsed;
             }
         } catch(e) {
-            this._log('warn', 'api-cache', 'Failed to load cache: ' + e.message);
+            this._log('warn', 'api-cache', 'Failed to load cache from localStorage: ' + e.message);
         }
         return {};
     }
     
     /**
-     * Sauvegarder le cache dans localStorage
+     * Charger le cache depuis le fichier disque (async)
+     * Fusionne avec le cache localStorage existant, en gardant les données les plus récentes
      */
-    _saveCache() {
+    async _loadFromFile() {
+        try {
+            if (!window.api || !window.api.readFile) {
+                if (window._sl) window._sl('ApiCache._loadFromFile: SKIP (no window.api.readFile)')
+                return;
+            }
+            if (window._sl) window._sl('ApiCache._loadFromFile: reading ' + this.cacheFile + '...')
+            const content = await window.api.readFile(this.cacheFile);
+            if (!content) {
+                if (window._sl) window._sl('ApiCache._loadFromFile: file NOT FOUND or empty')
+                return;
+            }
+            
+            const fileCache = JSON.parse(content);
+            if (!fileCache || typeof fileCache !== 'object') return;
+            
+            let merged = 0;
+            for (const key of Object.keys(fileCache)) {
+                const fileEntry = fileCache[key];
+                const memEntry = this.cache[key];
+                
+                // Garder l'entrée la plus récente
+                if (!memEntry || (fileEntry.timestamp && fileEntry.timestamp > (memEntry.timestamp || 0))) {
+                    this.cache[key] = fileEntry;
+                    merged++;
+                }
+            }
+            
+            if (merged > 0) {
+                if (window._sl) window._sl('ApiCache._loadFromFile: merged ' + merged + ' entries from disk (keys: ' + Object.keys(fileCache).join(',') + ')')
+                this._log('info', 'api-cache', 'Loaded ' + merged + ' entries from disk file (' + this.cacheFile + ')');
+                // Mettre à jour localStorage avec les données fusionnées
+                this._saveToLocalStorage();
+            } else {
+                if (window._sl) window._sl('ApiCache._loadFromFile: disk loaded but no newer entries (keys: ' + Object.keys(fileCache).join(',') + ')')
+                this._log('debug', 'api-cache', 'Disk cache loaded, no newer entries');
+            }
+        } catch(e) {
+            if (window._sl) window._sl('ApiCache._loadFromFile: FAILED: ' + e.message)
+            this._log('warn', 'api-cache', 'Failed to load cache from file: ' + e.message);
+        }
+    }
+    
+    /**
+     * Sauvegarder dans localStorage uniquement
+     */
+    _saveToLocalStorage() {
         try {
             localStorage.setItem(this.cacheKey, JSON.stringify(this.cache));
         } catch(e) {
-            this._log('warn', 'api-cache', 'Failed to save cache: ' + e.message);
+            this._log('warn', 'api-cache', 'Failed to save cache to localStorage: ' + e.message);
+        }
+    }
+    
+    /**
+     * Sauvegarder le cache dans localStorage ET sur fichier disque
+     */
+    _saveCache() {
+        this._saveToLocalStorage();
+        this._saveToFile();
+    }
+    
+    /**
+     * Sauvegarder le cache sur fichier disque (debounced pour éviter les écritures multiples)
+     */
+    _saveToFile() {
+        // Debounce: attendre 2s après le dernier appel avant d'écrire
+        if (this._fileSaveDebounce) clearTimeout(this._fileSaveDebounce);
+        this._fileSaveDebounce = setTimeout(() => {
+            this._doSaveToFile();
+        }, 2000);
+    }
+    
+    async _doSaveToFile() {
+        try {
+            if (!window.api || !window.api.writeFile) return;
+            const content = JSON.stringify(this.cache, null, 2);
+            await window.api.writeFile(this.cacheFile, content);
+            this._log('info', 'api-cache', 'Cache saved to disk (' + this.cacheFile + ', ' + Math.round(content.length / 1024) + ' KB)');
+        } catch(e) {
+            this._log('warn', 'api-cache', 'Failed to save cache to file: ' + e.message);
         }
     }
     

@@ -444,14 +444,18 @@ class DebugOverlay {
         const filesEl = document.getElementById('tab-files');
         const trameEl = document.getElementById('tab-trame');
         const diaposEl = document.getElementById('tab-diapos');
+        const startupEl = document.getElementById('tab-startup');
         if (filesEl) filesEl.style.display = tab === 'files' ? '' : 'none';
         if (trameEl) trameEl.style.display = tab === 'trame' ? '' : 'none';
         if (diaposEl) diaposEl.style.display = tab === 'diapos' ? '' : 'none';
+        if (startupEl) startupEl.style.display = tab === 'startup' ? '' : 'none';
         // Charger les données de l'onglet
         if (tab === 'files') {
             this._loadFilesTab();
         } else if (tab === 'diapos') {
             this._loadDiaposTab();
+        } else if (tab === 'startup') {
+            this._loadStartupTab();
         } else {
             this._loadTrameTab();
         }
@@ -463,6 +467,22 @@ class DebugOverlay {
     async _loadFilesTab() {
         const listEl = document.getElementById('media-list-body');
         if (listEl) listEl.innerHTML = '<div style="color:#888;padding:20px;text-align:center;">Chargement...</div>';
+        
+        // Afficher le chemin du cache média
+        try {
+            const pathEl = document.getElementById('media-cache-path');
+            if (pathEl) {
+                const basePath = (typeof pathSEE !== 'undefined' && pathSEE) ? pathSEE : null;
+                if (basePath) {
+                    pathEl.textContent = basePath + 'media/';
+                } else if (window.api && window.api.getConfig) {
+                    const cfg = await window.api.getConfig();
+                    pathEl.textContent = (cfg && cfg._basePath ? cfg._basePath : '?') + 'media/';
+                } else {
+                    pathEl.textContent = '(inconnu)';
+                }
+            }
+        } catch(e) { /* ignore */ }
         
         try {
             let files = [];
@@ -652,6 +672,54 @@ class DebugOverlay {
     }
     
     /**
+     * Charge l'onglet Startup Log (timeline de démarrage)
+     */
+    _loadStartupTab() {
+        const listEl = document.getElementById('startup-list-body');
+        const countEl = document.getElementById('startup-count');
+        const uptimeEl = document.getElementById('startup-uptime');
+        
+        if (!listEl) return;
+        
+        const logs = window._startupLog || [];
+        if (countEl) countEl.textContent = logs.length + ' événements';
+        if (uptimeEl) {
+            const uptime = window._startupTime ? ((Date.now() - window._startupTime) / 1000).toFixed(0) : '?';
+            uptimeEl.textContent = uptime + 's';
+        }
+        
+        if (logs.length === 0) {
+            listEl.innerHTML = '<div style="color:#888;padding:20px;text-align:center;">Aucun log de démarrage disponible</div>';
+            return;
+        }
+        
+        // Color-code log entries
+        let html = '';
+        for (const entry of logs) {
+            let color = '#aef'; // default blue
+            if (entry.includes('FAILED') || entry.includes('FAILURE') || entry.includes('ERROR') || entry.includes('THREW') || entry.includes('NO DATA') || entry.includes('EXHAUSTED')) {
+                color = '#ff6b6b'; // red
+            } else if (entry.includes('SUCCESS') || entry.includes('HIT') || entry.includes('OK')) {
+                color = '#6bff6b'; // green
+            } else if (entry.includes('SKIP') || entry.includes('EMPTY') || entry.includes('NOT FOUND') || entry.includes('stuck')) {
+                color = '#ffaa33'; // orange
+            }
+            html += '<div style="color:' + color + ';border-bottom:1px solid rgba(255,255,255,0.05);padding:2px 0;">' + this._escapeHtml(entry) + '</div>';
+        }
+        
+        // Add current state summary
+        html += '<div style="margin-top:12px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.2);color:#fff;font-weight:bold;">--- État actuel ---</div>';
+        html += '<div style="color:#aef;">apiCache keys: ' + (window.apiCache ? Object.keys(window.apiCache.cache || {}).join(', ') || '(vide)' : 'N/A') + '</div>';
+        html += '<div style="color:#aef;">apiConsecutiveErrors: ' + (window.apiConsecutiveErrors || 0) + '</div>';
+        html += '<div style="color:#aef;">ArrayDiapo: ' + (typeof ArrayDiapo !== 'undefined' && ArrayDiapo ? ArrayDiapo.length + ' items' : 'null/undefined') + '</div>';
+        html += '<div style="color:#aef;">init: ' + (typeof init !== 'undefined' ? init : 'undefined') + '</div>';
+        html += '<div style="color:#aef;">urlAPI: ' + (typeof urlAPI !== 'undefined' ? urlAPI : 'undefined') + '</div>';
+        html += '<div style="color:#aef;">localStorage cache: ' + (function() { try { var s = localStorage.getItem('seedisplay_api_cache'); return s ? (s.length + ' bytes') : 'vide'; } catch(e) { return 'error'; } })() + '</div>';
+        
+        listEl.innerHTML = html;
+    }
+    
+    /**
      * Charge l'onglet Diapos API (metadata des diapos depuis la réponse API)
      */
     _loadDiaposTab() {
@@ -825,11 +893,15 @@ class DebugOverlay {
                         <button class="media-tab" data-tab="files" onclick="window.debugOverlay.switchTab('files')">📁 Fichiers</button>
                         <button class="media-tab active" data-tab="trame" onclick="window.debugOverlay.switchTab('trame')">🎬 Trame de lecture</button>
                         <button class="media-tab" data-tab="diapos" onclick="window.debugOverlay.switchTab('diapos')">🗂️ Diapos API</button>
+                        <button class="media-tab" data-tab="startup" onclick="window.debugOverlay.switchTab('startup')">🚀 Startup</button>
                     </div>
                     <span class="media-close" onclick="window.debugOverlay.hideMediaList()">×</span>
                 </div>
                 <!-- TAB: Fichiers -->
                 <div class="media-tab-content" id="tab-files" style="display:none;">
+                    <div class="media-path-info" id="media-path-info" style="padding:6px 12px;background:rgba(0,0,0,0.3);border-radius:4px;margin:8px 12px 4px;font-family:monospace;font-size:12px;color:#aef;word-break:break-all;">
+                        📂 <span id="media-cache-path">-</span>
+                    </div>
                     <div class="media-stats">
                         <span id="media-list-count">-</span>
                         <span class="media-stats-sep">•</span>
@@ -882,12 +954,31 @@ class DebugOverlay {
                     <div class="media-list-body" id="diapos-list-body">
                     </div>
                 </div>
+                <!-- TAB: Startup Log -->
+                <div class="media-tab-content" id="tab-startup" style="display:none;">
+                    <div class="media-stats">
+                        <span id="startup-count">-</span>
+                        <span class="media-stats-sep">•</span>
+                        <span>Uptime: <span id="startup-uptime">-</span></span>
+                    </div>
+                    <div class="media-list-body" id="startup-list-body" style="font-family:monospace;font-size:11px;line-height:1.6;padding:8px 12px;">
+                    </div>
+                </div>
                 <div class="media-footer">
                     Appuyez sur <kbd>L</kbd> ou <kbd>Esc</kbd> pour fermer
                 </div>
             </div>
         `;
         document.body.appendChild(this.mediaPanel);
+    }
+    
+    /**
+     * Échappe les caractères HTML
+     */
+    _escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
     }
     
     /**

@@ -1,12 +1,13 @@
 {
   "name": "seedisplay",
-  "version": "1.12.9",
+  "version": "1.12.12",
   "description": "SEE Display Application",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "start:debug": "cross-env DEBUG_MODE=true electron .",
     "start:prod": "cross-env NODE_ENV=production electron .",
+    "start:offline": "electron . --offline",
     "test": "mocha test/**/*.test.js --exit",
     "test:performance": "mocha test/performance.test.js --timeout 120000",
     "version:patch": "npm version patch --no-git-tag-version",

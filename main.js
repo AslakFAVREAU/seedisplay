@@ -53,7 +53,12 @@ function getBasePath() {
 
 // Global base path - accessible throughout the app
 const BASE_PATH = getBasePath();
-log.info(`[Platform] ${process.platform}/${process.arch}, BASE_PATH=${BASE_PATH}, isRaspberryPi=${IS_RASPBERRY_PI}`);
+const START_OFFLINE = process.argv.includes('--offline');
+if (START_OFFLINE) {
+  process.env.SEEDISPLAY_OFFLINE = '1';
+}
+log.info(`[Platform] ${process.platform}/${process.arch}, BASE_PATH=${BASE_PATH}, isRaspberryPi=${IS_RASPBERRY_PI}${START_OFFLINE ? ', START_OFFLINE=true' : ''}`);
+if (START_OFFLINE) log.warn('[OFFLINE] App will start with ALL network blocked (--offline flag)');
 
 // Enregistrer le scheme see-media comme privilégié (doit être fait avant app.ready)
 protocol.registerSchemesAsPrivileged([{
@@ -391,7 +396,7 @@ function createDefaultWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      devTools: !isProduction  // DevTools seulement en dev
+      devTools: true  // Toujours disponible (ouverture via Ctrl+D ou Ctrl+Shift+I)
     }
   }
   
@@ -433,6 +438,12 @@ function createDefaultWindow() {
   }
   
   // Charger l'application AVANT ready-to-show
+  // Si démarré avec --offline, couper le réseau AVANT le chargement de la page
+  if (START_OFFLINE && win.webContents && win.webContents.session) {
+    win.webContents.session.enableNetworkEmulation({ offline: true });
+    win.webContents.session._offlineSimulated = true;
+    log.warn('[OFFLINE] Network emulation activated BEFORE page load');
+  }
   win.loadFile('index.html');
   
   // Injecter les dimensions custom une fois la page chargée
@@ -508,6 +519,13 @@ function createDefaultWindow() {
       win.focus();
       log.info('[main] ready-to-show: setup mode (fullscreen, no kiosk)');
     }
+    
+    // Notifier le renderer du mode offline (après que la page soit chargée)
+    if (START_OFFLINE) {
+      setTimeout(() => {
+        try { win.webContents.send('message', '__OFFLINE_ON__'); } catch(e) {}
+      }, 1000);
+    }
   });
   
   win.on('closed', () => {
@@ -564,7 +582,15 @@ app.on('ready', function() {
   globalShortcut.register('CommandOrControl+Shift+I', () => {
     if (win && win.webContents) {
       win.webContents.toggleDevTools();
-      log.info('DevTools basculés');
+      log.info('DevTools basculés via Ctrl+Shift+I');
+    }
+  });
+  
+  // Ctrl+D pour ouvrir DevTools (raccourci rapide)
+  globalShortcut.register('CommandOrControl+D', () => {
+    if (win && win.webContents) {
+      win.webContents.toggleDevTools();
+      log.info('DevTools basculés via Ctrl+D');
     }
   });
   
@@ -1089,22 +1115,22 @@ ipcMain.handle('preload-readBundledFile', async (evt, relative) => {
 })
 
 ipcMain.handle('preload-fetchJson', async (evt, url, opts) => {
-  console.log('[main] preload-fetchJson: url=', url, 'opts=', JSON.stringify(opts))
+  log.info('[main] preload-fetchJson: url=', url)
   try {
     // Support simple GET as well as a generic request via opts.method/data
     if (!opts || !opts.method) {
       const res = await axios.get(url, opts || {})
-      console.log('[main] preload-fetchJson: success, data?=', !!res.data)
+      log.info('[main] preload-fetchJson: success, data?=', !!res.data)
       return res.data
     }
     // axios.request supports method, url, data, headers, etc.
     const req = Object.assign({}, opts, { url })
     const res = await axios.request(req)
-    console.log('[main] preload-fetchJson: success (request), data?=', !!res.data)
+    log.info('[main] preload-fetchJson: success (request), data?=', !!res.data)
     return res.data
   } catch(e) {
-    console.log('[main] preload-fetchJson: error:', e.message)
-    return null
+    log.warn('[main] preload-fetchJson: FAILED:', e.code || e.message)
+    return null  // Renderer will detect null and throw
   }
 })
 
@@ -1235,6 +1261,7 @@ ipcMain.handle('preload-pruneMedia', async () => {
 // explicitly with Cmd + Q.
 // Get system info (CPU, memory, IPs) for debug overlay
 // Note: os module already imported at top of file
+
 ipcMain.handle('preload-getSystemInfo', async () => {
   try {
     // Get process memory usage
