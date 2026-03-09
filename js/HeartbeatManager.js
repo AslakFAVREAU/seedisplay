@@ -9,7 +9,7 @@
 
 class HeartbeatManager {
     constructor(options = {}) {
-        this._interval = options.interval || 30000; // 30 secondes par défaut
+        this._interval = options.interval || 7000; // 7 secondes par défaut
         this._apiToken = options.apiToken || null;
         this._ecranUuid = options.ecranUuid || null;
         this._env = options.env || 'beta';

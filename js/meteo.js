@@ -51,6 +51,22 @@ function mapCodeToIcon(code, isDay = true) {
   return map[code] ? ('logo/meteo/' + map[code] + '.png') : ('logo/meteo/01' + daySuffix + '.png')
 }
 
+// Bascule l'état offline/online du bloc météo
+function _meteoSetOffline(isOffline) {
+  try {
+    const zone = document.getElementById('zone_meteo')
+    if (zone) {
+      if (isOffline) zone.classList.add('meteo-offline')
+      else zone.classList.remove('meteo-offline')
+    }
+    const hzCard = document.querySelector('.hz-card-meteo')
+    if (hzCard) {
+      if (isOffline) hzCard.classList.add('meteo-offline')
+      else hzCard.classList.remove('meteo-offline')
+    }
+  } catch (e) { __log('warn', 'meteo', '_meteoSetOffline error', e) }
+}
+
 // Build Open-Meteo URL and fetch data
 const getMeteo = async () => {
   const lat = (typeof meteoLat !== 'undefined') ? meteoLat : 48.75
@@ -80,8 +96,10 @@ const requestJsonMeteo = async () => {
     const data = await getMeteo()
     if (!data) {
       __log('warn','meteo','requestJsonMeteo: aucune donnée reçue')
+      _meteoSetOffline(true)
       return
     }
+    _meteoSetOffline(false)
 
     __log('info','meteo','requestJsonMeteo: données reçues', data)
 

@@ -1,6 +1,6 @@
 # 📦 Guide de Build - SEE Display
 
-> **Dernière mise à jour :** 7 Mars 2026 — v2.0.0  
+![alt text](image.png)> **Dernière mise à jour :** 7 Mars 2026 — v2.0.0  
 > **Plateforme cible unique :** Linux x86_64 (AppImage)
 
 ---
