@@ -825,6 +825,9 @@
     }
 
     .hz-card {
+      /* --f : unité de base proportionnelle. À 1920px CSS → 16px (même base que l'original rem).
+         Tout scale linéairement avec la résolution. */
+      --f: clamp(10px, 0.833vw, 40px);
       flex: 0 0 auto;
       display: flex;
       flex-direction: column;
@@ -838,7 +841,7 @@
       border-radius: 24px;
       border: 1px solid rgba(255, 255, 255, 0.22);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      padding: 2rem;
+      padding: calc(2 * var(--f));
       aspect-ratio: 1 / 1;
       height: min(75vh, calc(100vw / 3 - 3vw));
       animation: glassSlideUp 0.7s ease-out both;
@@ -848,23 +851,23 @@
 
     /* Col 1 : Horloge */
     .hz-time {
-      font-size: 12rem;
+      font-size: calc(12 * var(--f));
       font-weight: 400;
       line-height: 1;
       letter-spacing: -0.02em;
       font-variant-numeric: tabular-nums;
       text-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
-      margin-bottom: 1.2rem;
+      margin-bottom: calc(1.2 * var(--f));
     }
     .hz-day-name {
-      font-size: 4.2rem;
+      font-size: calc(4.2 * var(--f));
       font-weight: 600;
-      margin-bottom: 0.3rem;
+      margin-bottom: calc(0.3 * var(--f));
       text-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
       text-transform: capitalize;
     }
     .hz-date-full {
-      font-size: 2.7rem;
+      font-size: calc(2.7 * var(--f));
       font-weight: 300;
       opacity: 0.85;
       text-transform: capitalize;
@@ -872,12 +875,12 @@
 
     /* Col 2 : Météo */
     .hz-weather-icon {
-      width: 110px;
-      height: 110px;
+      width: calc(6.875 * var(--f));
+      height: calc(6.875 * var(--f));
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 1rem;
+      margin-bottom: calc(1 * var(--f));
     }
     .hz-weather-icon img {
       width: 100%;
@@ -885,15 +888,15 @@
       object-fit: contain;
     }
     .hz-weather-temp {
-      font-size: 5rem;
+      font-size: calc(5 * var(--f));
       font-weight: 300;
       font-variant-numeric: tabular-nums;
       text-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     .hz-weather-desc {
-      font-size: 1.4rem;
+      font-size: calc(1.4 * var(--f));
       font-weight: 400;
-      margin-top: 1rem;
+      margin-top: calc(1 * var(--f));
       opacity: 0.85;
       text-transform: capitalize;
     }
@@ -901,9 +904,9 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.6rem;
-      margin-top: 1.5rem;
-      font-size: 1.6rem;
+      gap: calc(0.6 * var(--f));
+      margin-top: calc(1.5 * var(--f));
+      font-size: calc(1.6 * var(--f));
       font-weight: 400;
       opacity: 0.9;
     }
@@ -922,24 +925,24 @@
 
     /* Col 3 : Éphéméride */
     .hz-ephe-label {
-      font-size: 1.3rem;
+      font-size: calc(1.3 * var(--f));
       font-weight: 600;
       letter-spacing: 0.12em;
       text-transform: uppercase;
       opacity: 0.6;
-      margin-bottom: 1rem;
+      margin-bottom: calc(1 * var(--f));
     }
     .hz-ephe-name {
-      font-size: 3.5rem;
+      font-size: calc(3.5 * var(--f));
       font-weight: 600;
-      margin-bottom: 1.5rem;
+      margin-bottom: calc(1.5 * var(--f));
       text-shadow: 0 1px 8px rgba(0, 0, 0, 0.1);
     }
     .hz-info-line {
-      font-size: 1.8rem;
+      font-size: calc(1.8 * var(--f));
       font-weight: 400;
       opacity: 0.85;
-      margin: 0.4rem 0;
+      margin: calc(0.4 * var(--f)) 0;
     }
 
     /* Fête dans le layout horizontal */
@@ -947,15 +950,15 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.5rem;
-      margin-bottom: 0.8rem;
+      gap: calc(0.5 * var(--f));
+      margin-bottom: calc(0.8 * var(--f));
     }
     .hz-fete-container .hz-fete-icon {
-      font-size: 2.8rem;
+      font-size: calc(2.8 * var(--f));
       animation: ephe-icon-pulse 3s ease-in-out infinite;
     }
     .hz-fete-container .hz-fete-name {
-      font-size: 2.2rem;
+      font-size: calc(2.2 * var(--f));
       font-weight: 600;
       text-shadow: 0 1px 8px rgba(0,0,0,0.12);
     }
@@ -1841,7 +1844,7 @@
     // var weekNo = true
     // var weekType = false
 
-    const refresh = 21600000
+    var refresh = 21600000
     var lastUdpateMeteo = Date.now()
 
     // End init variable
@@ -1857,6 +1860,7 @@
     ephemerisLoaded = true;
     checkLoadingComplete();
   })
+  startEpheScheduler()
 
   // Initialize config via the secure preload API and then call existing getConfigSEE logic
   __log('info','bootstrap','inline init script start (preload-aware)')
@@ -2310,6 +2314,16 @@
    * Redémarre le pairing (quand on change d'environnement)
    */
   function restartPairing() {
+    stopPairing()
+    pairingCode = null
+    pairingLastStart = 0
+    const codeEl = document.getElementById('pairingCode')
+    const statusEl = document.getElementById('pairingStatus')
+    if (codeEl) codeEl.textContent = '----'
+    if (statusEl) {
+      statusEl.className = 'pairing-status waiting'
+      statusEl.innerHTML = '<span class="pairing-spinner"></span> Changement d\'environnement...'
+    }
     startPairing()
   }
 

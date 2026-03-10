@@ -781,6 +781,12 @@ if (monthGif == 11)
         requestJsonMeteo()
         ephe()
     }
+    // Rafraîchissement éphéméride au changement de jour (minuit)
+    var _todayStr = dateDayMonth()
+    if (window._lastEpheDate && window._lastEpheDate !== _todayStr) {
+        ephe()
+    }
+    window._lastEpheDate = _todayStr
 
     /*Affichage et met à jour la date et de la semaine et de l'heure sur la page par défaut*/
     document.getElementById("date").innerHTML = dateFr()

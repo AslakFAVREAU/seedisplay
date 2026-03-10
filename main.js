@@ -1019,20 +1019,22 @@ ipcMain.handle('capture-screen', async (evt, width = 1280, height = 720) => {
       // Custom mode: capture only the content area (top-left rectangle)
       const captureRect = { x: 0, y: 0, width: dimInfo.width, height: dimInfo.height }
       image = await win.webContents.capturePage(captureRect)
-      log.debug(`[main] capture-screen: custom mode, capturing rect ${dimInfo.width}x${dimInfo.height}`)
+      log.debug(`[main] capture-screen: custom mode, capturing rect ${dimInfo.width}x${dimInfo.height} (no resize, sending as-is)`)
     } else {
-      // Fullscreen / standard mode: capture the entire page
+      // Fullscreen / standard mode: capture the entire page then downscale
       image = await win.webContents.capturePage()
+      // Downscale only — never upscale (avoid distortion)
+      const capturedWidth = image.getSize().width
+      if (capturedWidth > width) {
+        image = image.resize({ width, quality: 'good' })
+      }
     }
     
-    // Resize to requested thumbnail dimensions
-    // The caller (HeartbeatManager) already sends portrait-aware w/h
-    const resized = image.resize({ width, height, quality: 'good' })
-    
     // Convertir en base64 JPEG (plus léger que PNG)
-    const dataUrl = `data:image/jpeg;base64,${resized.toJPEG(80).toString('base64')}`
+    const finalSize = image.getSize()
+    const dataUrl = `data:image/jpeg;base64,${image.toJPEG(80).toString('base64')}`
     
-    log.debug(`[main] capture-screen: captured ${width}x${height}`, dimInfo && !dimInfo.isStandard ? '(custom mode)' : '(fullscreen)')
+    log.debug(`[main] capture-screen: sending ${finalSize.width}x${finalSize.height}`, dimInfo && !dimInfo.isStandard ? '(custom rect)' : '(fullscreen resized)')
     return dataUrl
   } catch (e) {
     log.error('[main] capture-screen failed:', e.message)

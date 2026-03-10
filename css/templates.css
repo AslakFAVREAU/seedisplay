@@ -1294,13 +1294,11 @@
     padding: 0.8vh 1.2vw;
     background: rgba(255, 255, 255, 0.8);
     margin-bottom: 0.5vh;
-    border-left: 0.3vw solid var(--trafic-primary);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .trafic-dep-imminent {
     background: rgba(52, 152, 219, 0.12);
-    border-left-width: 0.5vw;
 }
 
 /* Line badge (colored) */

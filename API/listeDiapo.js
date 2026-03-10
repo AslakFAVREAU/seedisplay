@@ -551,12 +551,42 @@ function listeDiapoV2(data) {
       }
       window.sleepManager.updateConfig(ecranConfig)
     }
+
+    // Persist sleep schedule to disk the first time we get it from the server (not from cache).
+    // This dedicated file is loaded as a fallback by SleepManager when the full API cache is
+    // unavailable (fresh install, cleared cache, etc.).
+    if (!window._usingOfflineCache && window.api && window.api.writeFile) {
+      var hasSleepData = data.sleepMode || data.modeNuit || (data.programmation && data.programmation.active)
+      if (hasSleepData) {
+        var sleepConfigToSave = JSON.stringify({
+          sleepMode: data.sleepMode || null,
+          modeNuit: data.modeNuit || null,
+          programmation: data.programmation || null,
+          savedAt: Date.now()
+        })
+        window.api.writeFile('cache/sleepConfig.json', sleepConfigToSave).catch(function(e) {
+          _log('warn','diapo','listeDiapoV2: failed to persist sleep config: ' + (e && e.message))
+        })
+        _log('debug','diapo','listeDiapoV2: sleep config persisted to cache/sleepConfig.json')
+      }
+    }
   }
   
-  // If status is sleep, return empty array (caller will handle sleep mode)
+  // If status is sleep, check if local schedule confirms it before trusting the response.
+  // When offline, the cached response may still carry status='sleep' even after the
+  // scheduled wake-up time has passed; in that case we override to 'active' so the
+  // screen turns back on.
   if (data.status === 'sleep') {
-    _log('info','diapo','listeDiapoV2: screen is in sleep mode, no media to display')
-    return ArrayImg
+    const hasActiveSchedule = data.programmation && data.programmation.active
+    const isOffline = typeof window !== 'undefined' && window._usingOfflineCache
+    if (hasActiveSchedule && isOffline && typeof isWithinSchedule === 'function' && isWithinSchedule(data.programmation)) {
+      _log('warn','diapo','listeDiapoV2: offline cache says sleep but local schedule says we are in active hours - overriding to active')
+      window.screenStatus = 'active'
+      // fall through: continue processing diapos normally
+    } else {
+      _log('info','diapo','listeDiapoV2: screen is in sleep mode, no media to display')
+      return ArrayImg
+    }
   }
   
   // CLIENT-SIDE FALLBACK: Si le serveur dit "active" mais on est hors plage, forcer le sleep
@@ -568,117 +598,9 @@ function listeDiapoV2(data) {
     }
   }
 
-  // If timeline is empty or missing, try to build it from diapos with isEventTemplate
-  if (!data.timeline || !Array.isArray(data.timeline) || data.timeline.length === 0) {
-    _log('info','diapo','listeDiapoV2: timeline empty, checking for event templates in diapos')
-    
-    // Look for active diapos with isEventTemplate and evenement data
-    if (data.diapos && Array.isArray(data.diapos)) {
-      for (var i = 0; i < data.diapos.length; i++) {
-        var diapo = data.diapos[i]
-        if (diapo && diapo.actif && diapo.isEventTemplate && diapo.evenement) {
-          _log('info','diapo','listeDiapoV2: found event template diapo: ' + diapo.nom)
-          // Check if event is still valid (not finished)
-          var now = new Date()
-          var eventDate = diapo.evenement.date || ''
-          var eventHeureFin = diapo.evenement.heureFin || ''
-          
-          // Build end datetime to check if event is over
-          var isEventOver = false
-          if (eventDate && eventHeureFin) {
-            try {
-              var endDateTime = new Date(eventDate + 'T' + eventHeureFin + ':00')
-              isEventOver = now > endDateTime
-              if (isEventOver) {
-                _log('info','diapo','listeDiapoV2: skipping finished event "' + diapo.nom + '" (ended at ' + eventHeureFin + ')')
-              }
-            } catch(e) {
-              _log('warn','diapo','listeDiapoV2: could not parse event end time')
-            }
-          }
-          
-          if (!isEventOver) {
-            // Build templateData from evenement
-            var templateData = {
-              type: 'evenement',
-              titre: diapo.evenement.nom || diapo.nom,
-              lieu: diapo.evenement.salle || '',
-              heureDebut: diapo.evenement.heureDebut || '',
-              heureFin: diapo.evenement.heureFin || '',
-              date: diapo.evenement.date || '',
-              description: diapo.evenement.description || '',
-              couleur: diapo.evenement.couleur || '#3498db'
-            }
-            
-            // Add to ArrayImg as template type (15 seconds default for events)
-            ArrayImg.push(['template', templateData, 15, diapo.id])
-            _log('info','diapo','listeDiapoV2: generated template for event "' + templateData.titre + '"')
-          }
-        }
-      }
-    }
-    
-    // If we found event templates, add planning to the loop if fullscreen mode
-    if (ArrayImg.length > 0) {
-      _log('info','diapo','listeDiapoV2: generated ' + ArrayImg.length + ' event templates from diapos')
-      
-      // In fullscreen mode, add planning as a media item in the loop
-      var planningConfig = window.planningConfig
-      if (planningConfig && planningConfig.actif && planningConfig.position === 'fullscreen') {
-        var planningDuree = planningConfig.duree || 20 // 20 seconds default for planning
-        ArrayImg.push(['planning', { type: 'planning' }, planningDuree, 'planning-item'])
-        _log('info','diapo','listeDiapoV2: added planning to loop with duree=' + planningDuree + 's')
-      }
-      
-      return ArrayImg
-    }
-    
-    _log('warn','diapo','listeDiapoV2: no timeline and no event templates found')
-    return ArrayImg
-  }
-  
-  // In fullscreen mode with timeline, also add planning to the loop
-  var planningConfig = window.planningConfig
-  if (planningConfig && planningConfig.actif && planningConfig.position === 'fullscreen') {
-    // We'll add planning after processing the timeline
-    window._addPlanningToLoop = true
-    window._planningDuree = planningConfig.duree || 20
-    // TODO SERVER: Ajouter paramètre "slideDuree" dans planning config API
-    // Durée de chaque slide/page du carousel (en secondes)
-    window._planningSlideDuree = planningConfig.slideDuree || 10
-  }
-
-  // Check if priority mode is active (from API field or by scanning timeline)
-  var hasPrioritaire = data.modePrioritaire === true
-  if (!hasPrioritaire) {
-    // Fallback: scan timeline for priority diapos (backward compatibility)
-    for (var i = 0; i < data.timeline.length; i++) {
-      if (data.timeline[i] && data.timeline[i].diapoType === 'prioritaire') {
-        hasPrioritaire = true
-        break
-      }
-    }
-  }
-  
-  if (hasPrioritaire) {
-    _log('info','diapo','listeDiapoV2: priority mode active - filtering to show only priority media')
-  }
-
-  // Store diapos with templateData for template rendering
-  if (typeof window !== 'undefined') {
-    window.diaposWithTemplates = []
-    if (data.diapos && Array.isArray(data.diapos)) {
-      window.diaposWithTemplates = data.diapos.filter(function(d) {
-        return d && d.templateData && typeof d.templateData === 'object'
-      })
-      if (window.diaposWithTemplates.length > 0) {
-        _log('info','diapo','listeDiapoV2: found ' + window.diaposWithTemplates.length + ' diapos with templateData')
-      }
-    }
-  }
-  
   // NEW: Process dynamic templates from 'templates' array in API response
   // Templates dynamiques: anniversaires, menus, annonces avec ordre et durée
+  // NOTE: This runs BEFORE the timeline-empty check so templates work even with 0 diapos.
   if (data.templates && Array.isArray(data.templates) && data.templates.length > 0) {
     _log('info','diapo','listeDiapoV2: processing ' + data.templates.length + ' dynamic templates')
     
@@ -844,6 +766,115 @@ function listeDiapoV2(data) {
     }
   }
 
+  // If timeline is empty or missing, try to build it from diapos with isEventTemplate
+  if (!data.timeline || !Array.isArray(data.timeline) || data.timeline.length === 0) {
+    _log('info','diapo','listeDiapoV2: timeline empty, checking for event templates in diapos')
+    
+    // Look for active diapos with isEventTemplate and evenement data
+    if (data.diapos && Array.isArray(data.diapos)) {
+      for (var i = 0; i < data.diapos.length; i++) {
+        var diapo = data.diapos[i]
+        if (diapo && diapo.actif && diapo.isEventTemplate && diapo.evenement) {
+          _log('info','diapo','listeDiapoV2: found event template diapo: ' + diapo.nom)
+          // Check if event is still valid (not finished)
+          var now = new Date()
+          var eventDate = diapo.evenement.date || ''
+          var eventHeureFin = diapo.evenement.heureFin || ''
+          
+          // Build end datetime to check if event is over
+          var isEventOver = false
+          if (eventDate && eventHeureFin) {
+            try {
+              var endDateTime = new Date(eventDate + 'T' + eventHeureFin + ':00')
+              isEventOver = now > endDateTime
+              if (isEventOver) {
+                _log('info','diapo','listeDiapoV2: skipping finished event "' + diapo.nom + '" (ended at ' + eventHeureFin + ')')
+              }
+            } catch(e) {
+              _log('warn','diapo','listeDiapoV2: could not parse event end time')
+            }
+          }
+          
+          if (!isEventOver) {
+            // Build templateData from evenement
+            var templateData = {
+              type: 'evenement',
+              titre: diapo.evenement.nom || diapo.nom,
+              lieu: diapo.evenement.salle || '',
+              heureDebut: diapo.evenement.heureDebut || '',
+              heureFin: diapo.evenement.heureFin || '',
+              date: diapo.evenement.date || '',
+              description: diapo.evenement.description || '',
+              couleur: diapo.evenement.couleur || '#3498db'
+            }
+            
+            // Add to ArrayImg as template type (15 seconds default for events)
+            ArrayImg.push(['template', templateData, 15, diapo.id])
+            _log('info','diapo','listeDiapoV2: generated template for event "' + templateData.titre + '"')
+          }
+        }
+      }
+    }
+    
+    // If we found event templates, add planning to the loop if fullscreen mode
+    if (ArrayImg.length > 0) {
+      _log('info','diapo','listeDiapoV2: generated ' + ArrayImg.length + ' event templates from diapos')
+      
+      // In fullscreen mode, add planning as a media item in the loop
+      var planningConfig = window.planningConfig
+      if (planningConfig && planningConfig.actif && planningConfig.position === 'fullscreen') {
+        var planningDuree = planningConfig.duree || 20 // 20 seconds default for planning
+        ArrayImg.push(['planning', { type: 'planning' }, planningDuree, 'planning-item'])
+        _log('info','diapo','listeDiapoV2: added planning to loop with duree=' + planningDuree + 's')
+      }
+      
+      return ArrayImg
+    }
+    
+    _log('warn','diapo','listeDiapoV2: no timeline and no event templates found')
+    return ArrayImg
+  }
+  
+  // In fullscreen mode with timeline, also add planning to the loop
+  var planningConfig = window.planningConfig
+  if (planningConfig && planningConfig.actif && planningConfig.position === 'fullscreen') {
+    // We'll add planning after processing the timeline
+    window._addPlanningToLoop = true
+    window._planningDuree = planningConfig.duree || 20
+    // TODO SERVER: Ajouter paramètre "slideDuree" dans planning config API
+    // Durée de chaque slide/page du carousel (en secondes)
+    window._planningSlideDuree = planningConfig.slideDuree || 10
+  }
+
+  // Check if priority mode is active (from API field or by scanning timeline)
+  var hasPrioritaire = data.modePrioritaire === true
+  if (!hasPrioritaire) {
+    // Fallback: scan timeline for priority diapos (backward compatibility)
+    for (var i = 0; i < data.timeline.length; i++) {
+      if (data.timeline[i] && data.timeline[i].diapoType === 'prioritaire') {
+        hasPrioritaire = true
+        break
+      }
+    }
+  }
+  
+  if (hasPrioritaire) {
+    _log('info','diapo','listeDiapoV2: priority mode active - filtering to show only priority media')
+  }
+
+  // Store diapos with templateData for template rendering
+  if (typeof window !== 'undefined') {
+    window.diaposWithTemplates = []
+    if (data.diapos && Array.isArray(data.diapos)) {
+      window.diaposWithTemplates = data.diapos.filter(function(d) {
+        return d && d.templateData && typeof d.templateData === 'object'
+      })
+      if (window.diaposWithTemplates.length > 0) {
+        _log('info','diapo','listeDiapoV2: found ' + window.diaposWithTemplates.length + ' diapos with templateData')
+      }
+    }
+  }
+  
   // Parse timeline items - server already computed which medias are active
   for (var i = 0; i < data.timeline.length; i++) {
     try {
@@ -1225,7 +1256,13 @@ const getDiapoJson = async () => {
       }
     }
     
+    // Flag whether current data comes from offline cache so listeDiapoV2 can apply
+    // local-time schedule overrides instead of blindly trusting a stale 'sleep' status.
+    if (typeof window !== 'undefined') {
+      window._usingOfflineCache = !!(JsonDiapo.offline)
+    }
     ArrayDiapo = listeDiapo(JsonDiapo.data)
+    if (typeof window !== 'undefined') window._usingOfflineCache = false  // reset after parsing
     if (typeof window !== 'undefined' && window._sl) window._sl('requestJsonDiapo: parsed ' + (ArrayDiapo ? ArrayDiapo.length : 0) + ' diapo items')
 
     // Sync media cache on every refresh to pick up modified files

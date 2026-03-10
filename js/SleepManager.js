@@ -71,7 +71,39 @@ class SleepManager {
       this.applyLuminosity(this._currentLuminosity, false)
     }
 
+    // If we still don't have sleep/night config (no internet, empty cache), try the
+    // dedicated persisted file written the last time we were online.
+    if (!this._sleepConfig && !this._nightModeConfig) {
+      this._loadPersistedSleepConfig()
+    }
+
     return this
+  }
+
+  /**
+   * Load sleep schedule from cache/sleepConfig.json (saved when last online).
+   * Used as a last-resort fallback so the screen always knows when to wake up.
+   */
+  async _loadPersistedSleepConfig() {
+    try {
+      if (!window.api?.readFile) return
+      const raw = await window.api.readFile('cache/sleepConfig.json')
+      if (!raw) return
+      const cfg = JSON.parse(raw)
+      if (cfg.sleepMode && !this._sleepConfig) {
+        this._sleepConfig = cfg.sleepMode
+        this._log.info('sleep-manager', 'Loaded sleepMode from persisted cache:', JSON.stringify(this._sleepConfig))
+      }
+      if (cfg.modeNuit && !this._nightModeConfig) {
+        this._nightModeConfig = cfg.modeNuit
+        this._log.info('sleep-manager', 'Loaded modeNuit from persisted cache:', JSON.stringify(this._nightModeConfig))
+      }
+      // Re-run checks now that we have config
+      this._checkSleepStatus()
+      this._checkNightModeStatus()
+    } catch (e) {
+      this._log.debug('sleep-manager', 'No persisted sleep config available:', e.message)
+    }
   }
 
   /**

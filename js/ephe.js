@@ -236,3 +236,34 @@ async function ephe() {
 
     __log('info', 'ephe', 'loaded', { saint: saintFull, fete: fete ? fete.name : null })
 }
+
+// ============================================================
+// Planificateur indépendant — toutes les 3h + timeout précis à minuit
+// Appelé une seule fois après le premier chargement.
+// ============================================================
+function startEpheScheduler() {
+    // Éviter les doubles initialisations
+    if (window._epheSchedulerStarted) return
+    window._epheSchedulerStarted = true
+
+    // 1) Rafraîchissement toutes les 3 heures
+    setInterval(function() {
+        __log('info', 'ephe', 'refresh périodique 3h')
+        ephe()
+    }, 3 * 60 * 60 * 1000)
+
+    // 2) Timeout précis à minuit, se re-programme chaque nuit
+    function _scheduleMidnight() {
+        var now = new Date()
+        // Prochain minuit + 5 secondes de marge
+        var midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5)
+        var msUntilMidnight = midnight - now
+        __log('info', 'ephe', 'prochain refresh minuit dans ' + Math.round(msUntilMidnight / 60000) + ' min')
+        setTimeout(function() {
+            __log('info', 'ephe', 'refresh minuit')
+            ephe()
+            _scheduleMidnight()
+        }, msUntilMidnight)
+    }
+    _scheduleMidnight()
+}
