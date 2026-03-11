@@ -199,10 +199,17 @@ class HeartbeatManager {
         }
         
         // Média courant
-        if (typeof window.currentMediaIndex !== 'undefined' && window.ArrayDiapo) {
-            const current = window.ArrayDiapo[window.currentMediaIndex];
-            if (current) {
-                debug.currentMedia = current.file || current.media || 'unknown';
+        if (typeof window.currentMediaIndex !== 'undefined') {
+            const loop = window.ArrayMedia || window.ArrayDiapo;
+            if (loop && loop.length > 0) {
+                const current = loop[window.currentMediaIndex];
+                // Format: [type, file, delay, metadata]
+                if (Array.isArray(current) && current.length >= 2) {
+                    debug.currentMedia = current[1];
+                    debug.currentMediaType = current[0];
+                } else if (current) {
+                    debug.currentMedia = current.file || current.media || 'unknown';
+                }
             }
         }
         
@@ -245,6 +252,29 @@ class HeartbeatManager {
                 debug.circuitBreakers = window.errorHandler.getCircuitBreakersStatus();
             }
         }
+
+        // Santé vidéo (window._videoHealth) — critique pour monitoring prod
+        debug.videoHealth = window._videoHealth
+            ? {
+                errorCount:      window._videoHealth.errorCount      || 0,
+                skippedCount:    window._videoHealth.skippedCount     || 0,
+                redownloadCount: window._videoHealth.redownloadCount  || 0,
+                lastError:       window._videoHealth.lastError        || null,
+                lastSuccess:     window._videoHealth.lastSuccess      || null,
+                lastFile:        window._videoHealth.lastFile         || null
+              }
+            : null;
+
+        // Santé image (window._imageHealth) — monitoring chargement images
+        debug.imageHealth = window._imageHealth
+            ? {
+                errorCount:   window._imageHealth.errorCount   || 0,
+                skippedCount: window._imageHealth.skippedCount  || 0,
+                lastError:    window._imageHealth.lastError     || null,
+                lastSuccess:  window._imageHealth.lastSuccess   || null,
+                lastFile:     window._imageHealth.lastFile      || null
+              }
+            : null;
 
         // Statut global
         if (debug.sleepMode) {

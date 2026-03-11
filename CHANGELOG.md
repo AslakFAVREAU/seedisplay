@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## v2.0.6 - Fix BASE_PATH & Résilience Media (11 Mars 2026)
+
+### 🐛 Fix critique
+- **BASE_PATH Windows manquant dans main.js** : `getBasePath()` ne gérait pas `win32`, tombait dans le fallback `~/.seedisplay/` au lieu de `C:/SEE/`. Le protocole `see-media://` et tous les IPC handlers cherchaient les fichiers au mauvais endroit → ERR_FILE_NOT_FOUND sur les médias
+- Alignement main.js/preload.js : Windows `C:/SEE/`, Linux `/opt/seedisplay/data/`, macOS `~/Library/Application Support/SEEDisplay/`
+
+### 🛡️ Résilience media (vidéo + image)
+- **Video health tracker** : `_videoHealth` global + `_reportVideoError()` sur tous les chemins d'erreur (DOWNLOAD_FAILED, PLAY_FAILED, LOAD_TIMEOUT, STALLED_TIMEOUT, MediaError, REDOWNLOAD_FAILED)
+- **Image health tracker** : `_imageHealth` global + `_reportImageError()` + retry avec re-download sur `onerror`
+- **Abort controllers** : `ac.abort()` sur chaque chemin de sortie vidéo (timeout, stalled, play().catch, error handler) pour éviter les double-skip
+- **Ghost loop prevention** : `_abortAllVideoControllers()` dans `stopLoopDiapo()` et `LoopDiapo()` au démarrage
+- **Stack overflow fix** : `masquerPageDefault` wrap-around via `setTimeout` au lieu d'appel direct
+- **Unknown mediaType** : bloc `else` final avec skip en 500ms (anti-deadlock)
+- **ABORTED (code 1)** : ignoré dans le handler d'erreur vidéo (causé par notre propre `load()` lors du retry)
+- **see-media:// nocache** : `#nocache=` au lieu de `?nocache=` (compatible avec le protocole custom)
+
+### 📡 Monitoring (Heartbeat enrichi)
+- `videoHealth` + `imageHealth` dans le payload heartbeat
+- `currentMedia` fix : lecture du format tableau `[type, file]`
+- `recentErrors` (5 dernières) + `circuitBreakers` status
+
+### 🔧 Preload
+- Vérification intégrité sur 304 : si le fichier local est absent/vide malgré un ETag valide → supprime metadata + force re-download
+
+---
+
 ## v2.0.5 - Résilience & Monitoring (11 Mars 2026)
 
 ### 🛡️ Résilience

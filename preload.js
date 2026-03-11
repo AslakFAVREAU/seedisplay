@@ -381,10 +381,24 @@ contextBridge.exposeInMainWorld('api', {
             validateStatus: (status) => status === 200 || status === 304
           })
           
-          // 304 Not Modified - file is still valid
+          // 304 Not Modified - file is still valid, BUT verify local copy exists and is non-empty
           if (res.status === 304) {
-            ipcRenderer.send('renderer-log', { level: 'info', msg: 'preload.saveBinaryWithCache: 304 Not Modified, using cached file: ' + p })
-            return { success: true, cached: true, size: fs.statSync(p).size }
+            const localExists = fs.existsSync(p)
+            const localSize = localExists ? fs.statSync(p).size : 0
+            if (!localExists || localSize === 0) {
+              // Local file missing or empty despite 304 → delete stale metadata and force re-download
+              ipcRenderer.send('renderer-log', { level: 'warn', msg: 'preload.saveBinaryWithCache: 304 but local file missing/empty (' + localSize + ' bytes), forcing re-download: ' + p })
+              try { if (fs.existsSync(cacheMetadataPath)) fs.unlinkSync(cacheMetadataPath) } catch(e) {}
+              const res2 = await axios.get(url, { responseType: 'arraybuffer' })
+              const buf2 = Buffer.from(res2.data)
+              fs.writeFileSync(p, buf2)
+              const meta2 = { url, timestamp: Date.now(), size: buf2.length, etag: res2.headers['etag'] || null, lastModified: res2.headers['last-modified'] || null }
+              fs.writeFileSync(cacheMetadataPath, JSON.stringify(meta2, null, 2))
+              ipcRenderer.send('renderer-log', { level: 'info', msg: 'preload.saveBinaryWithCache: force re-downloaded ' + p + ' (' + buf2.length + ' bytes)' })
+              return { success: true, cached: false, size: buf2.length }
+            }
+            ipcRenderer.send('renderer-log', { level: 'debug', msg: 'preload.saveBinaryWithCache: 304 OK, local file valid (' + localSize + ' bytes): ' + p })
+            return { success: true, cached: true, size: localSize }
           }
           
           // 200 OK - save new file

@@ -25,6 +25,60 @@ let mediaLoopSignature = '';
 // AbortControllers pour nettoyer les event listeners vidéo sans cloner le DOM
 let videoAbortControllers = { 1: null, 2: null };
 
+// ─── Santé vidéo — exposé au heartbeat via window._videoHealth ───────────────
+window._videoHealth = {
+    errorCount:      0,   // total erreurs MediaError cette session
+    skippedCount:    0,   // vidéos sautées (erreur non récupérable)
+    redownloadCount: 0,   // re-téléchargements forcés réussis
+    lastError:       null, // { file, code, label, reason, ts }
+    lastSuccess:     null, // ISO timestamp de la dernière vidéo lue jusqu'au bout
+    lastFile:        null  // dernier fichier tenté
+};
+
+/**
+ * Signale une erreur vidéo dans window._videoHealth ET dans ErrorHandler.
+ * Toutes les erreurs vidéo remontent ainsi dans le heartbeat SOEK.
+ */
+function _reportVideoError(file, code, label, reason) {
+    const ts = new Date().toISOString();
+    if (!window._videoHealth) window._videoHealth = { errorCount: 0, skippedCount: 0, redownloadCount: 0 };
+    window._videoHealth.errorCount++;
+    window._videoHealth.lastError = { file, code, label, reason, ts };
+    if (window.errorHandler && typeof window.errorHandler.logError === 'function') {
+        window.errorHandler.logError(
+            new Error('[video:' + label + '] ' + reason + ' — ' + file),
+            { operation: 'video-playback', type: label, source: file }
+        );
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── Santé image — exposé au heartbeat via window._imageHealth ───────────────
+window._imageHealth = {
+    errorCount:   0,   // total erreurs de chargement cette session
+    skippedCount: 0,   // images sautées (erreur non récupérable)
+    lastError:    null, // { file, label, reason, ts }
+    lastSuccess:  null, // ISO timestamp de la dernière image affichée avec succès
+    lastFile:     null  // dernier fichier tenté
+};
+
+/**
+ * Signale une erreur image dans window._imageHealth ET dans ErrorHandler.
+ */
+function _reportImageError(file, label, reason) {
+    const ts = new Date().toISOString();
+    if (!window._imageHealth) window._imageHealth = { errorCount: 0, skippedCount: 0 };
+    window._imageHealth.errorCount++;
+    window._imageHealth.lastError = { file, label, reason, ts };
+    if (window.errorHandler && typeof window.errorHandler.logError === 'function') {
+        window.errorHandler.logError(
+            new Error('[image:' + label + '] ' + reason + ' — ' + file),
+            { operation: 'image-display', type: label, source: file }
+        );
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Expose pour DebugOverlay (trame de lecture)
 window._getMediaLoop = () => mediaLoop;
 window._getCurrentMediaIndex = () => currentMediaIndex;
@@ -170,7 +224,8 @@ async function showMedia(mediaIndex) {
         // Si masquerPageDefault est activé, boucler directement sans pause
         if (window.masquerPageDefault) {
             __log('info', 'diapo', 'end of loop, masquerPageDefault=true, looping immediately');
-            showMedia(0);
+            // setTimeout pour éviter un stack overflow si tous les médias échouent (recursion infinie)
+            setTimeout(() => showMedia(0), 100);
             return;
         }
         
@@ -244,6 +299,9 @@ async function showMedia(mediaIndex) {
         
         __log('debug', 'diapo', 'loading video in ' + divId);
         
+        // Tracker le fichier courant pour le health monitoring
+        if (window._videoHealth) window._videoHealth.lastFile = mediaFile;
+
         // Vérifier que la vidéo existe localement, sinon télécharger
         try {
             const decodedVideoFile = decodeURIComponent(mediaFile);
@@ -260,6 +318,7 @@ async function showMedia(mediaIndex) {
             }
         } catch (dlErr) {
             __log('warn', 'diapo', 'video download check failed: ' + dlErr.message);
+            _reportVideoError(mediaFile, 0, 'DOWNLOAD_FAILED', dlErr.message);
         }
         
         try {
@@ -304,7 +363,11 @@ async function showMedia(mediaIndex) {
                 __log('info', 'diapo', 'video display set, duration=' + videoEl.duration + 's, canplay=' + (videoEl.readyState >= 3));
                 
                 videoEl.play().catch(e => {
+                    if (signal.aborted) return; // déjà géré par un autre chemin
                     __log('error', 'diapo', 'video play() failed: ' + e.message);
+                    _reportVideoError(mediaFile, 0, 'PLAY_FAILED', e.message);
+                    if (window._videoHealth) window._videoHealth.skippedCount++;
+                    ac.abort(); // empêche error/ended de doubler l'avance
                     setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
                 });
                 
@@ -314,6 +377,10 @@ async function showMedia(mediaIndex) {
             
             // Flag pour éviter double exécution
             let videoStarted = false;
+            // Flag pour n'effectuer qu'un seul retry de re-téléchargement
+            let videoRetried = false;
+            // Timer stalled (lecture bloquée réseau)
+            let stalledTimer = null;
             
             // Écouter plusieurs événements pour robustesse (via AbortController)
             videoEl.addEventListener('loadeddata', () => {
@@ -337,12 +404,35 @@ async function showMedia(mediaIndex) {
                 if (!videoStarted && !signal.aborted) {
                     __log('error', 'diapo', 'video timeout after 10s, skipping to next');
                     videoStarted = true;
+                    _reportVideoError(mediaFile, 0, 'LOAD_TIMEOUT', 'no loadeddata after 10s');
+                    if (window._videoHealth) window._videoHealth.skippedCount++;
+                    // Abort AVANT showMedia pour empêcher l'event 'error' de doubler l'avance
+                    ac.abort();
                     showMedia(currentMediaIndex + 1);
                 }
             }, 10000);
             
-            // Annuler le timeout si la vidéo démarre
-            videoEl.addEventListener('playing', () => clearTimeout(videoTimeout), { once: true, signal });
+            // Nettoyer tous les timers quand la lecture (re)démarre
+            videoEl.addEventListener('playing', () => {
+                clearTimeout(videoTimeout);
+                if (stalledTimer) { clearTimeout(stalledTimer); stalledTimer = null; }
+            }, { signal });
+            
+            // STALLED: lecture bloquée réseau en cours de lecture
+            videoEl.addEventListener('stalled', () => {
+                if (signal.aborted) return;
+                __log('warn', 'diapo', 'video stalled (network blocked) — ' + mediaFile);
+                if (stalledTimer) clearTimeout(stalledTimer);
+                stalledTimer = setTimeout(() => {
+                    if (signal.aborted) return;
+                    __log('error', 'diapo', 'video stalled timeout (10s), skipping to next');
+                    _reportVideoError(mediaFile, 2, 'STALLED_TIMEOUT', 'playback stalled >10s');
+                    if (window._videoHealth) window._videoHealth.skippedCount++;
+                    // Abort AVANT showMedia pour empêcher l'event 'ended' de doubler l'avance
+                    ac.abort();
+                    showMedia(currentMediaIndex + 1);
+                }, 10000);
+            }, { signal });
             
             // Logger le chargement des données
             videoEl.addEventListener('loadstart', () => {
@@ -358,16 +448,70 @@ async function showMedia(mediaIndex) {
                 if (signal.aborted) return;
                 __log('info', 'diapo', 'video ended, next in 100ms');
                 clearTimeout(videoTimeout);
+                if (stalledTimer) { clearTimeout(stalledTimer); stalledTimer = null; }
+                // Marquer le succès de lecture complète
+                if (window._videoHealth) window._videoHealth.lastSuccess = new Date().toISOString();
                 setTimeout(() => showMedia(currentMediaIndex + 1), 100);
             }, { once: true, signal });
             
-            // Écouter les erreurs
-            videoEl.addEventListener('error', (e) => {
+            // Écouter les erreurs — avec retry automatique (re-téléchargement)
+            videoEl.addEventListener('error', async (e) => {
                 if (signal.aborted) return;
-                __log('error', 'diapo', 'video error: ' + (e.message || 'load failed'));
                 clearTimeout(videoTimeout);
-                setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
-            }, { once: true, signal });
+                if (stalledTimer) { clearTimeout(stalledTimer); stalledTimer = null; }
+                
+                // MediaError codes: 1=ABORTED 2=NETWORK 3=DECODE 4=SRC_NOT_SUPPORTED
+                const errCode  = videoEl.error ? videoEl.error.code : 0;
+                const errMsg   = videoEl.error ? videoEl.error.message : (e.message || 'unknown');
+                const errLabel = ['', 'ABORTED', 'NETWORK', 'DECODE', 'SRC_NOT_SUPPORTED'][errCode] || 'UNKNOWN';
+                
+                // ABORTED (code 1) = déclenché par notre propre videoEl.load() lors d'un retry.
+                // Ce n'est pas une vraie erreur — ignorer pour laisser le nouveau load() aboutir.
+                if (errCode === 1) {
+                    __log('debug', 'diapo', 'video ABORTED (code 1) — ignoré (propre à load() interne)');
+                    return;
+                }
+                
+                __log('error', 'diapo', 'video error code=' + errCode + ' (' + errLabel + '): ' + errMsg + ' file=' + mediaFile);
+                
+                // Signaler l'erreur immédiatement (avant retry) → remonte dans heartbeat
+                _reportVideoError(mediaFile, errCode, errLabel, errMsg);
+                
+                // Retry une seule fois: forcer le re-téléchargement (bypasse ETag)
+                // Cible: fichier corrompu/tronqué accepté par erreur sur 304
+                if (!videoRetried && (errCode === 3 || errCode === 4 || errCode === 2 || errCode === 0)) {
+                    videoRetried = true;
+                    __log('warn', 'diapo', 'video error: forcing re-download and retry (once)...');
+                    try {
+                        const decodedFile = decodeURIComponent(mediaFile);
+                        const relativePath = 'media/' + decodedFile;
+                        const baseUrl = typeof getMediaBaseUrl === 'function' ? getMediaBaseUrl() : 'https://soek.fr/uploads/see/media/';
+                        if (window.api && window.api.saveBinary) {
+                            const ok = await window.api.saveBinary(relativePath, baseUrl + mediaFile);
+                            if (ok) {
+                                __log('info', 'diapo', 'video re-downloaded OK, retrying playback...');
+                                if (window._videoHealth) window._videoHealth.redownloadCount++;
+                                videoStarted = false;
+                                sourceEl.src = url;
+                                videoEl.load(); // va déclencher ABORTED (code 1) → ignoré ci-dessus
+                                return; // laisser les events reprendre
+                            } else {
+                                __log('error', 'diapo', 'video re-download returned false');
+                                _reportVideoError(mediaFile, errCode, 'REDOWNLOAD_FAILED', 'saveBinary returned false');
+                            }
+                        }
+                    } catch (retryErr) {
+                        __log('error', 'diapo', 'video re-download exception: ' + retryErr.message);
+                        _reportVideoError(mediaFile, errCode, 'REDOWNLOAD_FAILED', retryErr.message);
+                    }
+                }
+                
+                // Erreur non-récupérable ou retry épuisé → skip
+                if (window._videoHealth) window._videoHealth.skippedCount++;
+                __log('error', 'diapo', 'video non-recoverable, skipping (total skipped=' + (window._videoHealth && window._videoHealth.skippedCount) + ')');
+                ac.abort(); // empêche ended/autres events de doubler l'avance
+                setTimeout(() => showMedia(currentMediaIndex + 1), 1000);
+            }, { signal });
             
             // Toggle pour la prochaine
             player = (player === 1) ? 2 : 1;
@@ -377,6 +521,8 @@ async function showMedia(mediaIndex) {
             
         } catch(e) {
             __log('error', 'diapo', 'video error: ' + e.message);
+            _reportVideoError(mediaFile, 0, 'EXCEPTION', e.message);
+            if (window._videoHealth) window._videoHealth.skippedCount++;
             // Passer au suivant en cas d'erreur
             setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
             return;
@@ -421,8 +567,13 @@ async function showMedia(mediaIndex) {
                 
                 if (!divEl) {
                     __log('error', 'diapo', divId + ' NOT FOUND in DOM!');
+                    _reportImageError(mediaFile, 'DOM_MISSING', divId + ' not found in DOM');
+                    if (window._imageHealth) window._imageHealth.skippedCount++;
+                    setTimeout(() => showMedia(currentMediaIndex + 1), 500);
                     return;
                 }
+
+                if (window._imageHealth) window._imageHealth.lastFile = mediaFile;
                 
                 // Créer un Image object pour précharger
                 const img = new Image();
@@ -432,6 +583,7 @@ async function showMedia(mediaIndex) {
                     if (imageHandled) return;
                     imageHandled = true;
                     __log('debug', 'diapo', 'image preloaded OK, switching');
+                    if (window._imageHealth) window._imageHealth.lastSuccess = new Date().toISOString();
                     divEl.style.backgroundImage = "url('" + url + "')";
                     // Afficher le nouveau div AVANT de cacher les anciens (évite flash noir)
                     divEl.style.display = 'block';
@@ -448,13 +600,49 @@ async function showMedia(mediaIndex) {
                     }, delay);
                 };
                 
-                img.onerror = () => {
+                img.onerror = async () => {
                     if (imageHandled) return;
                     imageHandled = true;
-                    __log('error', 'diapo', 'image preload failed for ' + mediaFile + ', skipping');
-                    // Annuler le timer de défilement normal
+                    __log('error', 'diapo', 'image preload failed for ' + mediaFile + ', retrying with re-download...');
+                    _reportImageError(mediaFile, 'LOAD_ERROR', 'img.onerror fired');
                     if (loopTimeout) { clearTimeout(loopTimeout); loopTimeout = null; }
-                    // Passer au suivant au lieu d'afficher un écran noir
+                    // Retry : re-télécharger le fichier (bypass ETag) puis retenter l'affichage
+                    try {
+                        const decodedFile = decodeURIComponent(mediaFile);
+                        const relativePath = 'media/' + decodedFile;
+                        const baseUrl = typeof getMediaBaseUrl === 'function' ? getMediaBaseUrl() : 'https://soek.fr/uploads/see/media/';
+                        if (window.api && window.api.saveBinary) {
+                            const ok = await window.api.saveBinary(relativePath, baseUrl + mediaFile);
+                            if (ok) {
+                                __log('info', 'diapo', 'image re-downloaded OK, retrying display...');
+                                // Retenter le chargement dans un nouvel objet Image
+                                const retryImg = new Image();
+                                retryImg.onload = () => {
+                                    __log('info', 'diapo', 'image retry OK after re-download');
+                                    if (window._imageHealth) window._imageHealth.lastSuccess = new Date().toISOString();
+                                    divEl.style.backgroundImage = "url('" + url + "')";
+                                    divEl.style.display = 'block';
+                                    currentVisibleDiv = divId;
+                                    hideAllMediaExcept(divId);
+                                    try { const pd = document.getElementById('pageDefault'); if (pd && pd.style.display !== 'none') pd.style.display = 'none'; } catch(e2) {}
+                                    loopTimeout = setTimeout(() => showMedia(currentMediaIndex + 1), delay);
+                                };
+                                retryImg.onerror = () => {
+                                    __log('error', 'diapo', 'image retry failed even after re-download, skipping');
+                                    _reportImageError(mediaFile, 'REDOWNLOAD_FAILED', 'onerror after saveBinary');
+                                    if (window._imageHealth) window._imageHealth.skippedCount++;
+                                    setTimeout(() => showMedia(currentMediaIndex + 1), 500);
+                                };
+                                retryImg.src = url + '#nocache=' + Date.now();
+                                return;
+                            }
+                        }
+                    } catch (retryErr) {
+                        __log('error', 'diapo', 'image re-download exception: ' + retryErr.message);
+                        _reportImageError(mediaFile, 'REDOWNLOAD_EXCEPTION', retryErr.message);
+                    }
+                    // Re-download impossible ou échoué → skip
+                    if (window._imageHealth) window._imageHealth.skippedCount++;
                     setTimeout(() => showMedia(currentMediaIndex + 1), 500);
                 };
                 
@@ -463,6 +651,8 @@ async function showMedia(mediaIndex) {
                     if (!imageHandled) {
                         imageHandled = true;
                         __log('error', 'diapo', 'image load timeout for ' + mediaFile + ', skipping');
+                        _reportImageError(mediaFile, 'LOAD_TIMEOUT', 'no onload after 8s');
+                        if (window._imageHealth) window._imageHealth.skippedCount++;
                         if (loopTimeout) { clearTimeout(loopTimeout); loopTimeout = null; }
                         setTimeout(() => showMedia(currentMediaIndex + 1), 200);
                     }
@@ -471,6 +661,8 @@ async function showMedia(mediaIndex) {
                 img.src = url;
             } catch(e) {
                 __log('error', 'diapo', 'image error: ' + e.message);
+                _reportImageError(mediaFile, 'EXCEPTION', e.message);
+                if (window._imageHealth) window._imageHealth.skippedCount++;
                 setTimeout(() => showMedia(currentMediaIndex + 1), 500);
             }
         };
@@ -479,9 +671,15 @@ async function showMedia(mediaIndex) {
         ensureMediaReady(mediaFile).then(ok => {
             if (!ok) {
                 __log('warn', 'diapo', 'media still not available after download attempt: ' + mediaFile);
+                _reportImageError(mediaFile, 'DOWNLOAD_FAILED', 'ensureMediaReady returned false');
+                // Ne pas incrémenter skippedCount ici : doShowImage va tenter quand même
             }
             doShowImage();
-        }).catch(() => doShowImage());
+        }).catch(err => {
+            __log('error', 'diapo', 'ensureMediaReady threw: ' + (err && err.message));
+            _reportImageError(mediaFile, 'DOWNLOAD_EXCEPTION', err && err.message);
+            doShowImage();
+        });
         
         // Toggle pour la prochaine
         imgShow = (imgShow === 1) ? 2 : 1;
@@ -581,6 +779,30 @@ async function showMedia(mediaIndex) {
             }
             showMedia(currentMediaIndex + 1);
         }, delay);
+
+    } else {
+        // Type de média inconnu → la boucle ne doit PAS se bloquer silencieusement
+        __log('error', 'diapo', 'unknown mediaType="' + mediaType + '" at index=' + mediaIndex + ', skipping');
+        if (window.errorHandler && typeof window.errorHandler.logError === 'function') {
+            window.errorHandler.logError(
+                new Error('[loop] unknown mediaType="' + mediaType + '" — ' + mediaFile),
+                { operation: 'showMedia', index: mediaIndex }
+            );
+        }
+        setTimeout(() => showMedia(currentMediaIndex + 1), 500);
+    }
+}
+
+/**
+ * Aborte tous les AbortControllers vidéo en cours.
+ * Empêche les events (ended, error, stalled) de relancer la boucle après stop ou relance.
+ */
+function _abortAllVideoControllers() {
+    for (const key of Object.keys(videoAbortControllers)) {
+        if (videoAbortControllers[key]) {
+            videoAbortControllers[key].abort();
+            videoAbortControllers[key] = null;
+        }
     }
 }
 
@@ -595,6 +817,9 @@ function LoopDiapo() {
         clearTimeout(loopTimeout);
         loopTimeout = null;
     }
+    
+    // Aborter les vidéos en cours pour empêcher les events fantômes de relancer la boucle
+    _abortAllVideoControllers();
     
     // CHECK DEBUG_MODE FIRST - si activé, rester sur pageDefault
     if (window.DEBUG_MODE) {
@@ -658,6 +883,9 @@ function stopLoopDiapo() {
         clearTimeout(loopTimeout);
         loopTimeout = null;
     }
+    
+    // Aborter les vidéos en cours (empêche ended/error de relancer showMedia)
+    _abortAllVideoControllers();
     
     // Cacher tous les médias
     hideAllMedia();

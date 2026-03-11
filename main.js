@@ -8,12 +8,20 @@ const os = require('os');
 
 //-------------------------------------------------------------------
 // Base Path Configuration
+// Windows: C:/SEE/
 // Linux: /opt/seedisplay/data/ or ~/.seedisplay/
+// macOS: ~/Library/Application Support/SEEDisplay/
 //-------------------------------------------------------------------
 const IS_LINUX = process.platform === 'linux';
 
 function getBasePath() {
-  if (IS_LINUX) {
+  const platform = process.platform;
+  
+  if (platform === 'win32') {
+    return 'C:/SEE/';
+  }
+  
+  if (platform === 'linux') {
     // Sur Linux, préférer /opt/seedisplay/data si accessible, sinon ~/.seedisplay
     const optPath = '/opt/seedisplay/data/';
     const homePath = path.join(os.homedir(), '.seedisplay/');
@@ -36,6 +44,17 @@ function getBasePath() {
     }
     return homePath;
   }
+  
+  if (platform === 'darwin') {
+    const macPath = path.join(os.homedir(), 'Library/Application Support/SEEDisplay/');
+    try {
+      if (!fs.existsSync(macPath)) {
+        fs.mkdirSync(macPath, { recursive: true });
+      }
+    } catch (e) { /* ignore */ }
+    return macPath;
+  }
+  
   // Fallback
   const fallback = path.join(os.homedir(), '.seedisplay/');
   if (!fs.existsSync(fallback)) fs.mkdirSync(fallback, { recursive: true });
