@@ -51,6 +51,111 @@ function mapCodeToIcon(code, isDay = true) {
   return map[code] ? ('logo/meteo/' + map[code] + '.png') : ('logo/meteo/01' + daySuffix + '.png')
 }
 
+// Calcule la phase lunaire à partir d'une date donnée (algorithme de Conway)
+// Retourne { emoji, name, illum (0-100), age (jours depuis nouvelle lune) }
+function getMoonPhase(date) {
+  date = date || new Date()
+  // Référence : nouvelle lune connue du 6 janvier 2000 à 18h14 UTC
+  const KNOWN_NEW_MOON = Date.UTC(2000, 0, 6, 18, 14, 0)
+  const SYNODIC = 29.53059 // jours
+
+  const elapsed = (date.getTime() - KNOWN_NEW_MOON) / (1000 * 60 * 60 * 24)
+  const age = ((elapsed % SYNODIC) + SYNODIC) % SYNODIC // 0..29.53
+  const fraction = age / SYNODIC // 0..1
+
+  // Illumination (0 % à nouvelle lune, 100 % à pleine lune)
+  const illum = Math.round((1 - Math.cos(2 * Math.PI * fraction)) / 2 * 100)
+
+  // 8 phases avec emoji Unicode et labels français
+  let emoji, name
+  if (fraction < 0.0625 || fraction >= 0.9375) {
+    emoji = '🌑'; name = 'Nouvelle lune'
+  } else if (fraction < 0.1875) {
+    emoji = '🌒'; name = 'Croissant'
+  } else if (fraction < 0.3125) {
+    emoji = '🌓'; name = '1er quartier'
+  } else if (fraction < 0.4375) {
+    emoji = '🌔'; name = 'Gibbeuse +'
+  } else if (fraction < 0.5625) {
+    emoji = '🌕'; name = 'Pleine lune'
+  } else if (fraction < 0.6875) {
+    emoji = '🌖'; name = 'Gibbeuse −'
+  } else if (fraction < 0.8125) {
+    emoji = '🌗'; name = 'Der. quartier'
+  } else {
+    emoji = '🌘'; name = 'Croissant −'
+  }
+
+  return { emoji, name, illum, age }
+}
+
+// Sauvegarde la réponse météo dans le cache disque (offline resilience)
+async function _saveMeteoCache(data) {
+  try {
+    if (!window.api || typeof window.api.writeFile !== 'function') return
+    await window.api.writeFile('cache/lastMeteo.json', JSON.stringify({ data, ts: Date.now() }))
+    __log('debug', 'meteo', 'cache saved')
+  } catch (e) {
+    __log('debug', 'meteo', 'cache save error', e && e.message)
+  }
+}
+
+// Charge et applique les dernières données météo cachées (mode offline)
+async function _loadMeteoCache() {
+  try {
+    if (!window.api || typeof window.api.readFile !== 'function') return
+    const raw = await window.api.readFile('cache/lastMeteo.json')
+    if (!raw) return
+    const cached = JSON.parse(raw)
+    if (!cached || !cached.data) return
+    const ageMin = Math.round((Date.now() - cached.ts) / 60000)
+    __log('info', 'meteo', 'using cached data (' + ageMin + ' min old)')
+    _applyMeteoData(cached.data)
+  } catch (e) {
+    __log('debug', 'meteo', 'cache load error', e && e.message)
+  }
+}
+
+// Applique les données météo au DOM (factorisé pour cache offline)
+function _applyMeteoData(data) {
+  try {
+    if (data.current_weather) {
+      const cur = data.current_weather
+      const tempElem = document.getElementById('todayTemp')
+      if (tempElem && typeof cur.temperature !== 'undefined') tempElem.innerHTML = Math.round(cur.temperature) + '°'
+      const iconElem = document.getElementById('todayImgMeteo')
+      if (iconElem && typeof cur.weathercode !== 'undefined') iconElem.src = mapCodeToIcon(cur.weathercode, true)
+      if (typeof cur.windspeed !== 'undefined') window._meteoWindSpeed = Math.round(cur.windspeed)
+    }
+    if (data.daily) {
+      const todayMin = data.daily.temperature_2m_min && data.daily.temperature_2m_min[0]
+      const todayMax = data.daily.temperature_2m_max && data.daily.temperature_2m_max[0]
+      if (typeof todayMin !== 'undefined') window._meteoTodayMin = Math.round(todayMin)
+      if (typeof todayMax !== 'undefined') window._meteoTodayMax = Math.round(todayMax)
+      const days = data.daily
+      for (let j = 1; j <= 4; j++) {
+        try {
+          const tempMax = days.temperature_2m_max && days.temperature_2m_max[j]
+          const code    = days.weathercode && days.weathercode[j]
+          const tempElem = document.getElementById('Tempd+' + j)
+          if (tempElem && typeof tempMax !== 'undefined') tempElem.innerHTML = Math.round(tempMax) + '°'
+          const imgElem = document.getElementById('ImgMeteod+' + j)
+          if (imgElem && typeof code !== 'undefined') imgElem.src = mapCodeToIcon(code, true)
+          if (j >= 2) {
+            const dateEl = document.getElementById('dateJourd+' + j)
+            if (dateEl && days.time && days.time[j]) {
+              const dayName = (typeof jourFr === 'function') ? jourFr(new Date(days.time[j]).getTime() / 1000) : days.time[j]
+              dateEl.innerHTML = dayName
+            }
+          }
+        } catch (e) { /* skip daily slot */ }
+      }
+    }
+  } catch (e) {
+    __log('warn', 'meteo', '_applyMeteoData error', e && e.message)
+  }
+}
+
 // Bascule l'état offline/online du bloc météo
 function _meteoSetOffline(isOffline) {
   try {
@@ -91,91 +196,50 @@ const getMeteo = async () => {
 
 // requestJsonMeteo : récupère les données météo via Open-Meteo et met à jour le DOM
 const requestJsonMeteo = async () => {
+  // Phase lunaire : calcul local, indépendant du réseau — toujours mis à jour en premier
+  try {
+    const moon = getMoonPhase(new Date())
+    // Layout par défaut
+    const moonEmoji = document.getElementById('moonPhaseEmoji')
+    const moonName  = document.getElementById('moonPhaseName')
+    if (moonEmoji) moonEmoji.textContent = moon.emoji
+    if (moonName)  moonName.textContent  = moon.name
+    // Layout horizontal
+    const hzMoonEmoji = document.getElementById('hzMoonEmoji')
+    const hzMoonName  = document.getElementById('hzMoonName')
+    if (hzMoonEmoji) hzMoonEmoji.textContent = moon.emoji
+    if (hzMoonName)  hzMoonName.textContent  = moon.name
+    __log('info','meteo','Phase lunaire:', moon.name, moon.emoji, moon.illum + '%')
+  } catch (e) { __log('warn','meteo','moon phase update error', e) }
+
   try {
     __log('info','meteo','requestJsonMeteo: début de la récupération météo')
     const data = await getMeteo()
     if (!data) {
-      __log('warn','meteo','requestJsonMeteo: aucune donnée reçue')
+      __log('warn','meteo','requestJsonMeteo: aucune donnée reçue, tentative cache offline')
       _meteoSetOffline(true)
+      await _loadMeteoCache()
       return
     }
     _meteoSetOffline(false)
 
-    __log('info','meteo','requestJsonMeteo: données reçues', data)
+    __log('info','meteo','requestJsonMeteo: données reçues')
+    _applyMeteoData(data)
 
-    // Current weather (aujourd'hui)
-    try {
-      if (data.current_weather) {
-        const cur = data.current_weather
-        const tempElem = document.getElementById('todayTemp')
-        if (tempElem && typeof cur.temperature !== 'undefined') {
-          tempElem.innerHTML = Math.round(cur.temperature) + '°'
-          __log('info','meteo','Température aujourd\'hui mise à jour:', Math.round(cur.temperature) + '°')
-        }
-        const iconElem = document.getElementById('todayImgMeteo')
-        if (iconElem && typeof cur.weathercode !== 'undefined') {
-          iconElem.src = mapCodeToIcon(cur.weathercode, true)
-          __log('info','meteo','Icône aujourd\'hui mise à jour:', cur.weathercode)
-        }
-        // Store wind speed for horizontal layout
-        if (typeof cur.windspeed !== 'undefined') {
-          window._meteoWindSpeed = Math.round(cur.windspeed)
-          __log('info','meteo','Vent actuel:', cur.windspeed, 'km/h')
-        }
-      }
-    } catch (e) { __log('warn','meteo','current update error', e) }
+    // Sauvegarder pour usage offline
+    await _saveMeteoCache(data)
 
-    // Store today's min/max from daily data for horizontal layout
-    if (data.daily) {
-      const todayMin = data.daily.temperature_2m_min && data.daily.temperature_2m_min[0]
-      const todayMax = data.daily.temperature_2m_max && data.daily.temperature_2m_max[0]
-      if (typeof todayMin !== 'undefined') window._meteoTodayMin = Math.round(todayMin)
-      if (typeof todayMax !== 'undefined') window._meteoTodayMax = Math.round(todayMax)
-      __log('info','meteo','Min/Max aujourd\'hui:', todayMin, '/', todayMax)
+    // Démarrer le scheduler 30min (une seule fois)
+    if (!window._meteoSchedulerStarted) {
+      window._meteoSchedulerStarted = true
+      setInterval(requestJsonMeteo, 30 * 60 * 1000)
+      __log('info', 'meteo', 'scheduler started (refresh every 30min)')
     }
 
-    // Daily forecasts: use daily arrays
-    if (data.daily) {
-      const days = data.daily
-      __log('info','meteo','Daily data:', days)
-      
-      // Loop through j=1 to 4 (demain, d+2, d+3, d+4)
-      for (let j = 1; j <= 4; j++) {
-        const idx = j // Index dans le tableau daily (0=aujourd'hui, 1=demain, etc.)
-        try {
-          const tempMax = days.temperature_2m_max && days.temperature_2m_max[idx]
-          const code = days.weathercode && days.weathercode[idx]
-
-          // Mise à jour température
-          const tempElem = document.getElementById('Tempd+' + j)
-          if (tempElem && typeof tempMax !== 'undefined') {
-            tempElem.innerHTML = Math.round(tempMax) + '°'
-            __log('info','meteo','Température d+' + j + ' mise à jour:', Math.round(tempMax) + '°')
-          }
-          
-          // Mise à jour icône
-          const imgElem = document.getElementById('ImgMeteod+' + j)
-          if (imgElem && typeof code !== 'undefined') {
-            imgElem.src = mapCodeToIcon(code, true)
-            __log('info','meteo','Icône d+' + j + ' mise à jour:', code)
-          }
-          
-          // Mise à jour jour (pour d+2, d+3, d+4)
-          if (j >= 2) {
-            const dateEl = document.getElementById('dateJourd+' + j)
-            if (dateEl && days.time && days.time[idx]) {
-              const dayName = jourFr(new Date(days.time[idx]).getTime() / 1000)
-              dateEl.innerHTML = dayName
-              __log('info','meteo','Jour d+' + j + ' mis à jour:', dayName)
-            }
-          }
-        } catch (e) { __log('warn','meteo','daily update error for d+' + j, e) }
-      }
-    }
   } catch (e) {
     __log('error','meteo','Error in requestJsonMeteo', e)
   }
 }
 
 // Export for testing
-try { module.exports = { requestJsonMeteo, getMeteo } } catch (e) { }
+try { module.exports = { requestJsonMeteo, getMeteo, _saveMeteoCache, _loadMeteoCache, _applyMeteoData } } catch (e) { }

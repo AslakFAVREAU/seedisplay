@@ -234,6 +234,18 @@ class HeartbeatManager {
             debug.memoryUsage = Math.round(mem.heapUsed / mem.heapTotal * 100);
         }
         
+        // Erreurs récentes et état des circuit breakers (via ErrorHandler)
+        debug.recentErrors = [];
+        debug.circuitBreakers = {};
+        if (window.errorHandler) {
+            if (typeof window.errorHandler.getRecentErrors === 'function') {
+                debug.recentErrors = window.errorHandler.getRecentErrors(5);
+            }
+            if (typeof window.errorHandler.getCircuitBreakersStatus === 'function') {
+                debug.circuitBreakers = window.errorHandler.getCircuitBreakersStatus();
+            }
+        }
+
         // Statut global
         if (debug.sleepMode) {
             debug.screenStatus = 'sleep';

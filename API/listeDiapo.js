@@ -1202,9 +1202,10 @@ const getDiapoJson = async () => {
         if (window._sl) window._sl('requestJsonDiapo: FAILURE #' + window.apiConsecutiveErrors + ' (no data, init=' + init + ', ArrayDiapo=' + (ArrayDiapo ? ArrayDiapo.length : 'null') + ' items)')
         _log('error','diapo','requestJsonDiapo: API FAILURE #' + window.apiConsecutiveErrors + ' - no data received')
         
-        // Après 3 échecs consécutifs, redémarrer l'app
-        if (window.apiConsecutiveErrors >= 3) {
-          _log('error','diapo','requestJsonDiapo: 3 consecutive API failures - RESTARTING APP')
+        // Après 10 échecs consécutifs (~50 min avec intervalle 5 min), redémarrer l'app.
+        // Seuil délibérément élevé : les diapos existantes restent actives pendant la coupure.
+        if (window.apiConsecutiveErrors >= 10) {
+          _log('error','diapo','requestJsonDiapo: 10 consecutive API failures - RESTARTING APP')
           try {
             if (window.api && typeof window.api.restartApp === 'function') {
               window.api.restartApp()

@@ -265,6 +265,62 @@ class ErrorHandler {
   }
 
   /**
+   * Installe les handlers globaux window.onerror et unhandledrejection.
+   * Appelé une seule fois au démarrage pour capturer toutes les erreurs JS non-gérées.
+   */
+  installGlobalHandlers() {
+    window.addEventListener('error', (event) => {
+      this.logError(new Error(event.message || 'Unknown JS error'), {
+        operation: 'global-js-error',
+        source: event.filename ? (event.filename.split('/').pop() + ':' + event.lineno) : 'unknown',
+        type: 'uncaught'
+      })
+    })
+
+    window.addEventListener('unhandledrejection', (event) => {
+      const msg = event.reason instanceof Error
+        ? event.reason.message
+        : (typeof event.reason === 'string' ? event.reason : 'Unhandled promise rejection')
+      this.logError(new Error(msg), {
+        operation: 'unhandled-rejection',
+        type: 'promise'
+      })
+    })
+
+    if (this.logger.info) this.logger.info('error', 'Global error handlers installed')
+  }
+
+  /**
+   * Retourne les N erreurs les plus récentes en format compact (sans stack).
+   * Utilisé par HeartbeatManager pour remonter les erreurs vers SOEK.
+   */
+  getRecentErrors(n = 10) {
+    return this.errorLog.slice(-n).map(e => ({
+      ts: e.timestamp,
+      msg: e.message,
+      op: (e.metadata && e.metadata.operation) || 'unknown',
+      type: (e.metadata && e.metadata.type) || null,
+      source: (e.metadata && e.metadata.source) || null
+    }))
+  }
+
+  /**
+   * Retourne l'état de tous les circuit breakers.
+   * Utilisé par HeartbeatManager pour détecter les API en échec.
+   */
+  getCircuitBreakersStatus() {
+    const result = {}
+    for (const [name, cb] of this.circuitBreakers) {
+      result[name] = {
+        state: cb.state,
+        failures: cb.failureCount,
+        lastFail: cb.lastFailTime ? new Date(cb.lastFailTime).toISOString() : null
+      }
+    }
+    return result
+  }
+
+  /**
    * Attendre (utility)
    */
   sleep(ms) {

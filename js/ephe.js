@@ -37,28 +37,6 @@ var FETES_FIXES = {
 }
 
 // ============================================================
-// Prénoms féminins connus — correction auto du genre
-// ============================================================
-var FEMALE_SAINTS = [
-    'Marie','Alix','Pauline','Julienne','Paulette','Agnès','Angèle','Martine',
-    'Brigitte','Agathe','Isabelle',
-    'Colette','Perpétue','Françoise','Justine','Edwige','Clémence','Adèle',
-    'Marina','Julie','Emilie','Émilie','Ida','Zoé','Zoe','Emma','Catherine',
-    'Florence','Domitille','Solange','Estelle','Sophie','Caroline','Félicité',
-    'Pétronille','Petronille',
-    'Clotilde','Solène','Édith','Edith','Alice','Mariette','Marthe','Martha',
-    'Laetitia','Clarisse','Hélène','Valérie','Monique','Maria',
-    'Bertille','Reine','Marguerite','Teresa','Thérèse','Therese',
-    'Joséphine','Josephine','Thecla','Thècle',
-    'Gertrude','Paulina','Cécile','Cecilia','Émeline','Emeline','Sylvie',
-    'Éléonore','Élisabeth','Elizabeth','Lucy','Lucie',
-    'Élise','Barbara','Barbe','Myriam','Natalie','Nathalie',
-    'Rosalie','Geneviève','Bernadette','Anne','Jeanne','Odile',
-    'Olga','Lucienne','Jeannine','Viviane','Irène','Blandine',
-    'Margot','Nadine','Véronique','Nicole','Amélie','Céline','Audile','Romaine'
-]
-
-// ============================================================
 // Calcul de Pâques — algorithme de Butcher (Gregorian)
 // ============================================================
 function computeEaster(year) {
@@ -155,33 +133,18 @@ async function ephe() {
         __log('error', 'ephe', 'CSV read error', e && e.message)
     }
 
-    // ── 2. Déterminer le genre du saint ──
-    var saintGender = 'm'
-    if (csvType === '3') {
-        saintGender = 'f'
-    } else if (csvType === '1') {
-        saintGender = '' // événement brut
-    } else if (saintName) {
-        // Extract first name from full name (e.g., "Félicité Et Perpétue" => "Félicité")
-        var firstName = saintName.split(/\s+/)[0]
-        if (FEMALE_SAINTS.indexOf(firstName) !== -1) {
-            saintGender = 'f'
-        }
-    }
-
-    // ── 3. Chercher fête du jour (fixes puis mobiles prioritaires) ──
+    // ── 2. Chercher fête du jour (fixes puis mobiles prioritaires) ──
     var fete = FETES_FIXES[today] || null
     var mobiles = getFetesMobiles(year)
     if (mobiles[today]) fete = mobiles[today]
 
-    // ── 4. Construire le texte du saint ──
+    // ── 3. Construire le texte du saint ──
     var saintFull = ''
     if (fete && fete.saint) {
         // La fête fournit un saint explicite
         saintFull = (fete.saintGender === 'f' ? 'Sainte ' : 'Saint ') + fete.saint
     } else if (saintName && csvType !== '1') {
-        var prefix = saintGender === 'f' ? 'Sainte ' : (saintGender === 'm' ? 'Saint ' : '')
-        saintFull = prefix + saintName
+        saintFull = saintName // nom complet tel que stocké dans le CSV
     } else if (saintName && csvType === '1' && !fete) {
         saintFull = saintName // événement CSV non couvert par les fêtes JS
     }

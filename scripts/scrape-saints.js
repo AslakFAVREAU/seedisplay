@@ -5,7 +5,7 @@
  * Generates/updates ephe.csv with French Catholic saints
  * 
  * Ignores mobile holidays (Pâques, Pentecôte, Lundi Pâques, etc)
- * Detects gender from "Sainte" vs "Saint" prefix
+ * Name is read from itemprop="name" (full canonical name)
  */
 
 const axios = require('axios');
@@ -38,40 +38,11 @@ function parseDate(dateStr) {
   return month ? `${day}/${month}` : null;
 }
 
-// Clean saint text but keep full name (e.g., "Félicité et Perpétue" not just "Félicité")
-function cleanSaintName(saintText) {
-  // Remove titles only (keep "et" and full names)
-  let text = saintText
-    .replace(/^Saintes?\s+/i, '')
-    .replace(/^Saints?\s+/i, '')
+// Get full name from itemprop="name" with minimal cleanup
+function getFullName(nameText) {
+  return nameText
     .replace(/\s*\([^)]+\)$/i, '') // Remove (aliases) at end
     .trim();
-  
-  // Capitalize each word properly
-  return text.split(' ').map(word => 
-    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-  ).join(' ');
-}
-
-// OLD: Extract main first name from "Sainte Marie Mère de Dieu" => "Marie"
-function extractMainName(saintText) {
-  // Remove titles and qualifiers
-  let text = saintText
-    .replace(/^Saintes?\s+/i, '')
-    .replace(/^Saints?\s+/i, '')
-    .replace(/\s*\([^)]+\)$/i, '') // Remove (aliases)
-    .replace(/\s+et\s+.*/i, '') // Remove "et ..." for multiple saints
-    .trim();
-  
-  // Take first word only
-  const match = text.match(/^([A-ZÀ-ÿ]+(?:-[A-ZÀ-ÿ]+)?)\b/i);
-  return match ? match[1] : null;
-}
-
-// Detect gender from original text
-function detectGender(saintText) {
-  const isFemale = /^Sainte\s/i.test(saintText);
-  return isFemale ? 'f' : 'm';
 }
 
 // Check if entry should be ignored
@@ -122,18 +93,16 @@ async function scrapeSaints() {
         const date = parseDate(`${dateMatch[1]} ${dateMatch[2]}`);
         if (!date || saints.has(date)) return; // Skip if already have this date
         
-        // Extract saint name from link
-        const link = $tile.find('a[href*="/saint/"]');
-        const saintText = link.text().trim();
+        // Extract full name from itemprop="name"
+        const nameEl = $tile.find('[itemprop="name"]');
+        const rawName = nameEl.length ? nameEl.text().trim() : $tile.find('a[href*="/saint/"]').text().trim();
         
-        if (!saintText || shouldIgnore(saintText)) return;
+        if (!rawName || shouldIgnore(rawName)) return;
         
-        // Clean and keep full name (e.g., "Félicité et Perpétue")
-        const fullName = cleanSaintName(saintText);
+        const fullName = getFullName(rawName);
         if (!fullName || fullName.length < 2) return;
         
-        const gender = detectGender(saintText);
-        saints.set(date, { name: fullName, gender });
+        saints.set(date, { name: fullName });
         pageAdded++;
         totalProcessed++;
       });
@@ -198,7 +167,7 @@ async function mergeWithExisting(newSaints) {
   let replacedCount = 0;
   let addedCount = 0;
   
-  for (const [date, { name, gender }] of newSaints) {
+  for (const [date, { name }] of newSaints) {
     if (merged.has(date)) {
       // Check if name changed
       if (merged.get(date).name !== name) {

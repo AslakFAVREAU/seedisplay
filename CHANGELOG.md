@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## v2.0.5 - Résilience & Monitoring (11 Mars 2026)
+
+### 🛡️ Résilience
+- **Météo cache offline** : sauvegarde dans `cache/lastMeteo.json` après chaque fetch réussi, rechargé automatiquement en cas d'erreur réseau
+- **Météo scheduler autonome** : `setInterval(30min)` démarré après le premier fetch réussi (ne dépend plus du cycle diapo)
+- **Seuil restart API** : porté de 3 à 10 erreurs consécutives (~50 min), les diapos existantes restent actives pendant la coupure
+
+### 📡 Monitoring (Heartbeat)
+- **Erreurs JS capturées** : `window.onerror` + `unhandledrejection` → stockés dans `ErrorHandler.errorLog`
+- **Remontée via heartbeat** : 5 dernières erreurs + état des circuit breakers envoyés dans chaque payload SOEK
+
+### 🐛 Fixes
+- `_applyMeteoData()` factorisé pour réutilisation depuis le cache offline
+
+---
+
 ## v1.12.1 - Patch Release (1 Mars 2026)
 
 ### 🔧 Maintenance
