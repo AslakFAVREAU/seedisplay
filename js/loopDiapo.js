@@ -35,10 +35,10 @@ window._videoHealth = {
     lastFile:        null  // dernier fichier tenté
 };
 
-// ─── Blacklist vidéo — skip auto après N échecs DECODE/SRC_NOT_SUPPORTED ─────
-// Clé: filename, Valeur: { count, label, reason, ts }
-window._videoBlacklist = {};
-const VIDEO_BLACKLIST_THRESHOLD = 3; // après 3 DECODE → skip immédiat
+// ─── Blacklist vidéo — SUPPRIMÉE v2.10.3 ─────────────────────────────────────
+// Le vrai problème était le manque de byte-range dans see-media://
+// Plus besoin de blacklist maintenant que le protocol handler gère les Range requests
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ─── Détection codecs supportés — remonté dans le heartbeat ─────────────────
 (function _detectSupportedCodecs() {
@@ -180,14 +180,9 @@ function hideAllMedia() {
 }
 
 /**
- * Précharge la prochaine vidéo dans le player inactif
- * pendant que la vidéo courante est en lecture.
- * Réduit le temps de transition entre deux vidéos consécutives.
+ * Précharge la prochaine vidéo dans le player inactif (désactivé).
  */
 function _preloadNextVideo(currentIndex) {
-    // Préchargement désactivé — chaque lecture crée un élément vidéo neuf (cloneNode)
-    // Le preload sur un élément réutilisé corrompt le pipeline décodeur de Chromium
-    // → PIPELINE_ERROR_DECODE audio/vidéo au passage suivant
     return;
 }
 
@@ -298,25 +293,12 @@ async function showMedia(mediaIndex) {
     }
     
     if (mediaType === 'video') {
-        // ── Blacklist check: skip immédiat si DECODE/SRC échoue N fois ──
-        const bl = window._videoBlacklist && window._videoBlacklist[mediaFile];
-        if (bl && bl.count >= VIDEO_BLACKLIST_THRESHOLD) {
-            __log('warn', 'diapo', 'video BLACKLISTED (' + bl.count + ' x ' + bl.label + '), skip: ' + mediaFile);
-            if (window._videoHealth) window._videoHealth.skippedCount++;
-            setTimeout(() => showMedia(currentMediaIndex + 1), 100);
-            return;
-        }
-
-        // Utiliser player (1 ou 2)
         const videoId = 'video' + player;
         const divId = 'divVideo' + player;
         
-        __log('debug', 'diapo', 'loading video in ' + divId);
-        
-        // Tracker le fichier courant pour le health monitoring
         if (window._videoHealth) window._videoHealth.lastFile = mediaFile;
 
-        // Vérifier que la vidéo existe localement, sinon télécharger
+        // S'assurer que le fichier existe localement
         try {
             const decodedVideoFile = decodeURIComponent(mediaFile);
             const relativePath = 'media/' + decodedVideoFile;
@@ -332,14 +314,13 @@ async function showMedia(mediaIndex) {
             }
         } catch (dlErr) {
             __log('warn', 'diapo', 'video download check failed: ' + dlErr.message);
-            _reportVideoError(mediaFile, 0, 'DOWNLOAD_FAILED', dlErr.message);
         }
         
         try {
             const url = typeof getMediaUrl === 'function' ? getMediaUrl(mediaFile) : pathMedia + mediaFile;
             const divEl = document.getElementById(divId);
             
-            // Annuler les listeners/timers du player précédent
+            // Annuler le player précédent
             if (videoAbortControllers[player]) {
                 videoAbortControllers[player].abort();
             }
@@ -347,262 +328,114 @@ async function showMedia(mediaIndex) {
             videoAbortControllers[player] = ac;
             const signal = ac.signal;
             
-            // ── CLONE NODE: créer un élément vidéo neuf à chaque lecture ──
-            // C'est la SEULE solution fiable pour éviter PIPELINE_ERROR_DECODE
-            // Chromium réutilise les décodeurs matériels audio/vidéo sur un même
-            // élément, ce qui corrompt le pipeline au 2ème passage.
-            const oldVideoEl = document.getElementById(videoId);
-            const newVideoEl = document.createElement('video');
-            newVideoEl.id = videoId;
-            newVideoEl.className = 'videoPlayer';
-            newVideoEl.setAttribute('width', '100%');
-            newVideoEl.setAttribute('height', '100%');
-            newVideoEl.setAttribute('preload', 'auto');
-            newVideoEl.setAttribute('playsinline', '');
-            newVideoEl.setAttribute('disablePictureInPicture', '');
-            newVideoEl.setAttribute('disableRemotePlayback', '');
-            newVideoEl.loop = false;
-            newVideoEl.muted = window.sonActif !== true;
+            // Réutiliser l'élément <video> existant (reset propre)
+            const videoEl = document.getElementById(videoId);
+            videoEl.pause();
+            videoEl.removeAttribute('src');
+            videoEl.load();
             
-            // Remplacer l'ancien élément dans le DOM
-            if (oldVideoEl && oldVideoEl.parentNode) {
-                oldVideoEl.pause();
-                oldVideoEl.removeAttribute('src');
-                oldVideoEl.load(); // libérer le décodeur
-                oldVideoEl.parentNode.replaceChild(newVideoEl, oldVideoEl);
-            } else {
-                divEl.innerHTML = '';
-                divEl.appendChild(newVideoEl);
-            }
-            
-            // Utiliser video.src directement (pas de <source>)
-            const videoEl = newVideoEl;
-            
-            __log('info', 'diapo', 'video muted=' + videoEl.muted + ' (sonActif=' + window.sonActif + ')');
-            
-            // Charger la vidéo
+            videoEl.muted = window.sonActif !== true;
+            videoEl.loop = false;
             videoEl.src = url;
             videoEl.load();
             
-            __log('info', 'diapo', 'video load() called, waiting for loadeddata event');
+            let videoStarted = false;
+            let videoRetried = false;
             
-            // Fonction pour afficher la vidéo quand prête
+            // Afficher et lancer la lecture
             const showVideo = () => {
                 if (signal.aborted) return;
-                __log('debug', 'diapo', 'video ready (loadeddata), displaying');
-                // Afficher le nouveau div AVANT de cacher les anciens (évite flash noir)
                 divEl.style.display = 'block';
                 currentVisibleDiv = divId;
                 hideAllMediaExcept(divId);
-                // Cacher pageDefault maintenant que le média est prêt
-                try { const pd = document.getElementById('pageDefault'); if (pd && pd.style.display !== 'none') { pd.style.display = 'none'; __log('info', 'diapo', 'pageDefault hidden (first media ready)'); } } catch(e) {}
-                
-                __log('info', 'diapo', 'video display set, duration=' + videoEl.duration + 's, canplay=' + (videoEl.readyState >= 3));
+                try { const pd = document.getElementById('pageDefault'); if (pd && pd.style.display !== 'none') { pd.style.display = 'none'; } } catch(e) {}
                 
                 videoEl.play().catch(e => {
-                    if (signal.aborted) return; // déjà géré par un autre chemin
+                    if (signal.aborted) return;
                     __log('error', 'diapo', 'video play() failed: ' + e.message);
                     _reportVideoError(mediaFile, 0, 'PLAY_FAILED', e.message);
-                    if (window._videoHealth) window._videoHealth.skippedCount++;
-                    ac.abort(); // empêche error/ended de doubler l'avance
-                    setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
+                    ac.abort();
+                    setTimeout(() => showMedia(currentMediaIndex + 1), 1000);
                 });
-                
-                // Précharger le prochain média dans le player inactif
-                _preloadNextVideo(mediaIndex);
             };
             
-            // Flag pour éviter double exécution
-            let videoStarted = false;
-            // Flag pour n'effectuer qu'un seul retry de re-téléchargement
-            let videoRetried = false;
-            // Timer stalled (lecture bloquée réseau)
-            let stalledTimer = null;
-            
-            // Écouter plusieurs événements pour robustesse (via AbortController)
-            videoEl.addEventListener('loadeddata', () => {
-                if (!videoStarted && !signal.aborted) {
-                    videoStarted = true;
-                    showVideo();
-                }
-            }, { once: true, signal });
-            
-            // Fallback sur canplaythrough si loadeddata ne se déclenche pas
+            // Quand prêt → afficher
             videoEl.addEventListener('canplaythrough', () => {
                 if (!videoStarted && !signal.aborted) {
-                    __log('warn', 'diapo', 'video canplaythrough fallback (loadeddata missed)');
                     videoStarted = true;
                     showVideo();
                 }
             }, { once: true, signal });
             
-            // TIMEOUT FALLBACK: si la vidéo ne charge pas en 10s, passer au suivant
+            // Timeout 10s si rien ne se passe
             const videoTimeout = setTimeout(() => {
                 if (!videoStarted && !signal.aborted) {
-                    __log('error', 'diapo', 'video timeout after 10s, skipping to next');
-                    videoStarted = true;
-                    _reportVideoError(mediaFile, 0, 'LOAD_TIMEOUT', 'no loadeddata after 10s');
-                    if (window._videoHealth) window._videoHealth.skippedCount++;
-                    // Abort AVANT showMedia pour empêcher l'event 'error' de doubler l'avance
+                    __log('error', 'diapo', 'video timeout 10s: ' + mediaFile);
+                    _reportVideoError(mediaFile, 0, 'LOAD_TIMEOUT', 'no canplaythrough after 10s');
                     ac.abort();
                     showMedia(currentMediaIndex + 1);
                 }
             }, 10000);
             
-            // Nettoyer tous les timers quand la lecture (re)démarre
-            videoEl.addEventListener('playing', () => {
-                clearTimeout(videoTimeout);
-                if (stalledTimer) { clearTimeout(stalledTimer); stalledTimer = null; }
-            }, { signal });
-            
-            // STALLED: lecture bloquée réseau en cours de lecture
-            videoEl.addEventListener('stalled', () => {
-                if (signal.aborted) return;
-                __log('warn', 'diapo', 'video stalled (network blocked) — ' + mediaFile);
-                if (stalledTimer) clearTimeout(stalledTimer);
-                stalledTimer = setTimeout(() => {
-                    if (signal.aborted) return;
-                    __log('error', 'diapo', 'video stalled timeout (10s), skipping to next');
-                    _reportVideoError(mediaFile, 2, 'STALLED_TIMEOUT', 'playback stalled >10s');
-                    if (window._videoHealth) window._videoHealth.skippedCount++;
-                    // Abort AVANT showMedia pour empêcher l'event 'ended' de doubler l'avance
-                    ac.abort();
-                    showMedia(currentMediaIndex + 1);
-                }, 10000);
-            }, { signal });
-            
-            // Logger le chargement des données
-            videoEl.addEventListener('loadstart', () => {
-                __log('debug', 'diapo', 'video loadstart event');
-            }, { once: true, signal });
-            
-            videoEl.addEventListener('canplay', () => {
-                __log('debug', 'diapo', 'video canplay event (readyState=' + videoEl.readyState + ')');
-            }, { signal });
-            
-            // Écouter la fin de la vidéo
+            // Fin de vidéo → suivant
             videoEl.addEventListener('ended', () => {
                 if (signal.aborted) return;
-                __log('info', 'diapo', 'video ended, next in 100ms');
                 clearTimeout(videoTimeout);
-                if (stalledTimer) { clearTimeout(stalledTimer); stalledTimer = null; }
-                // Marquer le succès de lecture complète
                 if (window._videoHealth) window._videoHealth.lastSuccess = new Date().toISOString();
                 setTimeout(() => showMedia(currentMediaIndex + 1), 100);
             }, { once: true, signal });
             
-            // Écouter les erreurs — avec retry automatique (re-téléchargement)
-            videoEl.addEventListener('error', async (e) => {
+            // Erreur → un seul retry (re-download), puis skip
+            videoEl.addEventListener('error', async () => {
                 if (signal.aborted) return;
                 clearTimeout(videoTimeout);
-                if (stalledTimer) { clearTimeout(stalledTimer); stalledTimer = null; }
                 
-                // MediaError codes: 1=ABORTED 2=NETWORK 3=DECODE 4=SRC_NOT_SUPPORTED
-                const errCode  = videoEl.error ? videoEl.error.code : 0;
-                const errMsg   = videoEl.error ? videoEl.error.message : (e.message || 'unknown');
+                const errCode = videoEl.error ? videoEl.error.code : 0;
+                const errMsg = videoEl.error ? videoEl.error.message : 'unknown';
                 const errLabel = ['', 'ABORTED', 'NETWORK', 'DECODE', 'SRC_NOT_SUPPORTED'][errCode] || 'UNKNOWN';
                 
-                // ABORTED (code 1) = déclenché par notre propre videoEl.load() lors d'un retry.
-                // Ce n'est pas une vraie erreur — ignorer pour laisser le nouveau load() aboutir.
-                if (errCode === 1) {
-                    __log('debug', 'diapo', 'video ABORTED (code 1) — ignoré (propre à load() interne)');
-                    return;
-                }
+                // ABORTED = notre propre load(), pas une erreur
+                if (errCode === 1) return;
                 
-                __log('error', 'diapo', 'video error code=' + errCode + ' (' + errLabel + '): ' + errMsg + ' file=' + mediaFile);
-                
-                // Signaler l'erreur immédiatement (avant retry) → remonte dans heartbeat
+                __log('error', 'diapo', 'video error ' + errLabel + ': ' + errMsg + ' — ' + mediaFile);
                 _reportVideoError(mediaFile, errCode, errLabel, errMsg);
                 
-                // DECODE (3) et SRC_NOT_SUPPORTED (4) : peut être codec incompatible
-                // OU fichier corrompu/tronqué. On tente UN re-download avant de blacklister.
-                if (errCode === 3 || errCode === 4) {
-                    if (!window._videoBlacklist) window._videoBlacklist = {};
-                    const blEntry = window._videoBlacklist[mediaFile] || { count: 0, redownloaded: false };
-                    blEntry.count++;
-                    blEntry.label = errLabel;
-                    blEntry.reason = errMsg;
-                    blEntry.ts = new Date().toISOString();
-                    window._videoBlacklist[mediaFile] = blEntry;
-                    __log('warn', 'diapo', 'video ' + errLabel + ' blacklist count=' + blEntry.count + '/' + VIDEO_BLACKLIST_THRESHOLD + ' — ' + mediaFile);
-
-                    // Premier DECODE/SRC → forcer re-download (fichier peut-être corrompu)
-                    if (!videoRetried && !blEntry.redownloaded) {
-                        videoRetried = true;
-                        blEntry.redownloaded = true;
-                        __log('warn', 'diapo', 'video DECODE: forcing re-download (file may be corrupt)...');
-                        try {
-                            const decodedFile = decodeURIComponent(mediaFile);
-                            const relativePath = 'media/' + decodedFile;
-                            const baseUrl = typeof getMediaBaseUrl === 'function' ? getMediaBaseUrl() : 'https://soek.fr/uploads/see/media/';
-                            if (window.api && window.api.saveBinary) {
-                                const ok = await window.api.saveBinary(relativePath, baseUrl + mediaFile);
-                                if (ok) {
-                                    __log('info', 'diapo', 'video re-downloaded OK after DECODE, retrying playback...');
-                                    if (window._videoHealth) window._videoHealth.redownloadCount++;
-                                    videoStarted = false;
-                                    videoEl.src = url;
-                                    videoEl.load();
-                                    return; // laisser les events reprendre
-                                } else {
-                                    __log('error', 'diapo', 'video re-download returned false');
-                                    _reportVideoError(mediaFile, errCode, 'REDOWNLOAD_FAILED', 'saveBinary returned false');
-                                }
-                            }
-                        } catch (retryErr) {
-                            __log('error', 'diapo', 'video re-download exception: ' + retryErr.message);
-                            _reportVideoError(mediaFile, errCode, 'REDOWNLOAD_FAILED', retryErr.message);
-                        }
-                    }
-                }
-
-                // Retry re-download pour NETWORK (2) ou erreurs inconnues (0)
-                if (!videoRetried && (errCode === 2 || errCode === 0)) {
+                // Un seul retry : re-download puis rejouer
+                if (!videoRetried) {
                     videoRetried = true;
-                    __log('warn', 'diapo', 'video error: forcing re-download and retry (once)...');
                     try {
                         const decodedFile = decodeURIComponent(mediaFile);
-                        const relativePath = 'media/' + decodedFile;
                         const baseUrl = typeof getMediaBaseUrl === 'function' ? getMediaBaseUrl() : 'https://soek.fr/uploads/see/media/';
                         if (window.api && window.api.saveBinary) {
-                            const ok = await window.api.saveBinary(relativePath, baseUrl + mediaFile);
+                            const ok = await window.api.saveBinary('media/' + decodedFile, baseUrl + mediaFile);
                             if (ok) {
-                                __log('info', 'diapo', 'video re-downloaded OK, retrying playback...');
+                                __log('info', 'diapo', 'video re-downloaded, retrying...');
                                 if (window._videoHealth) window._videoHealth.redownloadCount++;
                                 videoStarted = false;
                                 videoEl.src = url;
-                                videoEl.load(); // va déclencher ABORTED (code 1) → ignoré ci-dessus
-                                return; // laisser les events reprendre
-                            } else {
-                                __log('error', 'diapo', 'video re-download returned false');
-                                _reportVideoError(mediaFile, errCode, 'REDOWNLOAD_FAILED', 'saveBinary returned false');
+                                videoEl.load();
+                                return;
                             }
                         }
-                    } catch (retryErr) {
-                        __log('error', 'diapo', 'video re-download exception: ' + retryErr.message);
-                        _reportVideoError(mediaFile, errCode, 'REDOWNLOAD_FAILED', retryErr.message);
+                    } catch (e) {
+                        __log('error', 'diapo', 'video re-download failed: ' + e.message);
                     }
                 }
                 
-                // Erreur non-récupérable ou retry épuisé → skip
+                // Skip
                 if (window._videoHealth) window._videoHealth.skippedCount++;
-                __log('error', 'diapo', 'video non-recoverable, skipping (total skipped=' + (window._videoHealth && window._videoHealth.skippedCount) + ')');
-                ac.abort(); // empêche ended/autres events de doubler l'avance
+                ac.abort();
                 setTimeout(() => showMedia(currentMediaIndex + 1), 1000);
             }, { signal });
             
-            // Toggle pour la prochaine
+            // Toggle player
             player = (player === 1) ? 2 : 1;
-            
-            // NE PAS programmer de timeout pour les vidéos
             return;
             
         } catch(e) {
             __log('error', 'diapo', 'video error: ' + e.message);
             _reportVideoError(mediaFile, 0, 'EXCEPTION', e.message);
-            if (window._videoHealth) window._videoHealth.skippedCount++;
-            // Passer au suivant en cas d'erreur
-            setTimeout(() => showMedia(currentMediaIndex + 1), 2000);
+            setTimeout(() => showMedia(currentMediaIndex + 1), 1000);
             return;
         }
         
@@ -898,9 +731,6 @@ function LoopDiapo() {
     
     // Aborter les vidéos en cours pour empêcher les events fantômes de relancer la boucle
     _abortAllVideoControllers();
-    
-    // Réinitialiser la blacklist vidéo (nouvelle trame = potentiellement nouveaux encodages)
-    window._videoBlacklist = {};
     
     // CHECK DEBUG_MODE FIRST - si activé, rester sur pageDefault
     if (window.DEBUG_MODE) {

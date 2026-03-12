@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v2.10.3 - Nettoyage lecture vidéo (12 Mars 2026)
+
+### 🛠️ Refactoring
+- **Suppression usine à gaz vidéo** : éliminé ~250 lignes de contournements accumulés (cloneNode, blacklist, double retry DECODE/NETWORK, stalled timer, loadeddata+canplaythrough doublon, preload vide)
+- **Lecture vidéo simplifiée** : reset propre de l'élément existant, un seul event `canplaythrough`, un timeout 10s, un retry (re-download), puis skip
+- **Suppression blacklist** : plus nécessaire maintenant que see-media:// gère les byte-range requests (v2.10.2)
+- **HeartbeatManager** : retiré le champ `blacklisted` du payload (plus de blacklist)
+
+---
+
 ## v2.10.2 - Fix see-media:// byte-range support (12 Mars 2026)
 
 ### 🐛 Fix critique
