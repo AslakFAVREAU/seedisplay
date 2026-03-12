@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## v2.0.7 - Blacklist DECODE & Détection Codecs (12 Mars 2026)
+
+### 🛡️ Résilience vidéo
+- **Blacklist vidéo DECODE/SRC_NOT_SUPPORTED** : après 3 échecs consécutifs sur le même fichier, skip immédiat (plus de re-download inutile)
+- **Re-download limité** : seulement sur erreurs NETWORK (code 2) ou inconnues (code 0), pas sur DECODE (codec incompatible)
+- **Reset blacklist** : vidée automatiquement à chaque redémarrage de boucle (nouveau refresh API)
+
+### 📡 Monitoring
+- **Détection codecs au boot** : `canPlayType()` sur H.264, H.265, VP8, VP9, AV1, AAC, Opus, MP3, AC3, EAC3
+- **Heartbeat enrichi** : `debug.codecs` (support par codec) + `videoHealth.blacklisted` détaillé (file, count, label, reason, since)
+
+---
+
 ## v2.0.6 - Fix BASE_PATH & Résilience Media (11 Mars 2026)
 
 ### 🐛 Fix critique
