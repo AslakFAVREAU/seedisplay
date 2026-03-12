@@ -35,6 +35,42 @@ window._videoHealth = {
     lastFile:        null  // dernier fichier tenté
 };
 
+// ─── Blacklist vidéo — skip auto après N échecs DECODE/SRC_NOT_SUPPORTED ─────
+// Clé: filename, Valeur: { count, label, reason, ts }
+window._videoBlacklist = {};
+const VIDEO_BLACKLIST_THRESHOLD = 3; // après 3 DECODE → skip immédiat
+
+// ─── Détection codecs supportés — remonté dans le heartbeat ─────────────────
+(function _detectSupportedCodecs() {
+    try {
+        const v = document.createElement('video');
+        const codecs = {
+            'h264-baseline': v.canPlayType('video/mp4; codecs="avc1.42E01E"'),
+            'h264-main':     v.canPlayType('video/mp4; codecs="avc1.4D401E"'),
+            'h264-high':     v.canPlayType('video/mp4; codecs="avc1.640028"'),
+            'h265':          v.canPlayType('video/mp4; codecs="hev1.1.6.L93.B0"'),
+            'vp8':           v.canPlayType('video/webm; codecs="vp8"'),
+            'vp9':           v.canPlayType('video/webm; codecs="vp9"'),
+            'av1':           v.canPlayType('video/mp4; codecs="av01.0.01M.08"'),
+            'aac':           v.canPlayType('audio/mp4; codecs="mp4a.40.2"'),
+            'opus':          v.canPlayType('audio/webm; codecs="opus"'),
+            'mp3':           v.canPlayType('audio/mpeg'),
+            'ac3':           v.canPlayType('audio/mp4; codecs="ac-3"'),
+            'eac3':          v.canPlayType('audio/mp4; codecs="ec-3"')
+        };
+        const supported = {};
+        const unsupported = [];
+        for (const [name, result] of Object.entries(codecs)) {
+            if (result) { supported[name] = result; } else { unsupported.push(name); }
+        }
+        window._supportedCodecs = { supported, unsupported, raw: codecs };
+        __log('info', 'diapo', 'Codecs supportés: ' + Object.keys(supported).join(', '));
+        if (unsupported.length) __log('info', 'diapo', 'Codecs NON supportés: ' + unsupported.join(', '));
+    } catch (e) {
+        window._supportedCodecs = null;
+    }
+})();
+
 /**
  * Signale une erreur vidéo dans window._videoHealth ET dans ErrorHandler.
  * Toutes les erreurs vidéo remontent ainsi dans le heartbeat SOEK.
@@ -292,6 +328,15 @@ async function showMedia(mediaIndex) {
     }
     
     if (mediaType === 'video') {
+        // ── Blacklist check: skip immédiat si DECODE/SRC échoue N fois ──
+        const bl = window._videoBlacklist && window._videoBlacklist[mediaFile];
+        if (bl && bl.count >= VIDEO_BLACKLIST_THRESHOLD) {
+            __log('warn', 'diapo', 'video BLACKLISTED (' + bl.count + ' x ' + bl.label + '), skip: ' + mediaFile);
+            if (window._videoHealth) window._videoHealth.skippedCount++;
+            setTimeout(() => showMedia(currentMediaIndex + 1), 100);
+            return;
+        }
+
         // Utiliser player (1 ou 2)
         const videoId = 'video' + player;
         const divId = 'divVideo' + player;
@@ -477,9 +522,22 @@ async function showMedia(mediaIndex) {
                 // Signaler l'erreur immédiatement (avant retry) → remonte dans heartbeat
                 _reportVideoError(mediaFile, errCode, errLabel, errMsg);
                 
-                // Retry une seule fois: forcer le re-téléchargement (bypasse ETag)
-                // Cible: fichier corrompu/tronqué accepté par erreur sur 304
-                if (!videoRetried && (errCode === 3 || errCode === 4 || errCode === 2 || errCode === 0)) {
+                // DECODE (3) et SRC_NOT_SUPPORTED (4) = problème codec, pas fichier corrompu
+                // → incrémenter blacklist au lieu de re-télécharger
+                if (errCode === 3 || errCode === 4) {
+                    if (!window._videoBlacklist) window._videoBlacklist = {};
+                    const blEntry = window._videoBlacklist[mediaFile] || { count: 0 };
+                    blEntry.count++;
+                    blEntry.label = errLabel;
+                    blEntry.reason = errMsg;
+                    blEntry.ts = new Date().toISOString();
+                    window._videoBlacklist[mediaFile] = blEntry;
+                    __log('warn', 'diapo', 'video ' + errLabel + ' blacklist count=' + blEntry.count + '/' + VIDEO_BLACKLIST_THRESHOLD + ' — ' + mediaFile);
+                }
+
+                // Retry re-download seulement pour NETWORK (2) ou erreurs inconnues (0)
+                // Pas pour DECODE/SRC_NOT_SUPPORTED (codec incompatible, le fichier est intact)
+                if (!videoRetried && (errCode === 2 || errCode === 0)) {
                     videoRetried = true;
                     __log('warn', 'diapo', 'video error: forcing re-download and retry (once)...');
                     try {
@@ -820,6 +878,9 @@ function LoopDiapo() {
     
     // Aborter les vidéos en cours pour empêcher les events fantômes de relancer la boucle
     _abortAllVideoControllers();
+    
+    // Réinitialiser la blacklist vidéo (nouvelle trame = potentiellement nouveaux encodages)
+    window._videoBlacklist = {};
     
     // CHECK DEBUG_MODE FIRST - si activé, rester sur pageDefault
     if (window.DEBUG_MODE) {

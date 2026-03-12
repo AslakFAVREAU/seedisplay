@@ -261,9 +261,19 @@ class HeartbeatManager {
                 redownloadCount: window._videoHealth.redownloadCount  || 0,
                 lastError:       window._videoHealth.lastError        || null,
                 lastSuccess:     window._videoHealth.lastSuccess      || null,
-                lastFile:        window._videoHealth.lastFile         || null
+                lastFile:        window._videoHealth.lastFile         || null,
+                blacklisted:     window._videoBlacklist
+                    ? Object.keys(window._videoBlacklist)
+                        .filter(function(k) { return window._videoBlacklist[k].count >= 3; })
+                        .map(function(k) { var b = window._videoBlacklist[k]; return { file: k, count: b.count, label: b.label, reason: b.reason, since: b.ts }; })
+                    : []
               }
             : null;
+
+        // Codecs supportés par ce device (détecté au boot)
+        if (window._supportedCodecs) {
+            debug.codecs = window._supportedCodecs.raw;
+        }
 
         // Santé image (window._imageHealth) — monitoring chargement images
         debug.imageHealth = window._imageHealth
