@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v2.10.0 - Fix syntaxe preload vidéo (12 Mars 2026)
+
+### 🐛 Fix
+- **Correction SyntaxError loopDiapo.js:192** : bloc `catch` orphelin resté après la désactivation du preload vidéo — empêchait le chargement complet du fichier et donc `LoopDiapo` n'était plus défini
+
+---
+
 ## v2.0.9 - Fix PIPELINE_ERROR_DECODE définitif (12 Mars 2026)
 
 ### 🐛 Fix critique

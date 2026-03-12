@@ -189,9 +189,6 @@ function _preloadNextVideo(currentIndex) {
     // Le preload sur un élément réutilisé corrompt le pipeline décodeur de Chromium
     // → PIPELINE_ERROR_DECODE audio/vidéo au passage suivant
     return;
-    } catch (e) {
-        __log('warn', 'diapo', 'preloadNextVideo error (non-fatal): ' + e.message);
-    }
 }
 
 /**
