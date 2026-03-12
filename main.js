@@ -232,17 +232,16 @@ module.exports = { getUpdateChannel };
 //-------------------------------------------------------------------
 
 // Linux x64 optimizations
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
-app.commandLine.appendSwitch('disable-software-rasterizer');
 
-// Optimisations pour les codecs vidéo (VAAPI sur Linux)
+// Décodage vidéo : forcer le décodage logiciel sur Linux
+// VAAPI / hardware decode cause PIPELINE_ERROR_DECODE sur beaucoup de machines
 if (IS_LINUX) {
-  app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization');
-} else {
-  app.commandLine.appendSwitch('enable-features', 'CanvasOopRasterization');
+  app.commandLine.appendSwitch('disable-gpu-video-decode');
+  app.commandLine.appendSwitch('disable-accelerated-video-decode');
 }
+app.commandLine.appendSwitch('enable-features', 'CanvasOopRasterization');
 
 // Smooth scrolling et rendering
 app.commandLine.appendSwitch('enable-smooth-scrolling');

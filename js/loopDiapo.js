@@ -362,7 +362,7 @@ async function showMedia(mediaIndex) {
             newVideoEl.setAttribute('disablePictureInPicture', '');
             newVideoEl.setAttribute('disableRemotePlayback', '');
             newVideoEl.loop = false;
-            newVideoEl.muted = window.sonActif !== true;
+            newVideoEl.muted = true;
             
             // Remplacer l'ancien élément dans le DOM
             if (oldVideoEl && oldVideoEl.parentNode) {

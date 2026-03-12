@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v2.10.1 - Fix décodage vidéo Linux (12 Mars 2026)
+
+### 🐛 Fix critique
+- **Suppression VAAPI / hardware video decode** : les flags `VaapiVideoDecoder`, `ignore-gpu-blocklist` et `disable-software-rasterizer` forçaient le décodage matériel sur Linux, causant `PIPELINE_ERROR_DECODE` quand les drivers sont incomplets
+- **Ajout `--disable-gpu-video-decode`** : force le décodage logiciel (fiable sur tous les Ubuntu)
+- **Vidéo muted=true** : affichage digital n'a pas besoin d'audio, évite les erreurs du pipeline audio
+
+---
+
 ## v2.10.0 - Fix syntaxe preload vidéo (12 Mars 2026)
 
 ### 🐛 Fix
