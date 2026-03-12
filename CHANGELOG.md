@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v2.0.8 - Fix DECODE 2ème passage vidéo (12 Mars 2026)
+
+### 🐛 Fix critique
+- **PIPELINE_ERROR_DECODE au 2ème passage** : reset complet du décodeur vidéo (`pause` + `removeAttribute('src')` + `load()`) avant chaque chargement — Chromium réutilisait le pipeline avec un état corrompu (`is_key_frame=0` sans frames de référence)
+- Appliqué sur les deux players vidéo (`showMedia` + `_preloadNextVideo`)
+
+### 🛡️ Résilience
+- **Re-download sur DECODE** : premier DECODE tente un re-download (fichier possiblement corrompu), blacklist seulement si échec après re-download
+- Flag `redownloaded` persistant par fichier dans la blacklist (1 seul re-download par fichier)
+
+---
+
 ## v2.0.7 - Blacklist DECODE & Détection Codecs (12 Mars 2026)
 
 ### 🛡️ Résilience vidéo

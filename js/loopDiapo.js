@@ -214,6 +214,12 @@ function _preloadNextVideo(currentIndex) {
         __log('debug', 'diapo', 'preloading next video in ' + nextVideoId + ': ' + nextFile);
         nextVideoEl.preload = 'auto';
         nextVideoEl.muted = window.sonActif !== true;
+        // Reset décodeur avant preload (évite PIPELINE_ERROR_DECODE au 2ème passage)
+        nextVideoEl.pause();
+        nextSourceEl.removeAttribute('src');
+        nextVideoEl.removeAttribute('src');
+        nextVideoEl.load();
+        // Charger la nouvelle source
         nextSourceEl.src = nextUrl;
         nextVideoEl.load();
     } catch (e) {
@@ -388,7 +394,16 @@ async function showMedia(mediaIndex) {
             videoEl.muted = window.sonActif !== true;
             __log('info', 'diapo', 'video muted=' + videoEl.muted + ' (sonActif=' + window.sonActif + ')');
             
-            // Charger la vidéo
+            // ── Reset complet du décodeur vidéo avant chargement ──
+            // Sans ce reset, Chromium réutilise le décodeur avec un état corrompu
+            // → PIPELINE_ERROR_DECODE sur is_key_frame=0 au 2ème passage
+            videoEl.pause();
+            videoEl.currentTime = 0;
+            sourceEl.removeAttribute('src');
+            videoEl.removeAttribute('src');
+            videoEl.load(); // force le reset du pipeline de décodage
+            
+            // Charger la vidéo avec la nouvelle source
             sourceEl.src = url;
             videoEl.load();
             
@@ -522,21 +537,49 @@ async function showMedia(mediaIndex) {
                 // Signaler l'erreur immédiatement (avant retry) → remonte dans heartbeat
                 _reportVideoError(mediaFile, errCode, errLabel, errMsg);
                 
-                // DECODE (3) et SRC_NOT_SUPPORTED (4) = problème codec, pas fichier corrompu
-                // → incrémenter blacklist au lieu de re-télécharger
+                // DECODE (3) et SRC_NOT_SUPPORTED (4) : peut être codec incompatible
+                // OU fichier corrompu/tronqué. On tente UN re-download avant de blacklister.
                 if (errCode === 3 || errCode === 4) {
                     if (!window._videoBlacklist) window._videoBlacklist = {};
-                    const blEntry = window._videoBlacklist[mediaFile] || { count: 0 };
+                    const blEntry = window._videoBlacklist[mediaFile] || { count: 0, redownloaded: false };
                     blEntry.count++;
                     blEntry.label = errLabel;
                     blEntry.reason = errMsg;
                     blEntry.ts = new Date().toISOString();
                     window._videoBlacklist[mediaFile] = blEntry;
                     __log('warn', 'diapo', 'video ' + errLabel + ' blacklist count=' + blEntry.count + '/' + VIDEO_BLACKLIST_THRESHOLD + ' — ' + mediaFile);
+
+                    // Premier DECODE/SRC → forcer re-download (fichier peut-être corrompu)
+                    if (!videoRetried && !blEntry.redownloaded) {
+                        videoRetried = true;
+                        blEntry.redownloaded = true;
+                        __log('warn', 'diapo', 'video DECODE: forcing re-download (file may be corrupt)...');
+                        try {
+                            const decodedFile = decodeURIComponent(mediaFile);
+                            const relativePath = 'media/' + decodedFile;
+                            const baseUrl = typeof getMediaBaseUrl === 'function' ? getMediaBaseUrl() : 'https://soek.fr/uploads/see/media/';
+                            if (window.api && window.api.saveBinary) {
+                                const ok = await window.api.saveBinary(relativePath, baseUrl + mediaFile);
+                                if (ok) {
+                                    __log('info', 'diapo', 'video re-downloaded OK after DECODE, retrying playback...');
+                                    if (window._videoHealth) window._videoHealth.redownloadCount++;
+                                    videoStarted = false;
+                                    sourceEl.src = url;
+                                    videoEl.load();
+                                    return; // laisser les events reprendre
+                                } else {
+                                    __log('error', 'diapo', 'video re-download returned false');
+                                    _reportVideoError(mediaFile, errCode, 'REDOWNLOAD_FAILED', 'saveBinary returned false');
+                                }
+                            }
+                        } catch (retryErr) {
+                            __log('error', 'diapo', 'video re-download exception: ' + retryErr.message);
+                            _reportVideoError(mediaFile, errCode, 'REDOWNLOAD_FAILED', retryErr.message);
+                        }
+                    }
                 }
 
-                // Retry re-download seulement pour NETWORK (2) ou erreurs inconnues (0)
-                // Pas pour DECODE/SRC_NOT_SUPPORTED (codec incompatible, le fichier est intact)
+                // Retry re-download pour NETWORK (2) ou erreurs inconnues (0)
                 if (!videoRetried && (errCode === 2 || errCode === 0)) {
                     videoRetried = true;
                     __log('warn', 'diapo', 'video error: forcing re-download and retry (once)...');
