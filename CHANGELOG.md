@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v2.0.9 - Fix PIPELINE_ERROR_DECODE définitif (12 Mars 2026)
+
+### 🐛 Fix critique
+- **cloneNode vidéo** : remplacement de l'élément `<video>` par un élément neuf (`createElement`) à chaque lecture. C'est la seule solution pour éviter que Chromium réutilise les décodeurs matériels audio/vidéo corrompus au 2ème passage
+- **Suppression `<source>`** : utilisation de `video.src` directement (plus de `<source>` enfant qui empêche le reset du pipeline)
+- **Preload désactivé** : le préchargement dans le player inactif corrompait le décodeur du prochain player
+
+---
+
 ## v2.0.8 - Fix DECODE 2ème passage vidéo (12 Mars 2026)
 
 ### 🐛 Fix critique

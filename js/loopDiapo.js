@@ -185,43 +185,10 @@ function hideAllMedia() {
  * Réduit le temps de transition entre deux vidéos consécutives.
  */
 function _preloadNextVideo(currentIndex) {
-    try {
-        if (!mediaLoop || mediaLoop.length === 0) return;
-        
-        // Trouver le prochain média
-        const nextIndex = currentIndex + 1;
-        if (nextIndex >= mediaLoop.length) return; // fin de boucle, pas de preload
-        
-        const nextMedia = mediaLoop[nextIndex];
-        if (!nextMedia || !Array.isArray(nextMedia) || nextMedia.length < 2) return;
-        if (nextMedia[0] !== 'video') return; // preload seulement les vidéos
-        
-        const nextFile = nextMedia[1];
-        // Le player inactif est celui qu'on va utiliser (déjà toggleé)
-        const nextPlayer = player; // player a déjà été toggleé
-        const nextVideoId = 'video' + nextPlayer;
-        const nextSourceId = 'srcVideo' + nextPlayer;
-        const nextVideoEl = document.getElementById(nextVideoId);
-        const nextSourceEl = document.getElementById(nextSourceId);
-        
-        if (!nextVideoEl || !nextSourceEl) return;
-        
-        const nextUrl = typeof getMediaUrl === 'function' ? getMediaUrl(nextFile) : pathMedia + nextFile;
-        
-        // Ne précharger que si la source est différente
-        if (nextSourceEl.src && nextSourceEl.src.endsWith(nextFile)) return;
-        
-        __log('debug', 'diapo', 'preloading next video in ' + nextVideoId + ': ' + nextFile);
-        nextVideoEl.preload = 'auto';
-        nextVideoEl.muted = window.sonActif !== true;
-        // Reset décodeur avant preload (évite PIPELINE_ERROR_DECODE au 2ème passage)
-        nextVideoEl.pause();
-        nextSourceEl.removeAttribute('src');
-        nextVideoEl.removeAttribute('src');
-        nextVideoEl.load();
-        // Charger la nouvelle source
-        nextSourceEl.src = nextUrl;
-        nextVideoEl.load();
+    // Préchargement désactivé — chaque lecture crée un élément vidéo neuf (cloneNode)
+    // Le preload sur un élément réutilisé corrompt le pipeline décodeur de Chromium
+    // → PIPELINE_ERROR_DECODE audio/vidéo au passage suivant
+    return;
     } catch (e) {
         __log('warn', 'diapo', 'preloadNextVideo error (non-fatal): ' + e.message);
     }
@@ -346,7 +313,6 @@ async function showMedia(mediaIndex) {
         // Utiliser player (1 ou 2)
         const videoId = 'video' + player;
         const divId = 'divVideo' + player;
-        const sourceId = 'srcVideo' + player;
         
         __log('debug', 'diapo', 'loading video in ' + divId);
         
@@ -374,11 +340,9 @@ async function showMedia(mediaIndex) {
         
         try {
             const url = typeof getMediaUrl === 'function' ? getMediaUrl(mediaFile) : pathMedia + mediaFile;
-            const videoEl = document.getElementById(videoId);
-            const sourceEl = document.getElementById(sourceId);
             const divEl = document.getElementById(divId);
             
-            // Annuler les listeners précédents via AbortController (plus léger que cloneNode)
+            // Annuler les listeners/timers du player précédent
             if (videoAbortControllers[player]) {
                 videoAbortControllers[player].abort();
             }
@@ -386,25 +350,41 @@ async function showMedia(mediaIndex) {
             videoAbortControllers[player] = ac;
             const signal = ac.signal;
             
-            // S'assurer que loop est désactivé
-            videoEl.loop = false;
-            videoEl.removeAttribute('loop');
+            // ── CLONE NODE: créer un élément vidéo neuf à chaque lecture ──
+            // C'est la SEULE solution fiable pour éviter PIPELINE_ERROR_DECODE
+            // Chromium réutilise les décodeurs matériels audio/vidéo sur un même
+            // élément, ce qui corrompt le pipeline au 2ème passage.
+            const oldVideoEl = document.getElementById(videoId);
+            const newVideoEl = document.createElement('video');
+            newVideoEl.id = videoId;
+            newVideoEl.className = 'videoPlayer';
+            newVideoEl.setAttribute('width', '100%');
+            newVideoEl.setAttribute('height', '100%');
+            newVideoEl.setAttribute('preload', 'auto');
+            newVideoEl.setAttribute('playsinline', '');
+            newVideoEl.setAttribute('disablePictureInPicture', '');
+            newVideoEl.setAttribute('disableRemotePlayback', '');
+            newVideoEl.loop = false;
+            newVideoEl.muted = window.sonActif !== true;
             
-            // Gérer le son selon sonActif de l'API
-            videoEl.muted = window.sonActif !== true;
+            // Remplacer l'ancien élément dans le DOM
+            if (oldVideoEl && oldVideoEl.parentNode) {
+                oldVideoEl.pause();
+                oldVideoEl.removeAttribute('src');
+                oldVideoEl.load(); // libérer le décodeur
+                oldVideoEl.parentNode.replaceChild(newVideoEl, oldVideoEl);
+            } else {
+                divEl.innerHTML = '';
+                divEl.appendChild(newVideoEl);
+            }
+            
+            // Utiliser video.src directement (pas de <source>)
+            const videoEl = newVideoEl;
+            
             __log('info', 'diapo', 'video muted=' + videoEl.muted + ' (sonActif=' + window.sonActif + ')');
             
-            // ── Reset complet du décodeur vidéo avant chargement ──
-            // Sans ce reset, Chromium réutilise le décodeur avec un état corrompu
-            // → PIPELINE_ERROR_DECODE sur is_key_frame=0 au 2ème passage
-            videoEl.pause();
-            videoEl.currentTime = 0;
-            sourceEl.removeAttribute('src');
-            videoEl.removeAttribute('src');
-            videoEl.load(); // force le reset du pipeline de décodage
-            
-            // Charger la vidéo avec la nouvelle source
-            sourceEl.src = url;
+            // Charger la vidéo
+            videoEl.src = url;
             videoEl.load();
             
             __log('info', 'diapo', 'video load() called, waiting for loadeddata event');
@@ -564,7 +544,7 @@ async function showMedia(mediaIndex) {
                                     __log('info', 'diapo', 'video re-downloaded OK after DECODE, retrying playback...');
                                     if (window._videoHealth) window._videoHealth.redownloadCount++;
                                     videoStarted = false;
-                                    sourceEl.src = url;
+                                    videoEl.src = url;
                                     videoEl.load();
                                     return; // laisser les events reprendre
                                 } else {
@@ -593,7 +573,7 @@ async function showMedia(mediaIndex) {
                                 __log('info', 'diapo', 'video re-downloaded OK, retrying playback...');
                                 if (window._videoHealth) window._videoHealth.redownloadCount++;
                                 videoStarted = false;
-                                sourceEl.src = url;
+                                videoEl.src = url;
                                 videoEl.load(); // va déclencher ABORTED (code 1) → ignoré ci-dessus
                                 return; // laisser les events reprendre
                             } else {
