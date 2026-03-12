@@ -520,16 +520,78 @@ app.on('ready', function() {
   // depuis BASE_PATH sur toutes les plateformes (nécessaire sur Linux où file:// 
   // ne peut pas accéder aux fichiers hors du dossier app)
   try {
-    protocol.handle('see-media', (request) => {
+    protocol.handle('see-media', async (request) => {
       // URL: see-media://media/file.jpg → BASE_PATH + media/file.jpg
       let filePath = decodeURIComponent(request.url.replace('see-media://', ''));
       // Supprimer le slash initial si présent (see-media:///media/... → media/...)
       filePath = filePath.replace(/^\/+/, '');
+      // Supprimer fragment (#nocache=...) s'il existe
+      filePath = filePath.split('#')[0];
       const fullPath = path.join(BASE_PATH, filePath);
-      log.debug(`[see-media] ${request.url} → ${fullPath}`);
-      return net.fetch('file://' + fullPath);
+
+      // Vérifier que le fichier existe
+      if (!fs.existsSync(fullPath)) {
+        log.warn(`[see-media] File not found: ${fullPath}`);
+        return new Response('Not Found', { status: 404 });
+      }
+
+      const stat = fs.statSync(fullPath);
+      const totalSize = stat.size;
+
+      // Déterminer le Content-Type
+      const ext = path.extname(fullPath).toLowerCase();
+      const mimeTypes = {
+        '.mp4': 'video/mp4', '.webm': 'video/webm', '.ogg': 'video/ogg',
+        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+        '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.json': 'application/json',
+        '.pdf': 'application/pdf'
+      };
+      const contentType = mimeTypes[ext] || 'application/octet-stream';
+
+      // Gérer les byte-range requests (crucial pour la lecture vidéo)
+      const rangeHeader = request.headers.get('Range');
+      if (rangeHeader) {
+        const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+        if (match) {
+          const start = parseInt(match[1], 10);
+          const end = match[2] ? parseInt(match[2], 10) : totalSize - 1;
+          const chunkSize = end - start + 1;
+
+          log.debug(`[see-media] Range ${start}-${end}/${totalSize} → ${fullPath}`);
+
+          const fd = fs.openSync(fullPath, 'r');
+          const buffer = Buffer.alloc(chunkSize);
+          fs.readSync(fd, buffer, 0, chunkSize, start);
+          fs.closeSync(fd);
+
+          return new Response(buffer, {
+            status: 206,
+            headers: {
+              'Content-Type': contentType,
+              'Content-Range': `bytes ${start}-${end}/${totalSize}`,
+              'Content-Length': String(chunkSize),
+              'Accept-Ranges': 'bytes',
+              'Cache-Control': 'no-cache'
+            }
+          });
+        }
+      }
+
+      // Pas de Range → retourner le fichier complet
+      log.debug(`[see-media] Full file ${totalSize} bytes → ${fullPath}`);
+      const data = fs.readFileSync(fullPath);
+      return new Response(data, {
+        status: 200,
+        headers: {
+          'Content-Type': contentType,
+          'Content-Length': String(totalSize),
+          'Accept-Ranges': 'bytes',
+          'Cache-Control': 'no-cache'
+        }
+      });
     });
-    log.info('[see-media] Protocol handler registered for BASE_PATH=' + BASE_PATH);
+    log.info('[see-media] Protocol handler registered with byte-range support, BASE_PATH=' + BASE_PATH);
   } catch (e) {
     log.error('[see-media] Failed to register protocol handler:', e.message);
   }

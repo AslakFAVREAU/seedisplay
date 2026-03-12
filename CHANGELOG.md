@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v2.10.2 - Fix see-media:// byte-range support (12 Mars 2026)
+
+### 🐛 Fix critique
+- **Support byte-range requests dans see-media://** : l'ancien handler retournait toujours le fichier entier (200 OK) même quand Chromium demandait un byte-range (Range: bytes=X-Y). Le décodeur vidéo perdait sa position dans le stream → frames sans keyframe de référence → `PIPELINE_ERROR_DECODE` (`is_key_frame=0`)
+- **Réponses HTTP 206 Partial Content** : le protocol handler lit maintenant les octets demandés via `fs.readSync` et retourne des headers `Content-Range` / `Accept-Ranges` corrects
+- **MIME types** : détection automatique du Content-Type par extension
+- **Cache-Control: no-cache** : évite les réponses cachées qui pourraient corrompre le seeking
+
+---
+
 ## v2.10.1 - Fix décodage vidéo Linux (12 Mars 2026)
 
 ### 🐛 Fix critique
