@@ -183,7 +183,11 @@ class HeartbeatManager {
             
             // Planning
             planningActive: false,
-            
+
+            // Santé de la boucle d'affichage
+            loopWatchdogRestarts: 0,
+            secondsSinceLastMedia: null,
+
             // API health
             apiConsecutiveErrors: window.apiConsecutiveErrors || 0,
             
@@ -230,6 +234,13 @@ class HeartbeatManager {
             }
         }
         
+        // Watchdog de boucle : permet de voir à distance si l'affichage s'est figé
+        // (typiquement pendant la nuit) et a dû être relancé automatiquement.
+        debug.loopWatchdogRestarts = window._loopWatchdogRestarts || 0;
+        if (window._lastMediaChange) {
+            debug.secondsSinceLastMedia = Math.round((Date.now() - window._lastMediaChange) / 1000);
+        }
+
         // Planning (isVisible est une propriété)
         if (window.planningManager) {
             debug.planningActive = window.planningManager.isVisible || false;
@@ -327,7 +338,17 @@ class HeartbeatManager {
         try {
             // Collecter les infos
             const debug = this._collectDebugInfo();
-            
+
+            // Watchdog main + file d'incidents (l'historique part via /incidents)
+            try {
+                if (window.api && typeof window.api.getWatchdogState === 'function') {
+                    const wd = await window.api.getWatchdogState();
+                    if (wd) debug.watchdog = Object.assign({ niveauBoucle: window._loopWatchdogLevel || 0 }, wd);
+                }
+            } catch (e) {
+                this._log.debug('heartbeat', 'Could not get watchdog state:', e.message);
+            }
+
             // Capturer le screenshot
             const screenshot = await this._captureScreenshot();
             

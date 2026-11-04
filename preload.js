@@ -147,6 +147,29 @@ contextBridge.exposeInMainWorld('api', {
     }
   },
   // Restart complet de l'app (relaunch process) - utilisé après première association
+  // ─── Watchdog & incidents (voir lib/MainWatchdog.js, lib/IncidentLog.js) ───
+  // Signe de vie de la page : s'il cesse, le main recharge puis relance l'app
+  watchdogPing: (payload) => {
+    try { ipcRenderer.send('watchdog-ping', payload || {}) } catch (e) { /* ignore */ }
+  },
+  // Incident remonté au monitoring SOEK (journal persistant côté main)
+  reportIncident: (type, niveau, message, contexte) => {
+    try { ipcRenderer.send('incident-report', { type, niveau, message, contexte: contexte || {} }) } catch (e) { /* ignore */ }
+  },
+  // Niveau 3 du watchdog de la page : restart soumis à l'anti-boucle du main
+  watchdogRequestRestart: (cause) => {
+    try { ipcRenderer.send('watchdog-request-restart', cause || '') } catch (e) { /* ignore */ }
+  },
+  onWatchdogSafeMode: (callback) => {
+    ipcRenderer.on('watchdog-safe-mode', (event, on) => { try { callback(!!on) } catch (e) { /* ignore */ } })
+  },
+  getWatchdogState: async () => {
+    try { return await ipcRenderer.invoke('watchdog-get-state') } catch (e) { return null }
+  },
+  // Injection de pannes : ignoré par le main hors SEEDISPLAY_FAULTS=1
+  faultCrashRenderer: () => {
+    try { ipcRenderer.send('fault-crash-renderer') } catch (e) { /* ignore */ }
+  },
   restartApp: () => {
     try {
       ipcRenderer.send('restart-app');
@@ -284,6 +307,20 @@ contextBridge.exposeInMainWorld('api', {
       }
     }
     return await ipcRenderer.invoke('preload-saveBinary', relativePath, url)
+  },
+  deleteFile: async (relativePath) => {
+    if (hasNode) {
+      const p = safeJoin(BASE_PATH, relativePath)
+      try {
+        if (fs.existsSync(p)) fs.unlinkSync(p)
+        try { ipcRenderer.send('renderer-log', { level: 'info', msg: 'preload.deleteFile removed: ' + p }) } catch (err) { /* ignore */ }
+        return true
+      } catch (e) {
+        try { ipcRenderer.send('renderer-log', { level: 'warn', msg: 'preload.deleteFile failed: ' + String(e) }) } catch (err) { /* ignore */ }
+        return false
+      }
+    }
+    return await ipcRenderer.invoke('preload-deleteFile', relativePath)
   },
   // Media cache management APIs
   listMediaFiles: async () => {

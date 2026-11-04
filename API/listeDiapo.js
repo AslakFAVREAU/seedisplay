@@ -858,6 +858,10 @@ function listeDiapoV2(data) {
     }
   }
   
+  // Exposé pour downloadAllMedia : en mode prioritaire la liste est volontairement
+  // amputée, il ne faut surtout pas prendre cette absence pour une suppression.
+  if (typeof window !== 'undefined') window._modePrioritaireActif = hasPrioritaire
+
   if (hasPrioritaire) {
     _log('info','diapo','listeDiapoV2: priority mode active - filtering to show only priority media')
   }
@@ -908,7 +912,9 @@ function listeDiapoV2(data) {
           mediaNom: item.mediaNom || null,
           diapoId: item.diapoId || null,
           diapoNom: item.diapoNom || null,
-          transition: item.transition || 'cut'
+          transition: item.transition || 'cut',
+          mediaUpdatedAt: item.mediaUpdatedAt || null,
+          mediaUrl: item.mediaUrl || null
         }
         ArrayImg.push([mediaType, encodeURIComponent(fichier), duree, metadata])
       }
@@ -1027,7 +1033,9 @@ const getDiapoJson = async () => {
       
       // Fallback to direct axios call if ApiManager not available
       if (window._sl) window._sl('getDiapoJson: no ApiManager, using direct axios.get()')
-      const res = await axios.get(urlAPI)
+      // Timeout obligatoire : sans lui, un serveur qui ne répond pas au réveil
+      // laisse la promesse pendante et bloque le verrou de requestJsonDiapo.
+      const res = await axios.get(urlAPI, { timeout: 15000 })
       if (window._sl) window._sl('getDiapoJson: direct axios SUCCESS (data?=' + !!(res && res.data) + ')')
       _log('info','diapo','getDiapoJson: fetch success (direct axios) ' + (res && res.status))
       return res
@@ -1108,10 +1116,12 @@ const getDiapoJson = async () => {
   // Synchronisation robuste des médias (ETag/Last-Modified) à chaque refresh
   async function syncMediaCache(items) {
     try {
-      if (window._mediaSyncInProgress) return
+      // Verrou horodaté : au-delà de 30 min il est considéré comme abandonné
+      if (window._mediaSyncInProgress && Date.now() - (window._mediaSyncInProgressAt || 0) < 30 * 60 * 1000) return
       if (!window.api || (!window.api.saveBinaryWithCache && !window.api.saveBinary)) return
 
       window._mediaSyncInProgress = true
+      window._mediaSyncInProgressAt = Date.now()
       const mediaList = (items || []).map(getMediaFilename).filter(Boolean)
       if (!mediaList.length) { window._mediaSyncInProgress = false; return }
 
@@ -1175,7 +1185,7 @@ const getDiapoJson = async () => {
     window.requestJsonDiapo = null  // Sera défini après la déclaration de requestJsonDiapo
   }
 
-  const requestJsonDiapo = async () => {
+  const _requestJsonDiapoInner = async () => {
     // Mettre à jour l'heure du dernier pull et incrémenter le compteur
     if (typeof window !== 'undefined') {
       window.lastApiPullTime = Date.now()
@@ -1266,8 +1276,19 @@ const getDiapoJson = async () => {
     if (typeof window !== 'undefined') window._usingOfflineCache = false  // reset after parsing
     if (typeof window !== 'undefined' && window._sl) window._sl('requestJsonDiapo: parsed ' + (ArrayDiapo ? ArrayDiapo.length : 0) + ' diapo items')
 
-    // Sync media cache on every refresh to pick up modified files
-    await syncMediaCache(ArrayDiapo)
+    // Sync media cache on every refresh to pick up modified files.
+    // Non bloquant : le refresh (veille, applyDiapoUpdate, verrou _diapoRequestInFlight)
+    // ne doit pas attendre la revalidation ETag de tous les médias. Les téléchargements
+    // concurrents d'un même fichier sont dédupliqués côté main (downloadToFileOnce)
+    // et écrits de façon atomique, donc sans risque pour la vidéo en cours de lecture.
+    syncMediaCache(ArrayDiapo)
+
+    // Le timer de refresh doit démarrer AVANT tout return anticipé (veille, liste vide).
+    // Sinon un boot pendant la plage de veille — ce qui arrive avec l'auto-update de 2h
+    // ou le restart après 10 échecs API — laisse l'app sans aucun polling principal.
+    if (!refreshTimer) {
+      startRefreshTimer()
+    }
 
     // Check for sleep mode (API v2)
     if (typeof window !== 'undefined' && window.screenStatus === 'sleep') {
@@ -1275,10 +1296,14 @@ const getDiapoJson = async () => {
       showSleepScreen()
       return
     }
-    
+
     // If we were sleeping but now active, hide sleep screen
+    var wasSleeping = (typeof window !== 'undefined') && !!window._wasSleeping
     if (typeof window !== 'undefined' && typeof hideSleepScreen === 'function') {
       hideSleepScreen()
+    }
+    if (wasSleeping) {
+      _log('info','diapo','requestJsonDiapo: waking up from sleep window')
     }
 
     // Si aucune diapo n'est fournie, afficher l'écran par défaut pour éviter écran vide
@@ -1299,8 +1324,10 @@ const getDiapoJson = async () => {
     }
 
     // On ne fait l'instantiation de default screen que si on est sur la phase d'init sinon on ne fait que metre a jour le ArrayDiapo
-    if (init == true){   
+    if (init == true){
       _log('info','diapo','boucle init appelle defaultScreen')
+      // defaultScreen() enchaîne lui-même sur downloadAllMedia + LoopDiapo()
+      if (typeof window !== 'undefined') window._wasSleeping = false
       defaultScreen()
       // Démarrer le timer de refresh automatique après l'init
       startRefreshTimer()
@@ -1308,7 +1335,20 @@ const getDiapoJson = async () => {
 
     // Rafraîchir la boucle même si pageDefault est masquée
     if (init !== true && typeof window !== 'undefined' && typeof window.applyDiapoUpdate === 'function') {
-      window.applyDiapoUpdate(ArrayDiapo)
+      const loopRestarted = await window.applyDiapoUpdate(ArrayDiapo)
+
+      // Sortie de veille : showSleepScreen() a arrêté la boucle, mais applyDiapoUpdate
+      // ne la relance QUE si la liste a changé. Or au matin la liste est en général
+      // identique à celle de la veille au soir → il faut relancer explicitement.
+      if (window._wasSleeping) {
+        window._wasSleeping = false
+        if (loopRestarted) {
+          _log('info','diapo','wake-up: loop already restarted by applyDiapoUpdate')
+        } else {
+          _log('info','diapo','wake-up: forcing LoopDiapo() restart after sleep window')
+          if (typeof window.LoopDiapo === 'function') window.LoopDiapo()
+        }
+      }
     }
 
     // S'assurer que le timer de refresh tourne même si init est déjà passé
@@ -1316,7 +1356,38 @@ const getDiapoJson = async () => {
       startRefreshTimer()
     }
   }
-  
+
+  /**
+   * Verrou de ré-entrance.
+   * Au réveil, sleepCheckTimer (heure exacte), sleepRefreshTimer (5 min) et le
+   * refreshTimer principal (5 min) peuvent se déclencher quasi simultanément.
+   * Sans verrou, deux exécutions concurrentes passent toutes les deux le test
+   * `hasChanged` d'applyDiapoUpdate (calculé avant l'await du téléchargement),
+   * appellent chacune LoopDiapo(), et lancent deux downloadAllMedia() qui
+   * écrivent en même temps dans media/mediaVersions.json.
+   */
+  const requestJsonDiapo = async () => {
+    if (typeof window !== 'undefined' && window._diapoRequestInFlight) {
+      // Tous les appels réseau ont un timeout : un verrou de plus de 5 min est
+      // forcément abandonné (exception avalée, promesse perdue) → on le reprend
+      const age = Date.now() - (window._diapoRequestInFlightAt || 0)
+      if (age < 5 * 60 * 1000) {
+        _log('warn','diapo','requestJsonDiapo: appel déjà en cours, celui-ci est ignoré')
+        return
+      }
+      _log('error','diapo','requestJsonDiapo: verrou abandonné depuis ' + Math.round(age / 1000) + 's, repris')
+    }
+    if (typeof window !== 'undefined') {
+      window._diapoRequestInFlight = true
+      window._diapoRequestInFlightAt = Date.now()
+    }
+    try {
+      return await _requestJsonDiapoInner()
+    } finally {
+      if (typeof window !== 'undefined') window._diapoRequestInFlight = false
+    }
+  }
+
   // Exposer requestJsonDiapo sur window pour le raccourci R (refresh manuel)
   if (typeof window !== 'undefined') {
     window.requestJsonDiapo = requestJsonDiapo

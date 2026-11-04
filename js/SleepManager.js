@@ -13,6 +13,7 @@ class SleepManager {
     this._isSleeping = false
     this._isNightMode = false
     this._currentLuminosity = 100
+    this._dayLuminosity = 100  // luminosité configurée (hors veille / mode nuit)
     this._sleepConfig = null
     this._nightModeConfig = null
     this._checkInterval = null
@@ -56,6 +57,7 @@ class SleepManager {
 
     if (ecranConfig?.luminosite !== undefined) {
       this._currentLuminosity = ecranConfig.luminosite
+      this._dayLuminosity = ecranConfig.luminosite
     }
 
     // Start periodic check
@@ -131,6 +133,7 @@ class SleepManager {
     
     if (newLuminosity !== undefined) {
       this._currentLuminosity = newLuminosity
+      this._dayLuminosity = newLuminosity
     }
     
     // Refresh night mode config
@@ -230,7 +233,7 @@ class SleepManager {
    * Exit night mode - restore normal luminosity
    */
   _exitNightMode() {
-    const normalLuminosity = window.diapoManager?.ecranConfig?.luminosite || 100
+    const normalLuminosity = this._dayLuminosity ?? 100
     this._log.info('sleep-manager', `Exiting night mode, luminosity: ${normalLuminosity}%`)
     this._isNightMode = false
     this.applyLuminosity(normalLuminosity, true)
@@ -285,11 +288,6 @@ class SleepManager {
     // Fade to black
     this.applyLuminosity(0, true)
 
-    // Stop media playback
-    if (window.mediaPlayer) {
-      window.mediaPlayer.stop()
-    }
-
     // Hide content, show sleep indicator if desired
     const mainContent = document.getElementById('main-content')
     if (mainContent) {
@@ -305,18 +303,13 @@ class SleepManager {
     this._isSleeping = false
 
     // Restore luminosity
-    const targetLuminosity = window.diapoManager?.ecranConfig?.luminosite || 100
+    const targetLuminosity = this._dayLuminosity ?? 100
     this.applyLuminosity(targetLuminosity, true)
 
     // Show content
     const mainContent = document.getElementById('main-content')
     if (mainContent) {
       mainContent.style.opacity = '1'
-    }
-
-    // Resume media playback
-    if (window.mediaPlayer) {
-      window.mediaPlayer.start()
     }
   }
 

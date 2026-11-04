@@ -1,5 +1,85 @@
 # CHANGELOG
 
+## v2.11.0 - Watchdog multi-niveaux, incidents remontés à SOEK (4 Novembre 2026)
+
+### ✨ Nouveau
+- **Watchdog du process main** (`lib/MainWatchdog.js`) : la page envoie un signe de vie toutes les 10s. Sans ping depuis 45s → reload ; toujours rien 60s après → relance de l'app. Page bloquée > 30s (`unresponsive`) → crash forcé puis reload. Crash du renderer → reload, > 3 en 10 min → relance. Échec de chargement → reload. Mémoire > 1,5 Go → reload. Inactif quand DevTools est ouvert
+- **Anti-boucle de relance** : au-delà de 3 relances en 1h, l'écran passe en **mode sûr** (pageDefault, polling API maintenu) au lieu de relancer sans fin ; sortie après 1h sans incident critique. État persisté dans `cache/watchdog.json`, avec détection des arrêts inattendus (coupure de courant)
+- **Escalade du watchdog de boucle** : niveau 1 relance la boucle, niveau 2 remet la page dans un état connu (lecteurs vidés, verrous abandonnés libérés, liste rechargée), niveau 3 demande un restart au main
+- **Journal d'incidents** (`lib/IncidentLog.js`) persisté sur disque et envoyé à SOEK (`POST /see/API/heartbeat/{uuid}/incidents`), dédoublonné, avec backoff. Contrat et types : `docs/HEARTBEAT_SYSTEM.md` § Incidents. Résumé en direct dans `debug.watchdog` du heartbeat
+- **Injection de pannes** (`npm run start:faults`, `window.__faults`) et **faux serveur SOEK** (`npm run fake-soek`) avec pannes réseau et médias corrompus
+
+### 🐛 Corrigé (trouvé par les tests de stress)
+- **Relance impossible sous AppImage** : `app.relaunch()` relançait le chemin du montage `/tmp/.mount_*`, démonté à la fermeture → l'app ne revenait jamais (relance du watchdog et restart après association). Relance désormais le fichier AppImage. Trouvé en lançant l'AppImage réelle dans un conteneur Linux
+- Renderer réellement gelé : `forcefullyCrashRenderer` restait sans effet sous Linux et laissait un process orphelin → `SIGKILL` après 3s
+- Template qui ne se termine jamais (fetch trafic/météo pendu) : la boucle restait bloquée → timeout `durée + 20s`
+- Cycle complet sans aucun média affichable : la boucle repartait en 100ms-1s en boucle serrée → backoff 10s/30s/60s, incident `TOUS_MEDIAS_EN_ECHEC`
+- Vidéo corrompue côté serveur re-téléchargée à chaque cycle → au plus une fois par 30 min et par fichier
+- Média invalide en fin de liste : le wrap-around (pageDefault, backoff) était court-circuité
+- Après un `stopLoopDiapo()` volontaire (ex: liste vide avec `masquerPageDefault`), le watchdog relançait la boucle au bout de 90s ; filet conservé si la boucle reste arrêtée hors veille > 15 min avec des diapos
+- see-media:// : une URL mal encodée faisait lever une exception dans le handler → 400
+- Verrous `requestJsonDiapo` / `syncMediaCache` horodatés : un verrou abandonné ne bloque plus le polling indéfiniment
+
+### 🧪 Tests
+- 121 nouveaux tests : téléchargement, protocole see-media, journal d'incidents, watchdog main, cas limites de la boucle, escalade, et un **test chaos de 24h simulées** (3 graines) qui vérifie qu'il n'y a jamais deux chaînes, jamais plus de 160s sans affichage hors veille, ni fuite de timers
+
+---
+
+## v2.11.0 - Chargement & lecture média (4 Novembre 2026)
+
+### 🐛 Fix critique
+- **Écriture atomique des médias** : les téléchargements écrivaient directement dans le fichier final. `syncMediaCache` revalide tous les médias à chaque refresh : un 200 réécrivait le fichier, parfois celui en cours de lecture → fichier tronqué lu par see-media:// → `PIPELINE_ERROR_DECODE`. Écriture désormais dans `fichier.part`, contrôle de `Content-Length`, puis `rename`
+- **Timeouts de téléchargement** (15s jusqu'aux headers, 30s sans données) : un téléchargement pendu bloquait `syncMediaCache`, donc le verrou `_diapoRequestInFlight` → plus aucun refresh API jusqu'au redémarrage
+- **see-media:// en streaming** : une requête `Range: bytes=0-` (le cas courant pour une vidéo) chargeait le fichier entier en RAM, en synchrone, dans le process principal. Streaming via `createReadStream`, `fs.promises.stat`, support `bytes=-N`, réponse 416, garde anti path-traversal
+
+### 🛡️ Résilience
+- **Téléchargements en streaming** (plus de buffer complet en RAM) et **dédupliqués par fichier** : `syncMediaCache`, `downloadAllMedia` et le retry vidéo partagent le même transfert
+- **`saveBinary` mémorise l'ETag** : sans ça, le refresh suivant re-téléchargeait intégralement le fichier
+- **`syncMediaCache` non bloquant** dans `requestJsonDiapo`
+- **Garde de génération dans `showMedia`** : `img.onload`, le retry image et la fin de template pouvaient relancer une ancienne chaîne après un `LoopDiapo()` (défilement en double)
+- **Vidéo** : une erreur `ABORTED` n'annule plus le timeout de chargement ; le timeout est réarmé après un retry ; le retry fonctionne aussi après une erreur en cours de lecture (`canplaythrough` n'est plus `once`)
+- **Détection de lecture figée** : si `currentTime` n'avance plus pendant 10s → erreur `STALLED` remontée au heartbeat et passage au média suivant (avant : watchdog global, ≥ 90s)
+
+### 🧹 Nettoyage
+- `MediaPlayer.js` / `DiapoManager.js` ne sont plus chargés. `SleepManager` appelait `mediaPlayer.start()` au réveil → `defaultScreen()` → second `LoopDiapo()` en parallèle
+- `SleepManager` : la sortie de veille / mode nuit restaure la luminosité configurée (avant : toujours 100 %, `diapoManager.ecranConfig` n'étant jamais rempli)
+
+---
+
+## v2.10.5 - Fiabilité sortie de veille (12 Mars 2026)
+
+### 🐛 Fix critique
+- **La boucle diapo ne s'arrête plus jamais pendant la veille** : `showSleepScreen()` appelle désormais `stopLoopDiapo()`. Avant, la boucle continuait de décoder vidéos et d'enchaîner les images derrière le calque noir toute la nuit (8-12h), ce qui dégradait le pipeline vidéo Chromium et la mémoire jusqu'au matin
+- **Relance explicite au réveil** : `applyDiapoUpdate()` ne relançait la boucle que si la liste de médias avait changé. Au matin la liste est en général identique à celle de la veille → plus rien ne redémarrait l'affichage. `requestJsonDiapo` force maintenant `LoopDiapo()` à la sortie de la plage de veille (`applyDiapoUpdate` retourne s'il a déjà relancé)
+- **Timer de refresh démarré avant tout `return` anticipé** : un boot pendant la plage de veille (auto-update de 2h, restart après 10 échecs API) laissait l'app sans aucun polling principal, `init` restant bloqué à `true`
+
+### 🛡️ Résilience
+- **Jeton de génération de boucle** (`_scheduleLoop`) : deux `LoopDiapo()` concurrents créaient deux chaînes de `setTimeout` en parallèle (diapos qui défilent deux fois trop vite). `clearTimeout(loopTimeout)` ne suffisait pas car la plupart des relances ne sont pas stockées. Tout timer d'une génération précédente est maintenant abandonné
+- **Verrou de ré-entrance sur `requestJsonDiapo`** : au réveil, `sleepCheckTimer` + `sleepRefreshTimer` + `refreshTimer` peuvent tirer quasi simultanément
+- **Watchdog de boucle** : si aucun média n'a été affiché depuis 3× la durée attendue (min. 90s), la boucle est relancée automatiquement. Les vidéos repoussent l'échéance via `timeupdate` (leur durée réelle peut dépasser la durée déclarée)
+- **`downloadAllMedia()` sérialisé** : deux appels simultanés réécrivaient chacun `media/mediaVersions.json` et pouvaient supprimer un fichier que l'autre venait de télécharger
+- **Timeout de 15s sur l'axios direct** de `getDiapoJson` (le fallback sans ApiManager n'en avait aucun)
+- **`--disable-backgrounding-occluded-windows`** : si le compositeur coupe l'écran la nuit (DPMS), la fenêtre peut être vue comme occluse et Chromium ralentit les timers du renderer
+
+### 🔧 Correction v2.10.4
+- **Purge média différée** : la purge supprimait immédiatement tout média absent de la timeline courante. Or celle-ci est calculée à l'heure côté serveur et amputée côté client en mode prioritaire → le disque se vidait puis tout était re-téléchargé, avec écran vide si le réseau était coupé. Un média n'est désormais supprimé qu'après **7 jours** d'absence consécutive (`lastSeenAt` dans l'index), jamais en mode offline ni en mode prioritaire
+
+### 📡 Monitoring
+- Heartbeat : `loopWatchdogRestarts` et `secondsSinceLastMedia` — permet de voir à distance si l'affichage s'est figé pendant la nuit
+
+---
+
+## v2.10.4 - Invalidation cache média (12 Mars 2026)
+
+### ✨ Nouveau
+- **Invalidation cache média lors d'un remplacement SOEK** : la clé de cache est désormais basée sur `mediaId + mediaUpdatedAt`. Quand un fichier est remplacé depuis SOEK, le nouveau fichier est re-téléchargé automatiquement et l'ancien est supprimé du disque
+- **Index de versions** : `media/mediaVersions.json` stocke `{ mediaId → { cacheKey, localPath } }` de façon persistante
+- **Purge des médias retirés** : les fichiers locaux dont le `mediaId` n'apparaît plus dans la timeline sont supprimés à chaque mise à jour
+- **`window.api.deleteFile(relativePath)`** : nouvelle méthode preload pour supprimer un fichier sous BASE_PATH (avec fallback IPC)
+- **`listeDiapoV2`** : propage `mediaUpdatedAt` et `mediaUrl` dans les métadonnées de chaque item
+
+---
+
 ## v2.10.3 - Nettoyage lecture vidéo (12 Mars 2026)
 
 ### 🛠️ Refactoring

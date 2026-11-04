@@ -376,7 +376,7 @@ if (typeof window !== 'undefined') {
  * @param {number} [timeoutMs=30000] - timeout max global en ms
  * @returns {Promise<{downloaded: number, skipped: number, failed: number}>}
  */
-async function downloadAllMedia(mediaList, timeoutMs) {
+async function _downloadAllMediaInner(mediaList, timeoutMs) {
     timeoutMs = timeoutMs || 30000
     const stats = { downloaded: 0, skipped: 0, failed: 0 }
     if (!mediaList || !Array.isArray(mediaList) || !mediaList.length) return stats
@@ -384,21 +384,37 @@ async function downloadAllMedia(mediaList, timeoutMs) {
 
     const baseUrl = typeof getMediaBaseUrl === 'function' ? getMediaBaseUrl() : 'https://soek.fr/uploads/see/media/'
 
+    // Charger l'index de versions (mediaId → { cacheKey, localPath })
+    const VERSION_INDEX_PATH = 'media/mediaVersions.json'
+    let versionIndex = {}
+    try {
+        const raw = await window.api.readFile(VERSION_INDEX_PATH)
+        if (raw) versionIndex = JSON.parse(raw)
+    } catch (e) { /* index absent ou corrompu — repart de zéro */ }
+    const updatedIndex = Object.assign({}, versionIndex)
+
     // Collecter les noms de fichiers uniques (ignorer templates/planning)
-    const fileSet = new Set()
+    // fileMap: file → metadata (pour récupérer mediaId / mediaUpdatedAt)
+    const fileMap = new Map()
     for (const item of mediaList) {
         if (!item || !Array.isArray(item) || item.length < 2) continue
         const type = item[0]
         const file = item[1]
         if (!file || typeof file !== 'string') continue
         if (type === 'template' || type === 'planning') continue
-        fileSet.add(file)
+        if (!fileMap.has(file)) fileMap.set(file, item[3] || {})
     }
 
-    if (!fileSet.size) return stats
+    if (!fileMap.size) return stats
 
-    const files = Array.from(fileSet)
+    const files = Array.from(fileMap.keys())
     __log('info', 'download', 'downloadAllMedia: ' + files.length + ' unique files to check')
+
+    // Ensemble des mediaId actifs (pour purge en fin de fonction)
+    const activeMediaIds = new Set()
+    for (const meta of fileMap.values()) {
+        if (meta && meta.mediaId != null) activeMediaIds.add(String(meta.mediaId))
+    }
 
     // Télécharger en parallèle (max 3 simultanés) avec timeout global
     const concurrency = 3
@@ -414,22 +430,65 @@ async function downloadAllMedia(mediaList, timeoutMs) {
     async function worker() {
         while (idx < files.length && !done) {
             const file = files[idx++]
+            const meta = fileMap.get(file) || {}
             // Decode URI-encoded filename for disk path
             let decodedFile
             try { decodedFile = decodeURIComponent(file) } catch(e) { decodedFile = file }
             const relativePath = 'media/' + decodedFile
             const url = baseUrl + file
+
+            // Déterminer si un re-téléchargement est forcé (cache invalidation)
+            const mediaId = meta.mediaId != null ? String(meta.mediaId) : null
+            const mediaUpdatedAt = meta.mediaUpdatedAt != null ? String(meta.mediaUpdatedAt) : null
+            let forceDownload = false
+            if (mediaId && mediaUpdatedAt) {
+                const cacheKey = mediaId + '_' + mediaUpdatedAt
+                const stored = updatedIndex[mediaId]
+                if (!stored || stored.cacheKey !== cacheKey) {
+                    forceDownload = true
+                    __log('info', 'download', 'media invalidated (new version): ' + file + ' (mediaId=' + mediaId + ', updatedAt=' + mediaUpdatedAt + ')')
+                }
+            }
+
             try {
-                // Vérifier si le fichier existe déjà localement
                 const exists = window.api.existsSync ? window.api.existsSync(relativePath) : false
-                if (exists) {
+                if (exists && !forceDownload) {
                     stats.skipped++
+                    // Indexer les fichiers déjà présents non encore connus de l'index
+                    if (mediaId && mediaUpdatedAt) {
+                        updatedIndex[mediaId] = { cacheKey: mediaId + '_' + mediaUpdatedAt, localPath: relativePath, lastSeenAt: Date.now() }
+                    }
                     continue
                 }
-                // Télécharger
-                if (window.api.saveBinaryWithCache) {
+
+                // Supprimer l'ancien fichier local quand le média a été remplacé
+                if (forceDownload && mediaId) {
+                    const stored = versionIndex[mediaId]
+                    if (stored && stored.localPath && stored.localPath !== relativePath) {
+                        try {
+                            if (window.api.deleteFile) await window.api.deleteFile(stored.localPath)
+                            __log('info', 'download', 'deleted replaced media: ' + stored.localPath)
+                        } catch (delErr) {
+                            __log('warn', 'download', 'could not delete old media: ' + stored.localPath)
+                        }
+                    }
+                }
+
+                // Forcer saveBinary (contourne le cache ETag) si invalidation, sinon saveBinaryWithCache
+                let ok = false
+                if (forceDownload && window.api.saveBinary) {
+                    ok = !!(await window.api.saveBinary(relativePath, url))
+                    if (ok) {
+                        stats.downloaded++
+                        __log('info', 'download', 'force-redownloaded: ' + file)
+                    } else {
+                        stats.failed++
+                        __log('warn', 'download', 'force-redownload FAIL: ' + file)
+                    }
+                } else if (window.api.saveBinaryWithCache) {
                     const res = await window.api.saveBinaryWithCache(relativePath, url)
                     if (res && res.success) {
+                        ok = true
                         stats.downloaded++
                         __log('debug', 'download', 'OK: ' + file + (res.cached ? ' (cached)' : ' (' + res.size + 'b)'))
                     } else {
@@ -437,10 +496,15 @@ async function downloadAllMedia(mediaList, timeoutMs) {
                         __log('warn', 'download', 'FAIL: ' + file)
                     }
                 } else if (window.api.saveBinary) {
-                    await window.api.saveBinary(relativePath, url)
-                    stats.downloaded++
+                    ok = !!(await window.api.saveBinary(relativePath, url))
+                    if (ok) { stats.downloaded++ } else { stats.failed++ }
                 } else {
                     stats.skipped++
+                }
+
+                // Mettre à jour l'index après téléchargement réussi
+                if (ok && mediaId && mediaUpdatedAt) {
+                    updatedIndex[mediaId] = { cacheKey: mediaId + '_' + mediaUpdatedAt, localPath: relativePath, lastSeenAt: Date.now() }
                 }
             } catch (e) {
                 stats.failed++
@@ -455,8 +519,85 @@ async function downloadAllMedia(mediaList, timeoutMs) {
     await Promise.race([Promise.all(workers), globalTimeout])
     done = true
 
+    // ─── Purge DIFFÉRÉE des médias retirés ───────────────────────────────────
+    // Une absence ponctuelle de la timeline n'est PAS une suppression :
+    //  - le serveur calcule la timeline à l'heure courante (diapos datées, plages)
+    //  - en mode prioritaire la liste est amputée côté client
+    //  - en mode offline la liste vient d'un cache potentiellement partiel
+    // Supprimer tout de suite reviendrait à vider le disque puis à tout
+    // re-télécharger — et à afficher un écran vide si le réseau est coupé.
+    // On ne supprime donc qu'après plusieurs jours d'absence consécutive.
+    const PURGE_AFTER_MS = 7 * 24 * 60 * 60 * 1000
+    const nowTs = Date.now()
+    const purgeAllowed = activeMediaIds.size > 0
+        && !window._usingOfflineCache
+        && !window._modePrioritaireActif
+
+    if (!purgeAllowed && activeMediaIds.size > 0) {
+        __log('info', 'download', 'purge skipped (offline=' + !!window._usingOfflineCache + ', prioritaire=' + !!window._modePrioritaireActif + ')')
+    }
+
+    for (const id of Object.keys(updatedIndex)) {
+        const stored = updatedIndex[id]
+        if (!stored) { delete updatedIndex[id]; continue }
+
+        // Média présent dans la timeline → on rafraîchit sa date de dernière vue
+        if (activeMediaIds.has(id)) {
+            stored.lastSeenAt = nowTs
+            continue
+        }
+
+        if (!purgeAllowed) continue
+
+        // Première absence constatée : on démarre le compte à rebours
+        if (!stored.lastSeenAt) { stored.lastSeenAt = nowTs; continue }
+
+        const absentMs = nowTs - stored.lastSeenAt
+        if (absentMs < PURGE_AFTER_MS) continue
+
+        if (stored.localPath) {
+            try {
+                if (window.api.deleteFile) await window.api.deleteFile(stored.localPath)
+                __log('info', 'download', 'pruned media absent ' + Math.round(absentMs / 86400000) + 'j: ' + stored.localPath)
+            } catch (e) { /* ignore */ }
+        }
+        delete updatedIndex[id]
+    }
+
+    // Persister l'index mis à jour
+    try {
+        await window.api.writeFile(VERSION_INDEX_PATH, JSON.stringify(updatedIndex))
+    } catch (e) {
+        __log('warn', 'download', 'could not save mediaVersions index: ' + (e && e.message))
+    }
+
     __log('info', 'download', 'downloadAllMedia complete: ' + stats.downloaded + ' new, ' + stats.skipped + ' cached, ' + stats.failed + ' failed')
     return stats
+}
+
+/**
+ * Sérialise les appels : deux downloadAllMedia() simultanés lisent puis
+ * réécrivent media/mediaVersions.json chacun de leur côté (le dernier écrase
+ * l'autre) et peuvent supprimer un fichier que l'autre vient de télécharger.
+ */
+async function downloadAllMedia(mediaList, timeoutMs) {
+    const previous = window._downloadAllInFlight
+    let release
+    const mine = new Promise(resolve => { release = resolve })
+    window._downloadAllInFlight = mine
+    window._downloadAllInFlightAt = Date.now()
+
+    if (previous) {
+        __log('info', 'download', 'downloadAllMedia: mise en file derrière un téléchargement en cours')
+        try { await previous } catch (e) { /* ignore */ }
+    }
+
+    try {
+        return await _downloadAllMediaInner(mediaList, timeoutMs)
+    } finally {
+        release()
+        if (window._downloadAllInFlight === mine) window._downloadAllInFlight = null
+    }
 }
 
 if (typeof window !== 'undefined') {
@@ -477,7 +618,24 @@ if (typeof window !== 'undefined') {
  */
 function showSleepScreen() {
     __log('info','sleep','showSleepScreen called')
-    
+
+    // Arrêter réellement la boucle : sans ça elle continue de décoder vidéos et
+    // d'enchaîner les images derrière le calque noir pendant toute la nuit, ce qui
+    // dégrade le pipeline vidéo Chromium et la mémoire jusqu'au matin.
+    // À faire AVANT de cacher les divs : stopLoopDiapo() réaffiche pageDefault.
+    if (!window._wasSleeping) {
+        try {
+            if (typeof stopLoopDiapo === 'function') stopLoopDiapo()
+            else if (window.stopLoopDiapo) window.stopLoopDiapo()
+            __log('info','sleep','diapo loop stopped for the sleep window')
+        } catch (e) {
+            __log('warn','sleep','stopLoopDiapo failed: ' + (e && e.message))
+        }
+    }
+    // Mémorise qu'on est passé par la veille → hideSleepScreen/requestJsonDiapo
+    // sauront qu'il faut relancer explicitement la boucle au réveil.
+    window._wasSleeping = true
+
     // Hide all media displays
     try { document.getElementById("divImg1").style.display = "none" } catch(e) {}
     try { document.getElementById("divImg2").style.display = "none" } catch(e) {}

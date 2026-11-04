@@ -5,6 +5,10 @@ const autoUpdater = updater.autoUpdater;
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { createSeeMediaHandler } = require('./lib/mediaProtocol');
+const { createDownloader } = require('./lib/download');
+const { IncidentLog } = require('./lib/IncidentLog');
+const { MainWatchdog, relaunchOptions } = require('./lib/MainWatchdog');
 
 //-------------------------------------------------------------------
 // Base Path Configuration
@@ -250,6 +254,9 @@ app.commandLine.appendSwitch('enable-accelerated-2d-canvas');
 // Performance: empêcher le throttling du renderer (kiosk = toujours au premier plan)
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
+// La nuit, si le compositeur coupe l'écran (DPMS) la fenêtre peut être vue comme
+// occluse : Chromium ralentit alors les timers du renderer et la boucle dérive.
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 log.info('Hardware acceleration enabled for smooth video playback');
@@ -520,77 +527,7 @@ app.on('ready', function() {
   // depuis BASE_PATH sur toutes les plateformes (nécessaire sur Linux où file:// 
   // ne peut pas accéder aux fichiers hors du dossier app)
   try {
-    protocol.handle('see-media', async (request) => {
-      // URL: see-media://media/file.jpg → BASE_PATH + media/file.jpg
-      let filePath = decodeURIComponent(request.url.replace('see-media://', ''));
-      // Supprimer le slash initial si présent (see-media:///media/... → media/...)
-      filePath = filePath.replace(/^\/+/, '');
-      // Supprimer fragment (#nocache=...) s'il existe
-      filePath = filePath.split('#')[0];
-      const fullPath = path.join(BASE_PATH, filePath);
-
-      // Vérifier que le fichier existe
-      if (!fs.existsSync(fullPath)) {
-        log.warn(`[see-media] File not found: ${fullPath}`);
-        return new Response('Not Found', { status: 404 });
-      }
-
-      const stat = fs.statSync(fullPath);
-      const totalSize = stat.size;
-
-      // Déterminer le Content-Type
-      const ext = path.extname(fullPath).toLowerCase();
-      const mimeTypes = {
-        '.mp4': 'video/mp4', '.webm': 'video/webm', '.ogg': 'video/ogg',
-        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
-        '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
-        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.json': 'application/json',
-        '.pdf': 'application/pdf'
-      };
-      const contentType = mimeTypes[ext] || 'application/octet-stream';
-
-      // Gérer les byte-range requests (crucial pour la lecture vidéo)
-      const rangeHeader = request.headers.get('Range');
-      if (rangeHeader) {
-        const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-        if (match) {
-          const start = parseInt(match[1], 10);
-          const end = match[2] ? parseInt(match[2], 10) : totalSize - 1;
-          const chunkSize = end - start + 1;
-
-          log.debug(`[see-media] Range ${start}-${end}/${totalSize} → ${fullPath}`);
-
-          const fd = fs.openSync(fullPath, 'r');
-          const buffer = Buffer.alloc(chunkSize);
-          fs.readSync(fd, buffer, 0, chunkSize, start);
-          fs.closeSync(fd);
-
-          return new Response(buffer, {
-            status: 206,
-            headers: {
-              'Content-Type': contentType,
-              'Content-Range': `bytes ${start}-${end}/${totalSize}`,
-              'Content-Length': String(chunkSize),
-              'Accept-Ranges': 'bytes',
-              'Cache-Control': 'no-cache'
-            }
-          });
-        }
-      }
-
-      // Pas de Range → retourner le fichier complet
-      log.debug(`[see-media] Full file ${totalSize} bytes → ${fullPath}`);
-      const data = fs.readFileSync(fullPath);
-      return new Response(data, {
-        status: 200,
-        headers: {
-          'Content-Type': contentType,
-          'Content-Length': String(totalSize),
-          'Accept-Ranges': 'bytes',
-          'Cache-Control': 'no-cache'
-        }
-      });
-    });
+    protocol.handle('see-media', createSeeMediaHandler({ basePath: BASE_PATH, log }));
     log.info('[see-media] Protocol handler registered with byte-range support, BASE_PATH=' + BASE_PATH);
   } catch (e) {
     log.error('[see-media] Failed to register protocol handler:', e.message);
@@ -601,7 +538,8 @@ app.on('ready', function() {
   Menu.setApplicationMenu(menu);
 
   createDefaultWindow();
-  
+  attachWatchdog(win);
+
   // Raccourcis clavier globaux pour le mode production
   const { globalShortcut } = require('electron');
   
@@ -1001,11 +939,146 @@ ipcMain.on('leave-setup-mode', () => {
   }
 })
 
+// Relance l'app et quitte. Sous AppImage, process.execPath pointe dans le montage
+// /tmp/.mount_* qui disparaît à la fermeture : voir relaunchOptions().
+function relaunchApp() {
+  app.relaunch(relaunchOptions())
+  app.exit(0)
+}
+
 // Restart complet de l'app (utilisé après première association)
 ipcMain.on('restart-app', () => {
   log.info('[main] Restart requested - relaunching app')
-  app.relaunch()
-  app.exit(0)
+  if (mainWatchdog) mainWatchdog.markCleanExit('restart demandé par la page')
+  relaunchApp()
+})
+
+//-------------------------------------------------------------------
+// Watchdog & journal d'incidents
+//
+// Le watchdog de boucle du renderer ne peut rien si le JS de la page est figé
+// ou si le process a crashé : le main surveille la page (pings, événements
+// Electron) et escalade reload → relaunch → mode sûr. Chaque incident est
+// journalisé sur disque et remonté au monitoring SOEK (lib/IncidentLog.js).
+//-------------------------------------------------------------------
+const FAULTS_ENABLED = process.env.SEEDISPLAY_FAULTS === '1'
+
+function readConfigSEE() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(BASE_PATH, 'configSEE.json'), 'utf8'))
+  } catch (e) {
+    return null
+  }
+}
+
+const incidentLog = new IncidentLog({
+  filePath: path.join(BASE_PATH, 'cache', 'incidents.json'),
+  getConfig: () => {
+    const cfg = readConfigSEE() || {}
+    return { ecranUuid: cfg.ecranUuid, apiToken: cfg.apiToken, env: cfg.env }
+  },
+  axios: require('axios'),
+  log,
+  appVersion: app.getVersion(),
+  getUptimeS: () => process.uptime(),
+  isOffline: () => START_OFFLINE || !!(win && !win.isDestroyed() && win.webContents.session._offlineSimulated)
+})
+
+let mainWatchdog = null
+
+function attachWatchdog(targetWin) {
+  const statePath = path.join(BASE_PATH, 'cache', 'watchdog.json')
+  mainWatchdog = new MainWatchdog({
+    incidentLog,
+    log,
+    stateStore: {
+      read: () => { try { return JSON.parse(fs.readFileSync(statePath, 'utf8')) } catch (e) { return null } },
+      write: (obj) => {
+        fs.mkdirSync(path.dirname(statePath), { recursive: true })
+        fs.writeFileSync(statePath + '.tmp', JSON.stringify(obj))
+        fs.renameSync(statePath + '.tmp', statePath)
+      }
+    },
+    isPaused: () => !!(targetWin && !targetWin.isDestroyed() && targetWin.webContents.isDevToolsOpened()),
+    getRendererMemoryMB: () => {
+      if (!targetWin || targetWin.isDestroyed()) return 0
+      const pid = targetWin.webContents.getOSProcessId()
+      const metric = app.getAppMetrics().find(m => m.pid === pid)
+      return metric && metric.memory ? metric.memory.workingSetSize / 1024 : 0  // Ko → Mo
+    },
+    actions: {
+      reload: () => {
+        log.warn('[watchdog] reload de la page')
+        if (targetWin && !targetWin.isDestroyed()) targetWin.webContents.reload()
+      },
+      relaunch: () => {
+        log.error('[watchdog] relance de l\'application')
+        relaunchApp()
+      },
+      forceCrash: () => {
+        log.error('[watchdog] crash forcé du renderer')
+        if (!targetWin || targetWin.isDestroyed()) return
+        const wc = targetWin.webContents
+        const pid = wc.getOSProcessId()
+        wc.forcefullyCrashRenderer()
+        // Sous Linux, forcefullyCrashRenderer passe par un message que le renderer doit
+        // traiter : un process vraiment gelé l'ignore et resterait orphelin.
+        setTimeout(() => {
+          if (targetWin.isDestroyed() || wc.getOSProcessId() !== pid) return
+          try { process.kill(pid, 'SIGKILL') } catch (e) { /* déjà terminé */ }
+        }, 3000)
+      },
+      setSafeMode: (on) => {
+        log.warn('[watchdog] mode sûr ' + (on ? 'ACTIVÉ' : 'désactivé'))
+        if (targetWin && !targetWin.isDestroyed()) targetWin.webContents.send('watchdog-safe-mode', !!on)
+      }
+    }
+  })
+
+  targetWin.on('unresponsive', () => mainWatchdog.onUnresponsive())
+  targetWin.on('responsive', () => mainWatchdog.onResponsive())
+  targetWin.webContents.on('render-process-gone', (e, details) => mainWatchdog.onRenderProcessGone(details))
+  targetWin.webContents.on('did-fail-load', (e, code, desc, url, isMainFrame) => mainWatchdog.onDidFailLoad(code, desc, url, isMainFrame))
+  targetWin.webContents.on('did-finish-load', () => mainWatchdog.onPageLoaded())
+
+  mainWatchdog.start(app.getVersion())
+  incidentLog.start()
+}
+
+app.on('child-process-gone', (e, details) => { if (mainWatchdog) mainWatchdog.onChildProcessGone(details) })
+app.on('before-quit', () => { if (mainWatchdog) mainWatchdog.markCleanExit('quit') })
+
+ipcMain.on('watchdog-ping', (evt, payload) => { if (mainWatchdog) mainWatchdog.onPing(payload) })
+
+ipcMain.on('incident-report', (evt, inc) => {
+  try {
+    if (!inc || typeof inc !== 'object') return
+    incidentLog.record(inc.type, inc.niveau, inc.message, inc.contexte, 'renderer')
+  } catch (e) {
+    log.warn('[incident] report failed: ' + e.message)
+  }
+})
+
+// Niveau 3 du watchdog de la page : passe par le watchdog main (anti-boucle de relaunch)
+ipcMain.on('watchdog-request-restart', (evt, cause) => {
+  if (mainWatchdog) mainWatchdog.relaunch('demande de la page : ' + (cause || 'boucle bloquée'))
+})
+
+// Résumé pour le heartbeat (debug.watchdog)
+ipcMain.handle('watchdog-get-state', () => {
+  const inc = incidentLog.stats()
+  return Object.assign({}, mainWatchdog ? mainWatchdog.stats() : {}, {
+    incidentsEnAttente: inc.pending,
+    incidentsDernierEnvoi: inc.lastSentAt,
+    incidentsDerniereErreur: inc.lastError
+  })
+})
+
+// Injection de pannes (SEEDISPLAY_FAULTS=1 uniquement) : crash réel du renderer
+ipcMain.on('fault-crash-renderer', (evt) => {
+  if (!FAULTS_ENABLED) return
+  log.warn('[faults] crash du renderer demandé')
+  evt.sender.forcefullyCrashRenderer()
 })
 
 // Quit app on 'X' shortcut
@@ -1154,6 +1227,10 @@ ipcMain.handle('preload-writeFile', async (evt, relative, data) => {
   try { const p = path.join(BASE_PATH, relative); const dir = path.dirname(p); if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(p, data); return true } catch(e) { return false }
 })
 
+ipcMain.handle('preload-deleteFile', async (evt, relative) => {
+  try { const p = path.join(BASE_PATH, relative); if (fs.existsSync(p)) fs.unlinkSync(p); return true } catch(e) { return false }
+})
+
 ipcMain.handle('preload-readBundledFile', async (evt, relative) => {
   try { const p = path.join(__dirname, relative); return fs.readFileSync(p, 'utf8') } catch(e) { return null }
 })
@@ -1186,70 +1263,63 @@ ipcMain.on('preload-existsSync', (evt, relative) => {
   try { const p = path.join(BASE_PATH, relative); evt.returnValue = fs.existsSync(p) } catch(e) { evt.returnValue = false }
 })
 
+// Téléchargements média : streaming, .part + rename atomique, timeouts,
+// déduplication par fichier (voir lib/download.js)
+const { downloadToFileOnce } = createDownloader({ axios })
+
 ipcMain.handle('preload-saveBinary', async (evt, relative, url) => {
   try {
     const p = path.join(BASE_PATH, relative)
-    const dir = path.dirname(p)
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    const res = await axios.get(url, { responseType: 'arraybuffer' })
-    const buf = Buffer.from(res.data)
-    fs.writeFileSync(p, buf)
+    const res = await downloadToFileOnce(url, p)
+    // Mémoriser l'ETag : sinon le prochain saveBinaryWithCache refait un 200 complet.
+    // (304 possible si l'appel a rejoint une requête conditionnelle déjà en cours)
+    if (res.status === 200) {
+      const etagFile = p + '.etag'
+      if (res.etag) await fs.promises.writeFile(etagFile, res.etag)
+      else { try { await fs.promises.unlink(etagFile) } catch (_) { /* ignore */ } }
+    }
     return true
-  } catch(e) { return false }
+  } catch(e) {
+    log.warn('[main] saveBinary failed for ' + relative + ': ' + e.message)
+    return false
+  }
 })
 
 ipcMain.handle('preload-saveBinaryWithCache', async (evt, relative, url, cacheOptions = {}) => {
+  const p = path.join(BASE_PATH, relative)
+  const etagFile = p + '.etag'
   try {
-    const p = path.join(BASE_PATH, relative)
-    const dir = path.dirname(p)
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    
-    // Check if file exists and get ETag for conditional request
-    let existingETag = null
-    const etagFile = p + '.etag'
-    if (fs.existsSync(p) && fs.existsSync(etagFile)) {
-      try { existingETag = fs.readFileSync(etagFile, 'utf8').trim() } catch(e) {}
-    }
-    
+    // ETag pour requête conditionnelle (seulement si le fichier local existe et n'est pas vide)
+    let existingSize = 0
+    try { existingSize = (await fs.promises.stat(p)).size } catch (_) { /* absent */ }
+
     const headers = {}
-    if (existingETag) {
-      headers['If-None-Match'] = existingETag
+    if (existingSize > 0) {
+      try {
+        const etag = (await fs.promises.readFile(etagFile, 'utf8')).trim()
+        if (etag) headers['If-None-Match'] = etag
+      } catch (_) { /* pas d'ETag */ }
     }
-    
+
     try {
-      const res = await axios.get(url, { 
-        responseType: 'arraybuffer',
-        headers,
-        validateStatus: s => s === 200 || s === 304
-      })
-      
+      const res = await downloadToFileOnce(url, p, headers)
+
       if (res.status === 304) {
-        // Not modified - use cached file
-        const stats = fs.statSync(p)
-        return { success: true, cached: true, size: stats.size }
+        return { success: true, cached: true, size: existingSize }
       }
-      
-      // Save new file
-      const buf = Buffer.from(res.data)
-      fs.writeFileSync(p, buf)
-      
-      // Save ETag if present
-      const newETag = res.headers?.etag
-      if (newETag) {
-        fs.writeFileSync(etagFile, newETag)
-      }
-      
-      return { success: true, cached: false, size: buf.length }
+
+      if (res.etag) await fs.promises.writeFile(etagFile, res.etag)
+      return { success: true, cached: false, size: res.size }
     } catch(fetchErr) {
-      // If fetch fails but we have cached file, use it
-      if (fs.existsSync(p)) {
-        const stats = fs.statSync(p)
-        return { success: true, cached: true, size: stats.size, fallback: true }
+      // Échec réseau mais fichier local présent → on le garde
+      if (existingSize > 0) {
+        return { success: true, cached: true, size: existingSize, fallback: true }
       }
       throw fetchErr
     }
-  } catch(e) { 
-    return { success: false, error: e.message } 
+  } catch(e) {
+    log.warn('[main] saveBinaryWithCache failed for ' + relative + ': ' + e.message)
+    return { success: false, error: e.message }
   }
 })
 

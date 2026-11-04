@@ -1,6 +1,6 @@
 {
   "name": "seedisplay",
-  "version": "2.10.3",
+  "version": "2.11.0",
   "description": "SEE Display Application",
   "main": "main.js",
   "scripts": {
@@ -8,6 +8,8 @@
     "start:debug": "cross-env DEBUG_MODE=true electron .",
     "start:prod": "cross-env NODE_ENV=production electron .",
     "start:offline": "electron . --offline",
+    "start:faults": "cross-env SEEDISPLAY_FAULTS=1 electron .",
+    "fake-soek": "node scripts/fake-soek.js",
     "test": "mocha test/**/*.test.js --exit",
     "test:performance": "mocha test/performance.test.js --timeout 120000",
     "version:patch": "npm version patch --no-git-tag-version",
