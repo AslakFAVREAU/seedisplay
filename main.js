@@ -9,6 +9,10 @@ const { createSeeMediaHandler } = require('./lib/mediaProtocol');
 const { createDownloader } = require('./lib/download');
 const { IncidentLog } = require('./lib/IncidentLog');
 const { MainWatchdog, relaunchOptions } = require('./lib/MainWatchdog');
+const { redactHook } = require('./lib/redact');
+
+// Aucun secret (apiToken de l'écran) dans les logs, quelle que soit leur origine
+log.hooks.push(redactHook);
 
 //-------------------------------------------------------------------
 // Base Path Configuration

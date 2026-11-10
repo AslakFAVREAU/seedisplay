@@ -275,8 +275,8 @@ est journalisé sur le boîtier puis envoyé à SOEK, qui le conserve 30 jours.
 - File persistée dans `BASE_PATH/cache/incidents.json` (300 entrées max, les plus
   anciens `info` sont supprimés en premier) : un incident écrit juste avant un
   redémarrage part au démarrage suivant.
-- **Dédoublonnage** : même `type` + même `contexte.fichier` dans les 10 dernières
-  minutes → `occurrences` est incrémenté au lieu de créer une ligne.
+- **Dédoublonnage** : même `type` + même clé (`contexte.cle`, sinon `contexte.fichier`)
+  dans les 10 dernières minutes → `occurrences` est incrémenté au lieu de créer une ligne.
 - Envoi au démarrage, 2 s après un incident `critique`, sinon toutes les 60 s.
   Échec → backoff 1 min, 2 min, 4 min… plafonné à 10 min. Rien n'est envoyé en mode
   `--offline` ni sans `ecranUuid`/`apiToken`.
@@ -359,6 +359,10 @@ tout le reste est renvoyé plus tard.
 | `VIDEO_FIGEE` | warn | renderer | Lecture bloquée 10 s (`fichier`, `position`) |
 | `IMAGE_SAUTEE` | warn | renderer | Image illisible ou non chargée en 8 s (`fichier`, `code`) |
 | `TEMPLATE_TIMEOUT` | warn | renderer | Template non terminé après sa durée + 20 s (`typeTemplate`) |
+| `METEO_INDISPONIBLE` | warn | renderer | Open-Meteo en échec 3 fois de suite, une fois par panne (`cause` : `HTTP 429`, `ECONNABORTED`…, `echecsConsecutifs`, `cacheAgeMin` = âge des données affichées, `null` = bloc vide) |
+| `METEO_RETABLIE` | info | renderer | Météo de nouveau disponible après une panne signalée (`dureeMin`, `echecs`) |
+| `TRAFIC_INDISPONIBLE` | warn | renderer | API IDFM en échec 2 fois de suite pour un arrêt, une fois par panne (`cle` = `trafic:{arretId}`, `arret`, `http`, `cause`) ; ou template trafic mal configuré (`cle` = `trafic:config`) |
+| `TRAFIC_RETABLI` | info | renderer | Horaires de nouveau disponibles pour l'arrêt (`arretId`, `dureeMin`) |
 
 Un type inconnu de SOEK doit quand même être stocké et affiché (libellé = type brut) :
 le boîtier peut être plus récent que le serveur.

@@ -111,6 +111,52 @@ describe('loopDiapo — cas limites', function () {
       assert.deepStrictEqual(shown(h), [0, 1])
     })
 
+    it('changement de liste pendant une vidéo (passage en maintenance) : la vidéo est arrêtée', async () => {
+      const h = loadLoop({ media: [VID('mire.mp4', 60), IMG('a.jpg')] })
+      h.dom.videoDuration['mire.mp4'] = 60
+      h.start()
+      await h.clock.tick(5000)
+      const playing = ['video1', 'video2'].filter(id => !h.dom.elements[id].paused)
+      assert.strictEqual(playing.length, 1, 'la vidéo joue avant le changement')
+      // Comme requestJsonDiapo : la nouvelle liste est en place avant applyDiapoUpdate
+      const maintenance = [IMG('maintenance.png', 10)]
+      h.setMedia(maintenance)
+      assert.strictEqual(await h.ctx.applyDiapoUpdate(maintenance), true)
+      await h.clock.tick(2000)
+      for (const id of ['video1', 'video2']) {
+        assert.strictEqual(h.dom.elements[id].paused, true, id + ' encore en lecture derrière l\'image')
+        assert.strictEqual(h.dom.elements[id].src, '', id + ' garde sa source')
+      }
+      assert.strictEqual(h.run('mediaLoop.length'), 1)
+    })
+
+    it('getCurrentMedia (heartbeat) : média à l\'écran, template nommé, null une fois arrêté', async () => {
+      const h = loadLoop({ media: [IMG('a%20b.jpg', 5), TPL('menu', 5)] })
+      h.start()
+      await h.clock.tick(1000)
+      assert.deepStrictEqual(JSON.parse(JSON.stringify(h.ctx.getCurrentMedia())), { index: 0, type: 'img', file: 'a b.jpg' })
+      await h.clock.tick(5000)
+      assert.strictEqual(h.ctx.getCurrentMedia().file, 'template:menu')
+      h.ctx.stopLoopDiapo()
+      assert.strictEqual(h.ctx.getCurrentMedia(), null)
+    })
+
+    it('écran en maintenance : l\'affiche boucle sans passer par pageDefault', async () => {
+      const h = loadLoop({ media: [IMG('maintenance.png', 10)] })
+      h.run('window.screenStatus = "maintenance"')
+      h.start()
+      await h.clock.tick(1000)
+      let pageDefaultVu = false
+      for (let i = 0; i < 60; i++) {
+        await h.clock.tick(1000)
+        if (h.dom.elements.pageDefault.style.display !== 'none') pageDefaultVu = true
+      }
+      assert.strictEqual(pageDefaultVu, false, 'pageDefault affiché entre deux passages')
+      const t = h.calls.map(c => c.t)
+      assert.ok(t.length >= 5, 'au moins 5 passages en 61s : ' + t.length)
+      for (let i = 1; i < t.length; i++) assert.ok(t[i] - t[i - 1] < 11000, 'écart ' + (t[i] - t[i - 1]) + 'ms')
+    })
+
     it('enchaînement vidéo → vidéo : les écouteurs de l\'ancien lecteur sont retirés', async () => {
       const h = loadLoop({ media: [VID('v1.mp4'), VID('v2.mp4'), VID('v3.mp4')] })
       h.start()

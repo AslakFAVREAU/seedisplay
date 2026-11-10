@@ -17,6 +17,18 @@ var _log = (function(){
   }
 })()
 
+// Résumé court d'une erreur réseau : "HTTP 429", "ECONNABORTED", "circuit ouvert"…
+function _describeError(error) {
+  try {
+    const status = error && error.response && error.response.status;
+    if (status) return 'HTTP ' + status;
+    if (error && error.code) return String(error.code);
+    return String((error && error.message) || 'inconnue').slice(0, 120);
+  } catch (e) {
+    return 'inconnue';
+  }
+}
+
 class ApiManager {
   constructor() {
     this.logger = (typeof window !== 'undefined' && window.logger) ? window.logger : console;
@@ -212,6 +224,7 @@ class ApiManager {
         return res.data;
       } catch (error) {
         _log('error', 'api-manager', 'Direct meteo call failed', error.message);
+        this.lastMeteoError = _describeError(error);
         return null;
       }
     }
@@ -232,10 +245,13 @@ class ApiManager {
       );
 
       _log('info', 'api-manager', 'getMeteoWithErrorHandling: success');
+      this.lastMeteoError = null;
       return result;
 
     } catch (error) {
       _log('error', 'api-manager', 'getMeteoWithErrorHandling: all retries failed', error.message);
+      // Cause gardée pour l'incident METEO_INDISPONIBLE (js/meteo.js)
+      this.lastMeteoError = _describeError(error);
       return null; // Fallback silencieux pour meteo
     }
   }

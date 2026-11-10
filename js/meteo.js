@@ -101,19 +101,58 @@ async function _saveMeteoCache(data) {
 }
 
 // Charge et applique les dernières données météo cachées (mode offline)
+// @returns {number|null} âge du cache affiché en minutes, null si aucun cache
 async function _loadMeteoCache() {
   try {
-    if (!window.api || typeof window.api.readFile !== 'function') return
+    if (!window.api || typeof window.api.readFile !== 'function') return null
     const raw = await window.api.readFile('cache/lastMeteo.json')
-    if (!raw) return
+    if (!raw) return null
     const cached = JSON.parse(raw)
-    if (!cached || !cached.data) return
+    if (!cached || !cached.data) return null
     const ageMin = Math.round((Date.now() - cached.ts) / 60000)
     __log('info', 'meteo', 'using cached data (' + ageMin + ' min old)')
     _applyMeteoData(cached.data)
+    return ageMin
   } catch (e) {
     __log('debug', 'meteo', 'cache load error', e && e.message)
+    return null
   }
+}
+
+// ─── Santé de la météo → incidents SOEK ─────────────────────────────────────
+// Une panne ponctuelle est absorbée par le cache : on ne signale qu'à partir de
+// 3 échecs consécutifs, une seule fois par panne, puis le rétablissement.
+const METEO_SEUIL_ECHECS = 3
+const _meteoHealth = { echecs: 0, signalee: false, depuis: 0 }
+if (typeof window !== 'undefined') window._meteoHealth = _meteoHealth
+
+function _meteoIncident(type, niveau, message, contexte) {
+  try {
+    if (window.api && typeof window.api.reportIncident === 'function') window.api.reportIncident(type, niveau, message, contexte)
+  } catch (e) { /* ne jamais casser la météo pour un incident */ }
+}
+
+function _meteoEchec(cause, cacheAgeMin) {
+  _meteoHealth.echecs++
+  if (!_meteoHealth.depuis) _meteoHealth.depuis = Date.now()
+  if (_meteoHealth.signalee || _meteoHealth.echecs < METEO_SEUIL_ECHECS) return
+  _meteoHealth.signalee = true
+  const affichage = cacheAgeMin === null || cacheAgeMin === undefined
+    ? 'aucune donnée en cache, bloc météo vide'
+    : 'dernières données affichées (' + cacheAgeMin + ' min)'
+  _meteoIncident('METEO_INDISPONIBLE', 'warn',
+    'Météo indisponible après ' + _meteoHealth.echecs + ' échecs (' + (cause || 'cause inconnue') + ') : ' + affichage,
+    { cause: cause || null, echecsConsecutifs: _meteoHealth.echecs, cacheAgeMin: cacheAgeMin === undefined ? null : cacheAgeMin })
+}
+
+function _meteoSucces() {
+  if (_meteoHealth.signalee) {
+    const dureeMin = Math.round((Date.now() - _meteoHealth.depuis) / 60000)
+    _meteoIncident('METEO_RETABLIE', 'info', 'Météo de nouveau disponible après ' + dureeMin + ' min', { dureeMin, echecs: _meteoHealth.echecs })
+  }
+  _meteoHealth.echecs = 0
+  _meteoHealth.signalee = false
+  _meteoHealth.depuis = 0
 }
 
 // Applique les données météo au DOM (factorisé pour cache offline)
@@ -215,13 +254,16 @@ const requestJsonMeteo = async () => {
   try {
     __log('info','meteo','requestJsonMeteo: début de la récupération météo')
     const data = await getMeteo()
-    if (!data) {
+    if (!data || typeof data !== 'object' || (!data.current_weather && !data.daily)) {
       __log('warn','meteo','requestJsonMeteo: aucune donnée reçue, tentative cache offline')
       _meteoSetOffline(true)
-      await _loadMeteoCache()
+      const cacheAgeMin = await _loadMeteoCache()
+      const cause = data ? 'réponse sans données météo' : ((typeof window !== 'undefined' && window.apiManager && window.apiManager.lastMeteoError) || 'pas de réponse')
+      _meteoEchec(cause, cacheAgeMin)
       return
     }
     _meteoSetOffline(false)
+    _meteoSucces()
 
     __log('info','meteo','requestJsonMeteo: données reçues')
     _applyMeteoData(data)
@@ -242,4 +284,4 @@ const requestJsonMeteo = async () => {
 }
 
 // Export for testing
-try { module.exports = { requestJsonMeteo, getMeteo, _saveMeteoCache, _loadMeteoCache, _applyMeteoData } } catch (e) { }
+try { module.exports = { requestJsonMeteo, getMeteo, _saveMeteoCache, _loadMeteoCache, _applyMeteoData, _meteoHealth } } catch (e) { }

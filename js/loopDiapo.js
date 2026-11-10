@@ -231,6 +231,11 @@ function hideAllMediaExcept(exceptId) {
                 const el = document.getElementById(id);
                 if (el) {
                     el.style.display = 'none';
+                    // Une vidéo cachée ne doit jamais continuer à jouer (son, décodage)
+                    if (id.startsWith('divVideo')) {
+                        const v = document.getElementById('video' + id.slice(-1));
+                        if (v && !v.paused) { try { v.pause(); } catch (e) { /* ignore */ } }
+                    }
                     // Libérer la mémoire des images en arrière-plan (utile sur machines à 8 Go)
                     if (id.startsWith('divImg') && el.style.backgroundImage && el.style.backgroundImage !== "url('default.jpg')") {
                         el.style.backgroundImage = '';
@@ -252,6 +257,20 @@ function hideAllMediaExcept(exceptId) {
  */
 function hideAllMedia() {
     hideAllMediaExcept(null);
+}
+
+/**
+ * Arrête et vide les deux lecteurs vidéo. Abandonner les AbortControllers ne
+ * coupe que les écouteurs : sans ça, une vidéo en cours continue de jouer
+ * derrière le média suivant après un changement de liste (ex: passage en maintenance).
+ */
+function _stopAllVideos() {
+    ['video1', 'video2'].forEach(id => {
+        try {
+            const v = document.getElementById(id);
+            if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+        } catch (e) { /* ignore */ }
+    });
 }
 
 /**
@@ -326,9 +345,10 @@ async function showMedia(mediaIndex) {
             return;
         }
 
-        // Si masquerPageDefault est activé, boucler directement sans pause
-        if (window.masquerPageDefault) {
-            __log('info', 'diapo', 'end of loop, masquerPageDefault=true, looping immediately');
+        // masquerPageDefault, ou écran en maintenance (l'affiche reste à l'écran
+        // en continu) : boucler directement sans passer par pageDefault
+        if (window.masquerPageDefault || window.screenStatus === 'maintenance') {
+            __log('info', 'diapo', 'end of loop, ' + (window.masquerPageDefault ? 'masquerPageDefault=true' : 'maintenance') + ', looping immediately');
             // setTimeout pour éviter un stack overflow si tous les médias échouent (recursion infinie)
             _scheduleLoop(() => showMedia(0), 100);
             return;
@@ -933,6 +953,8 @@ function LoopDiapo() {
 
     // Aborter les vidéos en cours pour empêcher les events fantômes de relancer la boucle
     _abortAllVideoControllers();
+    // ...et les arrêter réellement : sinon la vidéo en cours continue derrière le nouveau média
+    _stopAllVideos();
 
     // Réarmer le watchdog sur ce nouveau départ
     window._lastMediaChange = Date.now();
@@ -1020,7 +1042,8 @@ function stopLoopDiapo() {
 
     // Aborter les vidéos en cours (empêche ended/error de relancer showMedia)
     _abortAllVideoControllers();
-    
+    _stopAllVideos();
+
     // Cacher tous les médias
     hideAllMedia();
     
@@ -1072,6 +1095,7 @@ async function applyDiapoUpdate(newList) {
             }
             _bumpLoopGeneration()
             _abortAllVideoControllers()
+            _stopAllVideos()
             hideAllMedia()
 
             const container = document.getElementById('mediaContainer')
@@ -1166,12 +1190,7 @@ function _forceSafeState(reason) {
     __log('error', 'diapo', 'WATCHDOG niveau 2 : remise à zéro de l\'état (' + reason + ')');
     try { stopLoopDiapo(); } catch (e) { /* ignore */ }
 
-    ['video1', 'video2'].forEach(id => {
-        try {
-            const v = document.getElementById(id);
-            if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
-        } catch (e) { /* ignore */ }
-    });
+    _stopAllVideos();
     try { if (window.templateRenderer) window.templateRenderer.hide(); } catch (e) { /* ignore */ }
     try { if (window.planningManager) window.planningManager.hide(); } catch (e) { /* ignore */ }
 
@@ -1322,8 +1341,32 @@ function _applyWatchdogSafeMode(on) {
     }
 }
 
+/**
+ * Média actuellement à l'écran, pour le heartbeat (monitoring SOEK).
+ * null entre deux cycles (pageDefault), boucle arrêtée ou liste vide.
+ * @returns {{index:number, type:string, file:string}|null}
+ */
+function getCurrentMedia() {
+    try {
+        if (!mediaLoop || !mediaLoop.length || loopStoppedAt) return null;
+        const item = mediaLoop[currentMediaIndex];
+        if (!Array.isArray(item) || item.length < 2) return null;
+        const type = String(item[0] || '');
+        let file = item[1];
+        if (file && typeof file === 'object') {
+            file = 'template:' + (file.type || 'inconnu');
+        } else {
+            try { file = decodeURIComponent(String(file)); } catch (e) { file = String(file); }
+        }
+        return { index: currentMediaIndex, type, file };
+    } catch (e) {
+        return null;
+    }
+}
+
 // Expose helpers for refresh logic
 if (typeof window !== 'undefined') {
+    window.getCurrentMedia = getCurrentMedia
     window.LoopDiapo = LoopDiapo
     window.stopLoopDiapo = stopLoopDiapo
     window.applyDiapoUpdate = applyDiapoUpdate

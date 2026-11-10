@@ -270,6 +270,24 @@ contextBridge.exposeInMainWorld('api', {
       return null
     }
   },
+  // Comme fetchJson, mais sans perdre la cause de l'échec (code HTTP, timeout…) :
+  // { ok, status, data, code, error }. Sert aux incidents remontés à SOEK.
+  fetchJsonResult: async (url, opts) => {
+    if (FORCE_OFFLINE) return { ok: false, status: null, data: null, code: 'OFFLINE', error: 'Network disabled (offline mode)' }
+    try {
+      if (hasNode && axios) {
+        const res = await axios.get(url, opts)
+        return { ok: true, status: res.status, data: res.data, code: null, error: null }
+      }
+      const data = await ipcRenderer.invoke('preload-fetchJson', url, opts)
+      return data === null || data === undefined
+        ? { ok: false, status: null, data: null, code: 'NETWORK', error: 'Network request failed' }
+        : { ok: true, status: 200, data, code: null, error: null }
+    } catch (e) {
+      const status = (e && e.response && e.response.status) || null
+      return { ok: false, status, data: null, code: (e && e.code) || null, error: (e && e.message) || 'unknown' }
+    }
+  },
   getEnv: (name) => {
     try { if (hasNode) return process.env[name] || null } catch(e) {}
     try { return ipcRenderer.sendSync('preload-getEnv', name) } catch(e) { return null }

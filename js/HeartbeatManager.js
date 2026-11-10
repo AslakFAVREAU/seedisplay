@@ -12,7 +12,7 @@ class HeartbeatManager {
         this._interval = options.interval || 7000; // 7 secondes par défaut
         this._apiToken = options.apiToken || null;
         this._ecranUuid = options.ecranUuid || null;
-        this._env = options.env || 'beta';
+        this._env = options.env || 'prod';
         this._updateChannel = options.updateChannel || 'stable';
         this._enabled = true;
         this._timer = null;
@@ -202,8 +202,12 @@ class HeartbeatManager {
             debug.mediaCount = window.ArrayImg.length;
         }
         
-        // Média courant
-        if (typeof window.currentMediaIndex !== 'undefined') {
+        // Média courant : fourni par la boucle (son index est interne à loopDiapo.js)
+        const cur = typeof window.getCurrentMedia === 'function' ? window.getCurrentMedia() : null;
+        if (cur) {
+            debug.currentMedia = cur.file;
+            debug.currentMediaType = cur.type;
+        } else if (typeof window.currentMediaIndex !== 'undefined') {
             const loop = window.ArrayMedia || window.ArrayDiapo;
             if (loop && loop.length > 0) {
                 const current = loop[window.currentMediaIndex];
@@ -422,7 +426,7 @@ class HeartbeatManager {
             case 'local':
                 return 'http://localhost:8000';
             default:
-                return 'https://beta.soek.fr';
+                return 'https://soek.fr';
         }
     }
 

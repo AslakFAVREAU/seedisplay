@@ -1099,6 +1099,17 @@ const getDiapoJson = async () => {
 
   // Timer de refresh automatique
   var refreshTimer = null
+  var refreshTimerMs = 0
+
+  // En maintenance, on interroge SOEK toutes les 30s pour en sortir vite ;
+  // sinon l'intervalle fourni par l'API (défaut 300s)
+  var MAINTENANCE_REFRESH_S = 30
+  function refreshIntervalMs() {
+    if (typeof window !== 'undefined' && window.screenStatus === 'maintenance') {
+      return MAINTENANCE_REFRESH_S * 1000
+    }
+    return ((typeof window !== 'undefined' && window.refreshInterval) || 300) * 1000
+  }
 
   // Utilitaire: extraire le nom de fichier média d'une entrée ArrayDiapo
   function getMediaFilename(item) {
@@ -1155,9 +1166,9 @@ const getDiapoJson = async () => {
       clearInterval(refreshTimer)
     }
     
-    // Utiliser l'intervalle fourni par l'API (défaut: 300 secondes = 5 minutes)
-    var intervalMs = (window.refreshInterval || 300) * 1000
-    _log('info','diapo','startRefreshTimer: scheduling API refresh every ' + (intervalMs/1000) + 's')
+    var intervalMs = refreshIntervalMs()
+    refreshTimerMs = intervalMs
+    _log('info','diapo','startRefreshTimer: scheduling API refresh every ' + (intervalMs/1000) + 's' + (window.screenStatus === 'maintenance' ? ' (maintenance)' : ''))
     
     // Enregistrer l'heure du prochain refresh prévu
     window.lastApiPullTime = Date.now()
@@ -1174,6 +1185,7 @@ const getDiapoJson = async () => {
     if (refreshTimer) {
       clearInterval(refreshTimer)
       refreshTimer = null
+      refreshTimerMs = 0
       _log('info','diapo','stopRefreshTimer: timer stopped')
     }
   }
@@ -1286,7 +1298,8 @@ const getDiapoJson = async () => {
     // Le timer de refresh doit démarrer AVANT tout return anticipé (veille, liste vide).
     // Sinon un boot pendant la plage de veille — ce qui arrive avec l'auto-update de 2h
     // ou le restart après 10 échecs API — laisse l'app sans aucun polling principal.
-    if (!refreshTimer) {
+    // Recalé aussi quand l'intervalle attendu change (entrée/sortie de maintenance).
+    if (!refreshTimer || refreshTimerMs !== refreshIntervalMs()) {
       startRefreshTimer()
     }
 

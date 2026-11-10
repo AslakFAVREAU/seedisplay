@@ -109,6 +109,16 @@ describe('IncidentLog (lib/IncidentLog.js)', function () {
     assert.strictEqual(a._derniere, undefined, 'champ interne non exposé')
   })
 
+  it('dédoublonne sur contexte.cle quand il n\'y a pas de fichier (un incident par arrêt)', () => {
+    const log = make()
+    log.record('TRAFIC_INDISPONIBLE', 'warn', 'x', { cle: 'trafic:A' })
+    log.record('TRAFIC_INDISPONIBLE', 'warn', 'x', { cle: 'trafic:A' })
+    log.record('TRAFIC_INDISPONIBLE', 'warn', 'x', { cle: 'trafic:B' })
+    log.record('METEO_INDISPONIBLE', 'warn', 'x', {})
+    assert.strictEqual(log.pending(), 3)
+    assert.strictEqual(log.list().find(i => i.contexte.cle === 'trafic:A').occurrences, 2)
+  })
+
   it('la fenêtre de dédoublonnage glisse avec la dernière occurrence', () => {
     const log = make()
     for (let i = 0; i < 30; i++) { log.record('VIDEO_FIGEE', 'warn', 'x', { fichier: 'a.mp4' }); now += 5 * 60 * 1000 }

@@ -19,6 +19,22 @@
 - Après un `stopLoopDiapo()` volontaire (ex: liste vide avec `masquerPageDefault`), le watchdog relançait la boucle au bout de 90s ; filet conservé si la boucle reste arrêtée hors veille > 15 min avec des diapos
 - see-media:// : une URL mal encodée faisait lever une exception dans le handler → 400
 - Verrous `requestJsonDiapo` / `syncMediaCache` horodatés : un verrou abandonné ne bloque plus le polling indéfiniment
+- Changement de liste pendant une vidéo (ex: passage en maintenance) : la vidéo continuait de jouer, son compris, derrière le nouveau média → lecteurs arrêtés et vidés à chaque (re)démarrage ou arrêt de la boucle, et une vidéo cachée est toujours mise en pause
+- Heartbeat : un `env` absent ou inconnu partait vers `beta.soek.fr` (domaine hors service) alors que le reste de l'app utilisait la prod → prod par défaut
+- `configSEE.json` du poste de dev (avec son `apiToken`) n'est plus embarqué dans le build
+
+- `apiToken` de l'écran écrit en clair dans les logs (appairage, chargement de la config) → masqué par un hook electron-log (`lib/redact.js`) sur tout ce qui est journalisé, clé IDFM comprise
+- Heartbeat : `currentMedia` toujours vide (l'index de la boucle est interne à `loopDiapo.js`) → exposé par `window.getCurrentMedia()` ; `template:<type>` pour un template, vide entre deux cycles
+
+### 📡 Incidents des API externes
+- **Météo** (Open-Meteo) : `METEO_INDISPONIBLE` après 3 échecs consécutifs (cause `HTTP 429`, `ECONNABORTED`…, âge du cache affiché), puis `METEO_RETABLIE`
+- **Transports** (IDFM PRIM) : `TRAFIC_INDISPONIBLE` par arrêt après 2 échecs consécutifs, avec le code HTTP et une explication (clé refusée, quota, arrêt inconnu, serveur en erreur), puis `TRAFIC_RETABLI` ; template trafic sans clé ou sans arrêt signalé une fois. Nouveau `window.api.fetchJsonResult` qui garde le statut HTTP
+- Dédoublonnage des incidents sur `contexte.cle` (en plus de `contexte.fichier`)
+- Libellés ajoutés côté SOEK (`EcranIncident::TYPES`)
+- L'éphéméride n'est pas concernée : `ephe.csv` est livré avec l'app, aucun appel réseau
+
+### 🔧 Maintenance
+- Écran en `maintenance` : l'affiche reste à l'écran en continu (plus de pageDefault entre deux passages) et SOEK est interrogé toutes les **30s** au lieu de l'intervalle normal, pour reprendre la diffusion dès la sortie de maintenance. Le polling revient à l'intervalle de l'API automatiquement
 
 ### 🧪 Tests
 - 121 nouveaux tests : téléchargement, protocole see-media, journal d'incidents, watchdog main, cas limites de la boucle, escalade, et un **test chaos de 24h simulées** (3 graines) qui vérifie qu'il n'y a jamais deux chaînes, jamais plus de 160s sans affichage hors veille, ni fuite de timers

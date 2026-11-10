@@ -965,6 +965,15 @@ class TemplateRenderer {
             // Handle missing configuration
             if (!data.arrets || data.arrets.length === 0 || !data.apiKey) {
                 this._log('warn', 'template', 'TRAFIC: incomplete config - showing error state');
+                // Signalé une fois par configuration (pas à chaque passage du template)
+                const manque = (!data.arrets || data.arrets.length === 0) ? 'aucun arrêt configuré' : 'clé API IDFM absente';
+                if (this._traficConfigSignalee !== manque) {
+                    this._traficConfigSignalee = manque;
+                    try {
+                        if (window.api?.reportIncident) window.api.reportIncident('TRAFIC_INDISPONIBLE', 'warn',
+                            'Template trafic mal configuré dans SOEK : ' + manque, { cle: 'trafic:config', cause: manque });
+                    } catch (e) { /* ignore */ }
+                }
                 this.container.innerHTML = this.renderTrafic(data, []);
                 this.container.style.display = 'flex';
                 this._hideOtherContainers();
@@ -1054,6 +1063,67 @@ class TemplateRenderer {
     /**
      * Helper HTTP pour appeler l'API IDFM PRIM
      */
+    /**
+     * Comme _fetchFromPRIM, mais garde la cause de l'échec pour les incidents SOEK.
+     * @returns {Promise<{data: Object|null, erreur: {http: number|null, cause: string}|null}>}
+     */
+    async _fetchFromPRIMDetail(url, apiKey, timeout = 8000) {
+        if (window.api?.fetchJsonResult) {
+            try {
+                const r = await window.api.fetchJsonResult(url, { headers: { apikey: apiKey }, timeout });
+                if (r && r.ok && r.data) return { data: r.data, erreur: null };
+                const http = (r && r.status) || null;
+                const cause = http ? 'HTTP ' + http : ((r && (r.code || r.error)) || 'pas de réponse');
+                this._log('error', 'template', `_fetchFromPRIM error: ${cause} — url=${url}`);
+                return { data: null, erreur: { http, cause: String(cause).slice(0, 120) } };
+            } catch (e) {
+                return { data: null, erreur: { http: null, cause: String(e && e.message || 'inconnue').slice(0, 120) } };
+            }
+        }
+        const data = await this._fetchFromPRIM(url, apiKey, timeout);
+        return { data, erreur: data ? null : { http: null, cause: 'pas de réponse' } };
+    }
+
+    /**
+     * Santé de l'API trafic par arrêt → incidents SOEK. Un échec ponctuel est
+     * ignoré (refresh toutes les 45s) : on signale à partir de 2 échecs
+     * consécutifs, une seule fois par panne, puis le rétablissement.
+     * @param {Object} arret
+     * @param {{http: number|null, cause: string}|null} erreur - null = succès
+     */
+    _noteTraficSante(arret, erreur) {
+        try {
+            if (!this._traficSante) this._traficSante = {};
+            const id = String((arret && arret.id) || 'inconnu');
+            const nom = (arret && (arret.nom || arret.label)) || id;
+            const s = this._traficSante[id] || (this._traficSante[id] = { echecs: 0, signalee: false, depuis: 0 });
+            const report = (type, niveau, message, contexte) => {
+                try { if (window.api?.reportIncident) window.api.reportIncident(type, niveau, message, contexte); } catch (e) { /* ignore */ }
+            };
+            if (!erreur) {
+                if (s.signalee) {
+                    const dureeMin = Math.round((Date.now() - s.depuis) / 60000);
+                    report('TRAFIC_RETABLI', 'info', `Horaires de nouveau disponibles pour « ${nom} » après ${dureeMin} min`,
+                        { cle: 'trafic:' + id, arretId: id, arret: nom, dureeMin, echecs: s.echecs });
+                }
+                s.echecs = 0; s.signalee = false; s.depuis = 0;
+                return;
+            }
+            s.echecs++;
+            if (!s.depuis) s.depuis = Date.now();
+            if (s.signalee || s.echecs < 2) return;
+            s.signalee = true;
+            const http = erreur.http || null;
+            const explication = (http === 401 || http === 403) ? 'clé API IDFM refusée'
+                : http === 429 ? 'quota IDFM dépassé'
+                : http === 404 ? 'arrêt inconnu chez IDFM'
+                : http >= 500 ? 'serveur IDFM en erreur'
+                : 'API IDFM injoignable';
+            report('TRAFIC_INDISPONIBLE', 'warn', `Horaires indisponibles pour « ${nom} » : ${explication} (${erreur.cause})`,
+                { cle: 'trafic:' + id, arretId: id, arret: nom, http, cause: erreur.cause, echecsConsecutifs: s.echecs });
+        } catch (e) { /* ne jamais casser le template pour un incident */ }
+    }
+
     async _fetchFromPRIM(url, apiKey, timeout = 8000) {
         try {
             if (window.api?.fetchJson) {
@@ -1089,7 +1159,10 @@ class TemplateRenderer {
                 
                 // ── 1) Fetch departures from the configured stop_area ──
                 const mainUrl = `${PRIM_BASE}/stop_areas/${encodeURIComponent(arretId)}/departures?count=20&data_freshness=realtime&disable_geojson=true`;
-                const mainResp = await this._fetchFromPRIM(mainUrl, apiKey);
+                const main = await this._fetchFromPRIMDetail(mainUrl, apiKey);
+                const mainResp = main.data;
+                // L'arrêt configuré fait foi pour la santé de l'API (les arrêts voisins sont un bonus)
+                this._noteTraficSante(arret, main.erreur);
                 let allRawDeps = mainResp?.departures || [];
                 this._log('info', 'template', `TRAFIC: main stop_area -> ${allRawDeps.length} departures`);
                 
